@@ -1,0 +1,70 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    /* Paleta Oficial Giannini 101 HSS Branca & Escudo Rajado */
+    --bg-porcelain: #F8F7F4;
+    --surface-white: #FFFFFF;
+    --red-wine: #7B1E2B;
+    --red-cherry: #B52A3A;
+    --text-graphite: #25252A;
+    --text-muted: #666672;
+    --border-silver: #D9D9D9;
+    --rose-soft: #F5E8EA;
+    --rose-subtle: #FAF1F2;
+  }
+
+  body {
+    background-color: #F8F7F4;
+    color: #25252A;
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    touch-action: manipulation;
+  }
+
+  /* Custom clean scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #F8F7F4;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #D9D9D9;
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #B52A3A;
+  }
+}
+
+.font-mono-code {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* Escudo Vermelho Rajado (Red Tortoiseshell / Swirled Pickguard subtle motif) */
+.tortoiseshell-badge {
+  background: linear-gradient(135deg, #7B1E2B 0%, #4A0E17 40%, #8F2231 65%, #5E1420 100%);
+  color: #FFFFFF;
+}
+
+.tortoiseshell-card {
+  background: linear-gradient(145deg, #FFFFFF 0%, #FAF1F2 100%);
+  border: 1px solid #E8D3D6;
+}
+
+.tortoiseshell-border {
+  border-image: linear-gradient(135deg, #7B1E2B, #B52A3A, #4A0E17) 1;
+}
+
+.glow-cherry {
+  box-shadow: 0 4px 20px -2px rgba(181, 42, 58, 0.2);
+}
+
+.glow-wine {
+  box-shadow: 0 4px 20px -2px rgba(123, 30, 43, 0.25);
+}

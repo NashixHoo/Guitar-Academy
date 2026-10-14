@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Porcelain White Body Gradient -->
+    <linearGradient id="porcelain" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="100%" stop-color="#F2EFE9" />
+    </linearGradient>
+
+    <!-- Red Tortoiseshell / Escudo Rajado Gradient -->
+    <linearGradient id="tortoiseshell" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#8F2231" />
+      <stop offset="25%" stop-color="#4A0E17" />
+      <stop offset="50%" stop-color="#B52A3A" />
+      <stop offset="75%" stop-color="#66141F" />
+      <stop offset="100%" stop-color="#7B1E2B" />
+    </linearGradient>
+
+    <!-- Chrome Strings Gradient -->
+    <linearGradient id="chrome" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#E5E7EB" />
+      <stop offset="50%" stop-color="#9CA3AF" />
+      <stop offset="100%" stop-color="#6B7280" />
+    </linearGradient>
+
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="6" stdDeviation="10" flood-color="#25252A" flood-opacity="0.15" />
+    </filter>
+  </defs>
+
+  <!-- Background rounded squircle (Porcelain White) -->
+  <rect width="512" height="512" rx="128" fill="#F8F7F4" />
+  <rect width="504" height="504" x="4" y="4" rx="124" fill="none" stroke="#D9D9D9" stroke-width="2" />
+
+  <!-- Guitar Pick Body (Glossy White Finish) -->
+  <path d="M 256 60 C 380 60 440 135 410 280 C 385 395 285 455 256 470 C 227 455 127 395 102 280 C 72 135 132 60 256 60 Z"
+        fill="url(#porcelain)" stroke="#D9D9D9" stroke-width="4" filter="url(#shadow)"/>
+
+  <!-- Escudo Vermelho Rajado (Tortoiseshell Inset Pickguard) -->
+  <path d="M 256 95 C 345 95 385 155 365 265 C 345 355 275 405 256 418 C 237 405 167 355 147 265 C 127 155 167 95 256 95 Z"
+        fill="url(#tortoiseshell)" stroke="#7B1E2B" stroke-width="3" />
+
+  <!-- Silver Fret Lines -->
+  <path d="M 185 160 Q 256 172 327 160" stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round" opacity="0.85" />
+  <path d="M 175 215 Q 256 230 337 215" stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round" opacity="0.85" />
+  <path d="M 168 270 Q 256 288 344 270" stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round" opacity="0.85" />
+  <path d="M 175 325 Q 256 342 337 325" stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round" opacity="0.85" />
+
+  <!-- 6 Strings (Chrome steel) -->
+  <line x1="215" y1="120" x2="238" y2="390" stroke="url(#chrome)" stroke-width="4" stroke-linecap="round" />
+  <line x1="231" y1="120" x2="245" y2="390" stroke="url(#chrome)" stroke-width="3.5" stroke-linecap="round" />
+  <line x1="247" y1="120" x2="252" y2="390" stroke="url(#chrome)" stroke-width="3" stroke-linecap="round" />
+  <line x1="265" y1="120" x2="260" y2="390" stroke="url(#chrome)" stroke-width="2.5" stroke-linecap="round" />
+  <line x1="281" y1="120" x2="267" y2="390" stroke="url(#chrome)" stroke-width="2" stroke-linecap="round" />
+  <line x1="297" y1="120" x2="274" y2="390" stroke="url(#chrome)" stroke-width="1.8" stroke-linecap="round" />
+
+  <!-- Giannini-inspired Wine Red Academy Star Emblem -->
+  <circle cx="256" cy="240" r="30" fill="#FFFFFF" stroke="#7B1E2B" stroke-width="3.5" />
+  <polygon points="256,220 263,235 280,236 267,247 271,264 256,254 241,264 245,247 232,236 249,235" fill="#7B1E2B" />
+</svg>

@@ -1,0 +1,6 @@
+{
+  "name": "Guitar Academy — Formação Musical para Guitarristas",
+  "description": "Plataforma completa de formação musical e prática de guitarra, com braço interativo, dicionário de acordes, metrônomo de alta precisão, treino auditivo e currículo do zero ao avançado.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
