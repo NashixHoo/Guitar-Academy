@@ -4,27 +4,37 @@ import path from 'path';
 import {defineConfig} from 'vite';
 import {VitePWA} from 'vite-plugin-pwa';
 
-export default defineConfig(() => {
+export default defineConfig(({command}) => {
+  // Determine base path:
+  // - In development ('serve'): '/' for Google AI Studio preview & local dev
+  // - In production: '/Guitar-Academy/' for GitHub Pages or relative './'
+  const isDev = command === 'serve';
+  const base = isDev
+    ? '/'
+    : (process.env.BASE_URL || (process.env.GITHUB_ACTIONS === 'true' ? '/Guitar-Academy/' : './'));
+
   return {
+    base,
     plugins: [
       react(),
       tailwindcss(),
       VitePWA({
+        base,
         registerType: 'autoUpdate',
         includeAssets: ['icon.svg'],
         manifest: {
-          id: '/',
+          id: base,
           name: 'Guitar Academy — Formação Musical',
           short_name: 'GuitarAcad',
           description: 'Plataforma completa de formação musical para guitarristas do zero ao avançado.',
           theme_color: '#F8F7F4',
           background_color: '#F8F7F4',
           display: 'standalone',
-          start_url: '/',
-          scope: '/',
+          start_url: base,
+          scope: base,
           icons: [
             {
-              src: '/icon.svg',
+              src: 'icon.svg',
               sizes: '512x512',
               type: 'image/svg+xml',
               purpose: 'any',
@@ -42,7 +52,7 @@ export default defineConfig(() => {
     ],
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, '.'),
+        '@': path.resolve('.'),
       },
     },
     server: {
