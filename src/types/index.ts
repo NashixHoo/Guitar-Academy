@@ -185,6 +185,8 @@ export type NavigationTab =
   | 'home'
   | 'curriculum'
   | 'practice-routine'
+  | 'guitar-coach'
+  | 'tuner'
   | 'fretboard'
   | 'chords'
   | 'metronome'

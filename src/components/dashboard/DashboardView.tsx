@@ -12,7 +12,9 @@ import {
   ArrowRight, 
   Compass, 
   CheckCircle2,
-  Volume2
+  Volume2,
+  Radio,
+  Zap
 } from 'lucide-react';
 
 interface DashboardViewProps {
@@ -149,7 +151,52 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       </div>
 
       {/* Quick Launch Tools Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+        {/* Guitar Coach Quick Access */}
+        <div
+          onClick={() => onNavigateTab('guitar-coach')}
+          className="bg-white border-2 border-[#7B1E2B]/30 hover:border-[#7B1E2B] p-5 rounded-2xl cursor-pointer transition shadow-xs group flex flex-col justify-between"
+        >
+          <div>
+            <div className="w-10 h-10 rounded-xl bg-[#F5E8EA] flex items-center justify-center text-[#7B1E2B] mb-3 group-hover:scale-105 transition-transform border border-[#E8D3D6]">
+              <Zap className="w-5 h-5 text-[#B52A3A]" />
+            </div>
+            <h3 className="font-bold text-[#25252A] text-base group-hover:text-[#7B1E2B] transition-colors flex items-center gap-1.5">
+              <span>Guitar Coach</span>
+              <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-[#10b981]/15 text-[#047857] font-bold">Novo</span>
+            </h3>
+            <p className="text-xs text-[#666672] mt-1">
+              Treine transições de acordes no tempo com metrônomo e avaliação acústica real.
+            </p>
+          </div>
+          <div className="mt-4 flex items-center gap-1 text-xs font-bold text-[#7B1E2B]">
+            <span>Abrir Treinador</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </div>
+        </div>
+
+        {/* Tuner Pro Quick Access */}
+        <div
+          onClick={() => onNavigateTab('tuner')}
+          className="bg-white border border-[#D9D9D9] hover:border-[#7B1E2B] p-5 rounded-2xl cursor-pointer transition shadow-xs group flex flex-col justify-between"
+        >
+          <div>
+            <div className="w-10 h-10 rounded-xl bg-[#F5E8EA] flex items-center justify-center text-[#7B1E2B] mb-3 group-hover:scale-105 transition-transform border border-[#E8D3D6]">
+              <Radio className="w-5 h-5 text-[#7B1E2B]" />
+            </div>
+            <h3 className="font-bold text-[#25252A] text-base group-hover:text-[#7B1E2B] transition-colors">
+              Afinador Pro
+            </h3>
+            <p className="text-xs text-[#666672] mt-1">
+              Afinação da guitarra física via microfone real e agulha suave a 60 FPS.
+            </p>
+          </div>
+          <div className="mt-4 flex items-center gap-1 text-xs font-bold text-[#7B1E2B]">
+            <span>Afinar Guitarra</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </div>
+        </div>
+
         {/* Metronome Quick Access */}
         <div
           onClick={() => onNavigateTab('metronome')}

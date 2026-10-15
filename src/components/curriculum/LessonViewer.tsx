@@ -22,7 +22,8 @@ import {
   Trophy,
   Play,
   Pause,
-  AlertCircle
+  AlertCircle,
+  Radio
 } from 'lucide-react';
 
 interface LessonViewerProps {
@@ -31,6 +32,7 @@ interface LessonViewerProps {
   onUpdateProgress: (updated: UserProgress) => void;
   onSelectLesson: (lessonId: string) => void;
   onOpenMetronomeAtBpm?: (bpm: number) => void;
+  onOpenTuner?: () => void;
 }
 
 export const LessonViewer: React.FC<LessonViewerProps> = ({
@@ -39,6 +41,7 @@ export const LessonViewer: React.FC<LessonViewerProps> = ({
   onUpdateProgress,
   onSelectLesson,
   onOpenMetronomeAtBpm,
+  onOpenTuner,
 }) => {
   const currentLog = progress.practiceLogs?.[lesson.id];
   const [selectedAnswers, setSelectedAnswers] = useState<Record<string, number>>({});
@@ -381,6 +384,17 @@ export const LessonViewer: React.FC<LessonViewerProps> = ({
           <Guitar className="w-4 h-4 text-[#7B1E2B]" />
           <span>Registro de Prática Real</span>
         </button>
+
+        {onOpenTuner && lesson.id === 'lesson-1' && (
+          <button
+            onClick={onOpenTuner}
+            className="px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition border flex items-center gap-1.5 bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100 shadow-2xs"
+            title="Abrir o Afinador Pro com microfone real para conferir as 6 cordas da guitarra física"
+          >
+            <Radio className="w-4 h-4 text-emerald-600" />
+            <span>Afinador de Guitarra (Microfone)</span>
+          </button>
+        )}
       </div>
 
       {/* SECTION 1: Lesson Theoretical Content Parts */}

@@ -14,6 +14,8 @@ import {
   Trophy, 
   Settings, 
   Target,
+  Radio,
+  Zap,
   X
 } from 'lucide-react';
 
@@ -34,16 +36,18 @@ export const Navigation: React.FC<NavigationProps> = ({
     { id: 'home', label: '1. Início', icon: Home },
     { id: 'curriculum', label: '2. Minha Formação', icon: GraduationCap, badge: '6 Níveis' },
     { id: 'practice-routine', label: '3. Rotina de Estudo', icon: Target, badge: '10/20/30m' },
-    { id: 'fretboard', label: '4. Braço da Guitarra', icon: Guitar },
-    { id: 'chords', label: '5. Dicionário de Acordes', icon: BookOpen },
-    { id: 'metronome', label: '6. Metrônomo', icon: Clock, badge: 'Áudio Real' },
-    { id: 'theory', label: '7. Teoria Musical', icon: Compass },
-    { id: 'reading', label: '8. Leitura Musical', icon: Music },
-    { id: 'ear-training', label: '9. Treino Auditivo', icon: Headphones },
-    { id: 'technique', label: '10. Técnica', icon: Activity },
-    { id: 'library', label: '11. Biblioteca de Estudos', icon: BookMarked },
-    { id: 'progress', label: '12. Meu Progresso', icon: Trophy },
-    { id: 'settings', label: '13. Configurações', icon: Settings },
+    { id: 'guitar-coach', label: '4. Guitar Coach', icon: Zap, badge: 'Treino c/ Áudio' },
+    { id: 'tuner', label: '5. Afinador Pro', icon: Radio, badge: 'Microfone Real' },
+    { id: 'fretboard', label: '6. Braço da Guitarra', icon: Guitar },
+    { id: 'chords', label: '7. Dicionário de Acordes', icon: BookOpen },
+    { id: 'metronome', label: '8. Metrônomo', icon: Clock, badge: 'Áudio Real' },
+    { id: 'theory', label: '9. Teoria Musical', icon: Compass },
+    { id: 'reading', label: '10. Leitura Musical', icon: Music },
+    { id: 'ear-training', label: '11. Treino Auditivo', icon: Headphones },
+    { id: 'technique', label: '12. Técnica', icon: Activity },
+    { id: 'library', label: '13. Biblioteca de Estudos', icon: BookMarked },
+    { id: 'progress', label: '14. Meu Progresso', icon: Trophy },
+    { id: 'settings', label: '15. Configurações', icon: Settings },
   ];
 
   const handleItemClick = (id: NavigationTab) => {

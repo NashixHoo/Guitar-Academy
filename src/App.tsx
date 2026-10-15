@@ -15,6 +15,8 @@ import { MusicTheoryView } from './components/theory/MusicTheoryView';
 import { SightReadingView } from './components/reading/SightReadingView';
 import { EarTrainingView } from './components/eartraining/EarTrainingView';
 import { TechniqueView } from './components/technique/TechniqueView';
+import { TunerView } from './components/tuner/TunerView';
+import { GuitarCoachView } from './components/coach/GuitarCoachView';
 import { StudyLibraryView } from './components/library/StudyLibraryView';
 import { ProgressView } from './components/progress/ProgressView';
 import { SettingsView } from './components/settings/SettingsView';
@@ -137,6 +139,7 @@ export default function App() {
                   onUpdateProgress={setProgress}
                   onSelectLesson={handleSelectLesson}
                   onOpenMetronomeAtBpm={handleOpenMetronomeAtBpm}
+                  onOpenTuner={() => setCurrentTab('tuner')}
                 />
               </div>
             ) : (
@@ -161,7 +164,29 @@ export default function App() {
             />
           )}
 
-          {/* TAB 4: Braço da Guitarra */}
+          {/* TAB 4: Guitar Coach (Treino com Microfone & Metrônomo) */}
+          {currentTab === 'guitar-coach' && (
+            <GuitarCoachView
+              progress={progress}
+              onUpdateProgress={setProgress}
+              onNavigateTab={(tab) => {
+                setCurrentTab(tab);
+                setSelectedLessonId(null);
+              }}
+            />
+          )}
+
+          {/* TAB 5: Afinador Pro (Microfone Real) */}
+          {currentTab === 'tuner' && (
+            <TunerView
+              onOpenLessonTuning={() => {
+                setSelectedLessonId('lesson-1');
+                setCurrentTab('curriculum');
+              }}
+            />
+          )}
+
+          {/* TAB 5: Braço da Guitarra */}
           {currentTab === 'fretboard' && <FretboardView />}
 
           {/* TAB 4: Dicionário de Acordes */}

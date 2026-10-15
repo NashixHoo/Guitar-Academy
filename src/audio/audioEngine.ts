@@ -56,6 +56,10 @@ class AudioEngine {
     return this.ctx;
   }
 
+  public getContext(): AudioContext | null {
+    return this.ctx;
+  }
+
   public setMasterVolume(val: number) {
     if (this.masterGain && this.ctx) {
       const clamped = Math.max(0, Math.min(1, val));

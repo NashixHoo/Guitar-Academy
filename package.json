@@ -9,7 +9,8 @@
     "build:gh-pages": "vite build --base=/Guitar-Academy/",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "test": "tsx test-integration.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
