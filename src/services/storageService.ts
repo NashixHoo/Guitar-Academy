@@ -6,6 +6,14 @@ const METRONOME_KEY = 'guitar_academy_metronome_v1';
 export const INITIAL_PROGRESS: UserProgress = {
   currentLessonId: 'lesson-1',
   completedLessons: [],
+  practiceLogs: {},
+  exerciseRepetitions: {},
+  studyPlan: {
+    selectedLevel: 0,
+    primaryGoal: 'fundamentals',
+    dailyRoutineMinutes: 20,
+    startDate: new Date().toISOString().split('T')[0],
+  },
   quizScores: {},
   frequentErrors: {},
   totalStudyTimeSeconds: 0,
@@ -47,11 +55,125 @@ export const storageService = {
         parsed.todayStudyTimeSeconds = 0;
         parsed.lastStudyDate = today;
       }
-      return { ...INITIAL_PROGRESS, ...parsed };
+
+      // Safe migration: ensure practiceLogs, exerciseRepetitions and studyPlan exist
+      const migrated: UserProgress = {
+        ...INITIAL_PROGRESS,
+        ...parsed,
+        practiceLogs: parsed.practiceLogs || {},
+        exerciseRepetitions: parsed.exerciseRepetitions || {},
+        studyPlan: {
+          ...INITIAL_PROGRESS.studyPlan,
+          ...(parsed.studyPlan || {}),
+        },
+      };
+
+      return migrated;
     } catch {
       return INITIAL_PROGRESS;
     }
   },
+
+  saveLessonPractice(
+    lessonId: string,
+    practiceData: {
+      status?: 'viewed' | 'practicing' | 'mastered';
+      practicedBpm?: number;
+      confidence?: 'needs_review' | 'playable_slow' | 'mastered_with_metronome';
+      notes?: string;
+      needsReview?: boolean;
+      exerciseRepetitions?: number;
+      targetRepetitionsMet?: boolean;
+    }
+  ): UserProgress {
+    const current = this.loadProgress();
+    const existingLog = current.practiceLogs[lessonId] || {
+      lessonId,
+      status: 'viewed',
+      practicedBpm: 60,
+      confidence: 'playable_slow',
+      lastPracticedDate: new Date().toISOString().split('T')[0],
+      timesPracticed: 0,
+      needsReview: false,
+    };
+
+    const updatedLog = {
+      ...existingLog,
+      ...practiceData,
+      lastPracticedDate: new Date().toISOString().split('T')[0],
+      timesPracticed: existingLog.timesPracticed + 1,
+    };
+
+    const updated: UserProgress = {
+      ...current,
+      practiceLogs: {
+        ...current.practiceLogs,
+        [lessonId]: updatedLog,
+      },
+      currentLessonId: lessonId,
+      practicedBpm: practiceData.practicedBpm || current.practicedBpm,
+    };
+
+    if (practiceData.status === 'mastered' && !updated.completedLessons.includes(lessonId)) {
+      updated.completedLessons = [...updated.completedLessons, lessonId];
+    }
+
+    this.saveProgress(updated);
+    return updated;
+  },
+
+  recordExerciseRepetition(
+    lessonId: string,
+    exerciseId: string,
+    totalCount: number,
+    targetRepetitions: number,
+    bpm: number
+  ): UserProgress {
+    const current = this.loadProgress();
+    const existingLog = current.practiceLogs[lessonId] || {
+      lessonId,
+      status: 'practicing',
+      practicedBpm: bpm,
+      confidence: 'playable_slow',
+      lastPracticedDate: new Date().toISOString().split('T')[0],
+      timesPracticed: 0,
+      needsReview: false,
+    };
+
+    const targetMet = totalCount >= targetRepetitions;
+
+    const updatedLog = {
+      ...existingLog,
+      exerciseRepetitions: totalCount,
+      targetRepetitionsMet: targetMet || existingLog.targetRepetitionsMet,
+      practicedBpm: bpm,
+      lastPracticedDate: new Date().toISOString().split('T')[0],
+      confidence: targetMet ? ('mastered_with_metronome' as const) : existingLog.confidence,
+    };
+
+    const updatedAchievements = [...current.achievements];
+    if (targetMet && !updatedAchievements.includes('master-open-strings-60bpm')) {
+      updatedAchievements.push('master-open-strings-60bpm');
+    }
+
+    const updated: UserProgress = {
+      ...current,
+      exerciseRepetitions: {
+        ...(current.exerciseRepetitions || {}),
+        [exerciseId]: totalCount,
+      },
+      practiceLogs: {
+        ...current.practiceLogs,
+        [lessonId]: updatedLog,
+      },
+      achievements: updatedAchievements,
+      practicedBpm: bpm,
+    };
+
+    this.saveProgress(updated);
+    return updated;
+  },
+
 
   saveProgress(progress: UserProgress): void {
     try {

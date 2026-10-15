@@ -121,9 +121,16 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({ progress, onSele
                   </div>
 
                   <div>
-                    <span className="text-[10px] text-[#666672] uppercase font-bold block">
-                      {lesson.moduleTitle}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-[#666672] uppercase font-bold block">
+                        {lesson.moduleTitle}
+                      </span>
+                      {lesson.practicalExercise && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[#7B1E2B] bg-[#F5E8EA] px-2 py-0.2 rounded-md border border-[#E8D3D6]">
+                          Ex. Prático ({lesson.practicalExercise.targetBpm} BPM)
+                        </span>
+                      )}
+                    </div>
                     <h3 className="font-bold text-[#25252A] text-sm sm:text-base group-hover:text-[#7B1E2B]">
                       {lesson.title}
                     </h3>

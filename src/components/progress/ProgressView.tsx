@@ -13,7 +13,8 @@ import {
   AlertCircle,
   Flame,
   Calendar,
-  Sparkles
+  Sparkles,
+  Check
 } from 'lucide-react';
 
 interface ProgressViewProps {
@@ -193,6 +194,86 @@ export const ProgressView: React.FC<ProgressViewProps> = ({
             );
           })}
         </div>
+      </div>
+
+      {/* Physical Guitar Practice Log & Spaced Repetition */}
+      <div className="bg-white border border-[#D9D9D9] rounded-3xl p-6 sm:p-8 shadow-xs space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 pb-2 border-b border-[#D9D9D9]">
+          <div>
+            <h2 className="text-lg font-bold text-[#25252A] flex items-center gap-2">
+              <CheckCircle2 className="w-5 h-5 text-[#7B1E2B]" />
+              Diário de Prática na Guitarra Física
+            </h2>
+            <p className="text-xs text-[#666672] mt-0.5 font-medium">
+              Acompanhamento de andamento (BPM) e autoavaliação motora registrada nas aulas.
+            </p>
+          </div>
+        </div>
+
+        {Object.keys(progress.practiceLogs || {}).length === 0 ? (
+          <div className="text-center py-6 text-xs text-[#666672] bg-[#F8F7F4] rounded-2xl border border-[#D9D9D9]">
+            <p className="font-bold text-[#25252A]">Nenhum registro de prática salvo ainda.</p>
+            <p className="text-[#666672] mt-1">Ao estudar qualquer aula, registre o andamento (BPM) e sua autoavaliação com a guitarra em mãos.</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {Object.entries(progress.practiceLogs).map(([lessonId, log]) => {
+              const lessonDef = CURRICULUM_LEVELS.flatMap((l) => l.lessons).find((l) => l.id === lessonId);
+              const title = lessonDef ? lessonDef.title : lessonId;
+
+              const statusBadge = {
+                viewed: { label: 'Visualizado', bg: 'bg-zinc-100 text-zinc-700 border-zinc-200' },
+                practicing: { label: 'Em Prática', bg: 'bg-amber-100 text-amber-900 border-amber-200' },
+                mastered: { label: 'Dominado na Guitarra', bg: 'bg-emerald-100 text-emerald-900 border-emerald-300' },
+              }[log.status || 'viewed'];
+
+              const confidenceLabel = {
+                needs_review: '⚠️ Precisa Revisar',
+                playable_slow: '🔄 Toca Lento',
+                mastered_with_metronome: '✅ Dominado no Metrônomo',
+              }[log.confidence || 'playable_slow'];
+
+              return (
+                <div
+                  key={`practice-log-${lessonId}`}
+                  className="bg-[#F8F7F4] p-4 rounded-2xl border border-[#D9D9D9] flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs"
+                >
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className={`px-2 py-0.5 rounded-md font-bold text-[10px] border ${statusBadge.bg}`}>
+                        {statusBadge.label}
+                      </span>
+                      <span className="font-bold text-[#25252A] text-sm">{title}</span>
+                    </div>
+                    {log.exerciseRepetitions !== undefined && log.exerciseRepetitions > 0 && (
+                      <div className="inline-flex items-center gap-1.5 text-[11px] font-bold text-[#7B1E2B] bg-[#F5E8EA] px-2 py-0.5 rounded-md border border-[#E8D3D6]">
+                        <Check className="w-3 h-3 text-[#B52A3A]" />
+                        <span>{log.exerciseRepetitions} repetições do exercício prático registradas</span>
+                      </div>
+                    )}
+                    {log.notes && (
+                      <p className="text-[#666672] italic pl-1">"{log.notes}"</p>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-3 shrink-0">
+                    <span className="px-2.5 py-1 rounded-xl bg-white border border-[#D9D9D9] font-mono-code font-bold text-[#7B1E2B]">
+                      {log.practicedBpm} BPM
+                    </span>
+                    <span className="font-medium text-[#666672]">
+                      {confidenceLabel}
+                    </span>
+                    {log.needsReview && (
+                      <span className="px-2 py-0.5 rounded-md bg-rose-100 text-rose-800 text-[10px] font-bold">
+                        Revisar
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Frequent Errors and Review Section */}

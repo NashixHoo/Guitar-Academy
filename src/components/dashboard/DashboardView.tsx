@@ -72,10 +72,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <div className="flex flex-wrap items-center gap-3.5 pt-2">
             <button
               onClick={() => onSelectLesson(currentLesson.id)}
-              className="flex items-center gap-3 px-8 py-3.5 rounded-2xl bg-[#7B1E2B] text-white hover:bg-[#B52A3A] active:scale-95 font-bold text-sm sm:text-base shadow-sm transition"
+              className="flex items-center gap-3 px-7 py-3.5 rounded-2xl bg-[#7B1E2B] text-white hover:bg-[#B52A3A] active:scale-95 font-bold text-sm sm:text-base shadow-sm transition"
             >
               <Play className="w-5 h-5 fill-current" />
-              <span>Continuar Estudando</span>
+              <span>Continuar Aula Atual</span>
+            </button>
+
+            <button
+              onClick={() => onNavigateTab('practice-routine')}
+              className="flex items-center gap-2 px-6 py-3.5 rounded-2xl bg-[#F5E8EA] hover:bg-[#ebd3d6] text-[#7B1E2B] font-bold text-xs sm:text-sm border border-[#E8D3D6] transition"
+            >
+              <Flame className="w-4 h-4 text-[#B52A3A]" />
+              <span>Rotina Diária (10/20/30m)</span>
             </button>
 
             <button
@@ -83,7 +91,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               className="flex items-center gap-2 px-5 py-3.5 rounded-2xl bg-[#F8F7F4] hover:bg-[#F5E8EA] text-[#25252A] font-bold text-xs sm:text-sm border border-[#D9D9D9] transition"
             >
               <BookOpen className="w-4 h-4 text-[#7B1E2B]" />
-              <span>Ver Trilha Completa (6 Níveis)</span>
+              <span>Ver Trilha (6 Níveis)</span>
             </button>
           </div>
         </div>
@@ -279,6 +287,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
           <div className="space-y-3">
             {[
+              { 
+                title: 'Exercício Prático da Aula 1: 10 repetições das 6 cordas a 60 BPM', 
+                done: (progress.exerciseRepetitions?.['ex-l1-open-strings-alt-picking'] || 0) >= 10 || !!progress.practiceLogs?.['lesson-1']?.targetRepetitionsMet 
+              },
               { title: 'Concluir a Aula 1: As 6 cordas e as 7 notas', done: progress.completedLessons.includes('lesson-1') },
               { title: 'Aprender os primeiros acordes abertos: E, Em, A e Am', done: progress.completedLessons.includes('lesson-5') },
               { title: 'Treinar com o metrônomo por 15 minutos sem interrupção', done: progress.todayStudyTimeSeconds >= 900 },

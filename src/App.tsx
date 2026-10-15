@@ -7,6 +7,7 @@ import { Navigation } from './components/layout/Navigation';
 import { DashboardView } from './components/dashboard/DashboardView';
 import { CurriculumView } from './components/curriculum/CurriculumView';
 import { LessonViewer } from './components/curriculum/LessonViewer';
+import { PracticeRoutineView } from './components/routine/PracticeRoutineView';
 import { FretboardView } from './components/fretboard/FretboardView';
 import { ChordDictionaryView } from './components/chords/ChordDictionaryView';
 import { MetronomeView } from './components/metronome/MetronomeView';
@@ -135,6 +136,7 @@ export default function App() {
                   progress={progress}
                   onUpdateProgress={setProgress}
                   onSelectLesson={handleSelectLesson}
+                  onOpenMetronomeAtBpm={handleOpenMetronomeAtBpm}
                 />
               </div>
             ) : (
@@ -145,7 +147,21 @@ export default function App() {
             )
           )}
 
-          {/* TAB 3: Braço da Guitarra */}
+          {/* TAB 3: Sessão de Prática / Rotina Guiada */}
+          {currentTab === 'practice-routine' && (
+            <PracticeRoutineView
+              progress={progress}
+              onUpdateProgress={setProgress}
+              onSelectLesson={handleSelectLesson}
+              onNavigateTab={(tab) => {
+                setCurrentTab(tab);
+                setSelectedLessonId(null);
+              }}
+              onOpenMetronomeAtBpm={handleOpenMetronomeAtBpm}
+            />
+          )}
+
+          {/* TAB 4: Braço da Guitarra */}
           {currentTab === 'fretboard' && <FretboardView />}
 
           {/* TAB 4: Dicionário de Acordes */}

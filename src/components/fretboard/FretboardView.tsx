@@ -37,10 +37,10 @@ export const FretboardView: React.FC = () => {
         <div>
           <div className="flex items-center gap-2">
             <Guitar className="w-5 h-5 text-[#7B1E2B]" />
-            <h1 className="text-2xl font-black text-[#25252A]">Braço Interativo da Guitarra</h1>
+            <h1 className="text-2xl font-black text-[#25252A]">Mapa Pedagógico do Braço (Referência Física)</h1>
           </div>
           <p className="text-xs sm:text-sm text-[#666672] mt-1 font-medium">
-            Explore a geometria do braço, localize notas, escalas e arpejos em tempo real com áudio instantâneo.
+            Consulte a geometria do instrumento, localize notas e escalas no braço da sua guitarra física sem distrações virtuais.
           </p>
         </div>
 

@@ -55,6 +55,27 @@ export interface LessonPart {
   };
 }
 
+export interface PracticalExercise {
+  id: string;
+  title: string;
+  subtitle: string;
+  targetBpm: number;
+  targetRepetitions: number;
+  timeSignature: { beats: number; noteValue: number };
+  pickingPattern: string; // e.g. '↓ ↑ ↓ ↑ ↓ ↑ (Down-Up estrito)'
+  notesSequence: {
+    stringNumber: number; // 6, 5, 4, 3, 2, 1
+    noteCipher: NoteCipher;
+    notePt: NotePortuguese;
+    pickDirection: 'down' | 'up';
+    fret: number;
+  }[];
+  tablatureText: string;
+  instructions: string[];
+  biomechanicTips: string[];
+  validationCriteria: string;
+}
+
 export interface Lesson {
   id: string;
   level: number; // 0 to 5
@@ -69,6 +90,7 @@ export interface Lesson {
     questions: QuizQuestion[];
     passingScore: number;
   };
+  practicalExercise?: PracticalExercise;
 }
 
 export interface LevelInfo {
@@ -80,9 +102,57 @@ export interface LevelInfo {
   lessons: Lesson[];
 }
 
+export interface LessonPracticeLog {
+  lessonId: string;
+  status: 'viewed' | 'practicing' | 'mastered';
+  practicedBpm: number;
+  confidence: 'needs_review' | 'playable_slow' | 'mastered_with_metronome';
+  notes?: string;
+  lastPracticedDate: string;
+  timesPracticed: number;
+  needsReview: boolean;
+  exerciseRepetitions?: number;
+  targetRepetitionsMet?: boolean;
+}
+
+export interface StudyPlanProfile {
+  selectedLevel: number; // 0 to 5
+  primaryGoal: 'fundamentals' | 'worship_open_chords' | 'pentatonics_solos' | 'technique_speed' | 'harmony_improvisation';
+  dailyRoutineMinutes: 10 | 20 | 30;
+  startDate: string;
+}
+
+export interface TabNote {
+  stringNumber: number; // 1 (high E) to 6 (low E)
+  fret: number;
+  finger?: number;
+  technique?: 'h' | 'p' | 'b' | 'r' | 's' | '~' | 'pm' | 'none';
+  duration?: string;
+}
+
+export interface TabMeasure {
+  id: string;
+  timeSignature?: string;
+  beats: TabNote[][]; // array of vertical beats/chords
+  chordSymbol?: string;
+  lyricsOrCount?: string;
+}
+
+export interface TabSnippet {
+  id: string;
+  title: string;
+  bpm: number;
+  measures: TabMeasure[];
+  audioExampleNotes?: { freq: number; duration: number }[];
+  instruction?: string;
+}
+
 export interface UserProgress {
   currentLessonId: string;
   completedLessons: string[];
+  practiceLogs: Record<string, LessonPracticeLog>;
+  exerciseRepetitions: Record<string, number>; // exerciseId -> count
+  studyPlan: StudyPlanProfile;
   quizScores: Record<string, { score: number; total: number; date: string }>;
   frequentErrors: Record<string, number>;
   totalStudyTimeSeconds: number;
@@ -114,6 +184,7 @@ export interface MetronomeConfig {
 export type NavigationTab = 
   | 'home'
   | 'curriculum'
+  | 'practice-routine'
   | 'fretboard'
   | 'chords'
   | 'metronome'
@@ -124,3 +195,4 @@ export type NavigationTab =
   | 'library'
   | 'progress'
   | 'settings';
+

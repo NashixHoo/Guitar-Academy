@@ -13,6 +13,7 @@ import {
   BookMarked, 
   Trophy, 
   Settings, 
+  Target,
   X
 } from 'lucide-react';
 
@@ -32,16 +33,17 @@ export const Navigation: React.FC<NavigationProps> = ({
   const navItems: { id: NavigationTab; label: string; icon: React.ElementType; badge?: string }[] = [
     { id: 'home', label: '1. Início', icon: Home },
     { id: 'curriculum', label: '2. Minha Formação', icon: GraduationCap, badge: '6 Níveis' },
-    { id: 'fretboard', label: '3. Braço da Guitarra', icon: Guitar },
-    { id: 'chords', label: '4. Dicionário de Acordes', icon: BookOpen },
-    { id: 'metronome', label: '5. Metrônomo', icon: Clock, badge: 'Áudio Real' },
-    { id: 'theory', label: '6. Teoria Musical', icon: Compass },
-    { id: 'reading', label: '7. Leitura Musical', icon: Music },
-    { id: 'ear-training', label: '8. Treino Auditivo', icon: Headphones },
-    { id: 'technique', label: '9. Técnica', icon: Activity },
-    { id: 'library', label: '10. Biblioteca de Estudos', icon: BookMarked },
-    { id: 'progress', label: '11. Meu Progresso', icon: Trophy },
-    { id: 'settings', label: '12. Configurações', icon: Settings },
+    { id: 'practice-routine', label: '3. Rotina de Estudo', icon: Target, badge: '10/20/30m' },
+    { id: 'fretboard', label: '4. Braço da Guitarra', icon: Guitar },
+    { id: 'chords', label: '5. Dicionário de Acordes', icon: BookOpen },
+    { id: 'metronome', label: '6. Metrônomo', icon: Clock, badge: 'Áudio Real' },
+    { id: 'theory', label: '7. Teoria Musical', icon: Compass },
+    { id: 'reading', label: '8. Leitura Musical', icon: Music },
+    { id: 'ear-training', label: '9. Treino Auditivo', icon: Headphones },
+    { id: 'technique', label: '10. Técnica', icon: Activity },
+    { id: 'library', label: '11. Biblioteca de Estudos', icon: BookMarked },
+    { id: 'progress', label: '12. Meu Progresso', icon: Trophy },
+    { id: 'settings', label: '13. Configurações', icon: Settings },
   ];
 
   const handleItemClick = (id: NavigationTab) => {
