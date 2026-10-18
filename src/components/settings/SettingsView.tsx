@@ -1,15 +1,18 @@
-import React from 'react';
-import { UserProgress } from '../../types';
+import React, { useState } from 'react';
+import { UserProgress, NavigationTab } from '../../types';
 import { storageService } from '../../services/storageService';
 import { PWAInstallButton } from '../common/PWAInstallButton';
-import { Settings, Music, Clock, Sliders, Smartphone, Check } from 'lucide-react';
+import { Settings, Music, Clock, Sliders, Smartphone, Check, Target, ShieldCheck } from 'lucide-react';
+import { DailyGoalSettings } from '../dashboard/DailyGoalSettings';
 
 interface SettingsViewProps {
   progress: UserProgress;
   onUpdateProgress: (updated: UserProgress) => void;
+  onNavigateTab?: (tab: NavigationTab) => void;
 }
 
-export const SettingsView: React.FC<SettingsViewProps> = ({ progress, onUpdateProgress }) => {
+export const SettingsView: React.FC<SettingsViewProps> = ({ progress, onUpdateProgress, onNavigateTab }) => {
+  const [showGoalModal, setShowGoalModal] = useState<boolean>(false);
   const updateSetting = <K extends keyof UserProgress>(key: K, value: UserProgress[K]) => {
     const updated = { ...progress, [key]: value };
     onUpdateProgress(updated);
@@ -127,8 +130,28 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ progress, onUpdatePr
                 {mins} minutos / dia
               </button>
             ))}
+            <button
+              onClick={() => setShowGoalModal(true)}
+              className="px-4 py-2.5 rounded-xl font-bold text-xs transition border border-dashed border-[#7B1E2B] text-[#7B1E2B] hover:bg-[#F5E8EA] flex items-center gap-1.5"
+            >
+              <Target className="w-3.5 h-3.5" />
+              <span>Personalizar com Slider & Dicas...</span>
+            </button>
           </div>
         </div>
+
+        {/* Modal de Meta Diária em Configurações */}
+        {showGoalModal && (
+          <DailyGoalSettings
+            currentGoalMinutes={progress.dailyGoalMinutes || 30}
+            onSaveGoal={(newMins) => {
+              updateSetting('dailyGoalMinutes', newMins);
+              setShowGoalModal(false);
+            }}
+            onClose={() => setShowGoalModal(false)}
+            variant="modal"
+          />
+        )}
 
         {/* PWA & Offline Installation */}
         <div className="bg-white border border-[#D9D9D9] rounded-2xl p-6 shadow-xs space-y-3">
@@ -143,6 +166,33 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ progress, onUpdatePr
             <PWAInstallButton variant="settings" />
           </div>
         </div>
+
+        {/* Diagnóstico do Sistema & Auditoria Técnica */}
+        {onNavigateTab && (
+          <div className="bg-white border border-[#D9D9D9] rounded-2xl p-6 shadow-xs space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-[#25252A] font-bold text-sm">
+                <ShieldCheck className="w-4 h-4 text-[#7B1E2B]" />
+                <span>Auditoria & Diagnóstico do Sistema (Fase 4)</span>
+              </div>
+              <span className="text-[10px] font-mono-code font-bold px-2 py-0.5 rounded-full bg-[#EBF7EE] text-[#1E7B34]">
+                Ativo
+              </span>
+            </div>
+            <p className="text-xs text-[#666672]">
+              Verifique em tempo real o estado do localStorage, conectividade com o Professor IA, captação do microfone, perfil de domínio e a consistência das 21 habilidades e 18 aulas.
+            </p>
+            <div className="pt-2">
+              <button
+                onClick={() => onNavigateTab('diagnostics')}
+                className="px-4 py-2.5 rounded-xl bg-[#F8F7F4] hover:bg-[#F5E8EA] text-[#7B1E2B] text-xs font-bold transition border border-[#D9D9D9] flex items-center gap-2"
+              >
+                <ShieldCheck className="w-4 h-4" />
+                <span>Abrir Painel de Diagnóstico do Sistema</span>
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

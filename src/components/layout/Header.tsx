@@ -41,23 +41,21 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   return (
-    <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-[#D9D9D9] px-4 sm:px-6 py-3 flex items-center justify-between shadow-xs">
+    <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-[#D9D9D9] px-4 sm:px-6 py-3 flex items-center justify-between shadow-xs safe-area-top">
       {/* Left: Mobile hamburger & Brand */}
       <div className="flex items-center gap-3">
         <button
           onClick={onToggleMobileNav}
-          className="lg:hidden p-2 rounded-xl bg-[#F8F7F4] hover:bg-[#F5E8EA] text-[#25252A] transition border border-[#D9D9D9]"
+          className="lg:hidden p-2 rounded-xl bg-[#F8F7F4] hover:bg-[#F5E8EA] text-[#25252A] transition border border-[#D9D9D9] min-w-[44px] min-h-[44px] flex items-center justify-center"
           aria-label="Abrir Menu de Navegação"
         >
           <Menu className="w-5 h-5 text-[#7B1E2B]" />
         </button>
 
         <div className="flex items-center gap-2.5">
-          {/* Logo icon box inspired by Giannini white guitar & red pickguard */}
-          <div className="w-9 h-9 rounded-xl bg-[#F8F7F4] border border-[#D9D9D9] flex items-center justify-center shadow-xs group">
-            <div className="w-6 h-6 rounded-lg tortoiseshell-badge flex items-center justify-center">
-              <Guitar className="w-3.5 h-3.5 text-white" />
-            </div>
+          {/* Logo icon box using official icon.svg */}
+          <div className="w-9 h-9 rounded-xl bg-[#F8F7F4] border border-[#D9D9D9] flex items-center justify-center shadow-xs overflow-hidden p-1 tortoiseshell-card">
+            <img src="./icon.svg" alt="Guitar Academy" className="w-full h-full object-contain" />
           </div>
           <div>
             <span className="font-extrabold text-[#25252A] text-base tracking-tight flex items-center gap-1.5 leading-none">

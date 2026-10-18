@@ -16,6 +16,8 @@ import {
   Target,
   Radio,
   Zap,
+  Sparkles,
+  ShieldCheck,
   X
 } from 'lucide-react';
 
@@ -35,19 +37,21 @@ export const Navigation: React.FC<NavigationProps> = ({
   const navItems: { id: NavigationTab; label: string; icon: React.ElementType; badge?: string }[] = [
     { id: 'home', label: '1. Início', icon: Home },
     { id: 'curriculum', label: '2. Minha Formação', icon: GraduationCap, badge: '6 Níveis' },
-    { id: 'practice-routine', label: '3. Rotina de Estudo', icon: Target, badge: '10/20/30m' },
+    { id: 'practice-routine', label: '3. Central de Prática', icon: Target, badge: '5/10/15/30m' },
     { id: 'guitar-coach', label: '4. Guitar Coach', icon: Zap, badge: 'Treino c/ Áudio' },
-    { id: 'tuner', label: '5. Afinador Pro', icon: Radio, badge: 'Microfone Real' },
-    { id: 'fretboard', label: '6. Braço da Guitarra', icon: Guitar },
-    { id: 'chords', label: '7. Dicionário de Acordes', icon: BookOpen },
-    { id: 'metronome', label: '8. Metrônomo', icon: Clock, badge: 'Áudio Real' },
-    { id: 'theory', label: '9. Teoria Musical', icon: Compass },
-    { id: 'reading', label: '10. Leitura Musical', icon: Music },
-    { id: 'ear-training', label: '11. Treino Auditivo', icon: Headphones },
-    { id: 'technique', label: '12. Técnica', icon: Activity },
-    { id: 'library', label: '13. Biblioteca de Estudos', icon: BookMarked },
-    { id: 'progress', label: '14. Meu Progresso', icon: Trophy },
-    { id: 'settings', label: '15. Configurações', icon: Settings },
+    { id: 'professor-ai', label: '5. Professor IA', icon: Sparkles, badge: 'Gemini 3.8' },
+    { id: 'tuner', label: '6. Afinador Pro', icon: Radio, badge: 'Microfone Real' },
+    { id: 'fretboard', label: '7. Braço da Guitarra', icon: Guitar },
+    { id: 'chords', label: '8. Dicionário de Acordes', icon: BookOpen },
+    { id: 'metronome', label: '9. Metrônomo', icon: Clock, badge: 'Áudio Real' },
+    { id: 'theory', label: '10. Teoria Musical', icon: Compass },
+    { id: 'reading', label: '11. Leitura Musical', icon: Music },
+    { id: 'ear-training', label: '12. Treino Auditivo', icon: Headphones },
+    { id: 'technique', label: '13. Técnica', icon: Activity },
+    { id: 'library', label: '14. Biblioteca de Estudos', icon: BookMarked },
+    { id: 'progress', label: '15. Meu Progresso', icon: Trophy },
+    { id: 'settings', label: '16. Configurações', icon: Settings },
+    { id: 'diagnostics', label: '17. Diagnóstico do Sistema', icon: ShieldCheck, badge: 'Auditoria' },
   ];
 
   const handleItemClick = (id: NavigationTab) => {
@@ -70,7 +74,7 @@ export const Navigation: React.FC<NavigationProps> = ({
             <button
               key={item.id}
               onClick={() => handleItemClick(item.id)}
-              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition group ${
+              className={`w-full min-h-[44px] flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition group ${
                 isActive
                   ? 'bg-[#7B1E2B] text-white shadow-xs font-extrabold'
                   : 'text-[#25252A] hover:text-[#7B1E2B] hover:bg-[#F5E8EA]'
@@ -114,12 +118,13 @@ export const Navigation: React.FC<NavigationProps> = ({
             className="fixed inset-0 bg-[#25252A]/60 backdrop-blur-xs animate-in fade-in"
             onClick={onCloseMobile}
           />
-          <div className="fixed inset-y-0 left-0 w-72 bg-white border-r border-[#D9D9D9] shadow-2xl z-10 flex flex-col animate-in slide-in-from-left">
+          <div className="fixed inset-y-0 left-0 w-72 bg-white border-r border-[#D9D9D9] shadow-2xl z-10 flex flex-col animate-in slide-in-from-left safe-area-top safe-area-bottom">
             <div className="flex items-center justify-between p-4 border-b border-[#D9D9D9]">
               <span className="font-extrabold text-[#25252A] text-sm">Navegação Guitar Academy</span>
               <button
                 onClick={onCloseMobile}
-                className="p-1 rounded-lg text-[#666672] hover:text-[#25252A] hover:bg-[#F5E8EA]"
+                className="p-2 rounded-lg text-[#666672] hover:text-[#25252A] hover:bg-[#F5E8EA] min-w-[44px] min-h-[44px] flex items-center justify-center"
+                aria-label="Fechar menu"
               >
                 <X className="w-5 h-5" />
               </button>

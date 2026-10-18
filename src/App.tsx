@@ -17,33 +17,24 @@ import { EarTrainingView } from './components/eartraining/EarTrainingView';
 import { TechniqueView } from './components/technique/TechniqueView';
 import { TunerView } from './components/tuner/TunerView';
 import { GuitarCoachView } from './components/coach/GuitarCoachView';
+import { ProfessorAiView } from './components/professor/ProfessorAiView';
 import { StudyLibraryView } from './components/library/StudyLibraryView';
 import { ProgressView } from './components/progress/ProgressView';
 import { SettingsView } from './components/settings/SettingsView';
+import { DiagnosticsView } from './components/diagnostics/DiagnosticsView';
 import { OfflineIndicator } from './components/common/OfflineIndicator';
+import { SplashScreen } from './components/common/SplashScreen';
 
 export default function App() {
+  const [showSplash, setShowSplash] = useState(true);
   const [currentTab, setCurrentTab] = useState<NavigationTab>('home');
   const [progress, setProgress] = useState<UserProgress>(() => storageService.loadProgress());
   const [selectedLessonId, setSelectedLessonId] = useState<string | null>(null);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
-  // Background study session timer (increments study seconds while app is in foreground)
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setProgress((prev) => {
-        const updated: UserProgress = {
-          ...prev,
-          totalStudyTimeSeconds: prev.totalStudyTimeSeconds + 5,
-          todayStudyTimeSeconds: prev.todayStudyTimeSeconds + 5,
-        };
-        storageService.saveProgress(updated);
-        return updated;
-      });
-    }, 5000);
-
-    return () => clearInterval(timer);
-  }, []);
+  // Note: Em conformidade com a REGRA 3, tempo com o app apenas aberto em repouso
+  // não é contado como tempo de estudo. O tempo é contabilizado exclusivamente durante
+  // a prática ativa (Guitar Coach com microfone, Rotina Guiada com metrônomo e exercícios).
 
   const handleSelectLesson = (lessonId: string) => {
     setSelectedLessonId(lessonId);
@@ -110,11 +101,13 @@ export default function App() {
           onCloseMobile={() => setMobileNavOpen(false)}
         />
 
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
-          {/* TAB 1: Início */}
+        <main className="flex-1 p-3 sm:p-6 lg:p-8 overflow-y-auto safe-area-bottom">
+          <div key={currentTab} className="page-enter">
+            {/* TAB 1: Início */}
           {currentTab === 'home' && (
             <DashboardView
               progress={progress}
+              onUpdateProgress={setProgress}
               onNavigateTab={(tab) => {
                 setCurrentTab(tab);
                 setSelectedLessonId(null);
@@ -167,6 +160,18 @@ export default function App() {
           {/* TAB 4: Guitar Coach (Treino com Microfone & Metrônomo) */}
           {currentTab === 'guitar-coach' && (
             <GuitarCoachView
+              progress={progress}
+              onUpdateProgress={setProgress}
+              onNavigateTab={(tab) => {
+                setCurrentTab(tab);
+                setSelectedLessonId(null);
+              }}
+            />
+          )}
+
+          {/* TAB 5: Professor IA (Mentor Didático Gemini) */}
+          {currentTab === 'professor-ai' && (
+            <ProfessorAiView
               progress={progress}
               onUpdateProgress={setProgress}
               onNavigateTab={(tab) => {
@@ -233,13 +238,33 @@ export default function App() {
             <SettingsView
               progress={progress}
               onUpdateProgress={setProgress}
+              onNavigateTab={(tab) => {
+                setCurrentTab(tab);
+                setSelectedLessonId(null);
+              }}
             />
           )}
+
+          {/* TAB 17: Diagnóstico do Sistema & Auditoria Técnica */}
+          {currentTab === 'diagnostics' && (
+            <DiagnosticsView
+              progress={progress}
+              onUpdateProgress={setProgress}
+              onNavigateTab={(tab) => {
+                setCurrentTab(tab);
+                setSelectedLessonId(null);
+              }}
+            />
+          )}
+          </div>
         </main>
       </div>
 
       {/* Floating Offline Notification Status */}
       <OfflineIndicator />
+
+      {/* Abertura Premium (Splash Screen Fase 5.2) */}
+      {showSplash && <SplashScreen onFinish={() => setShowSplash(false)} />}
     </div>
   );
 }

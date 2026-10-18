@@ -14,6 +14,7 @@ import { CHORD_DATABASE } from '../../data/chordDatabase';
 import { getChordShapes } from '../../chords/shapes';
 import { parseChordSymbol } from '../../chords/chord-builder';
 import { storageService } from '../../services/storageService';
+import { createInitialPedagogicalProfile, recordSkillEvidence } from '../../pedagogy/adaptiveEngine';
 import { 
   Play, 
   Square, 
@@ -412,11 +413,30 @@ export const GuitarCoachView: React.FC<GuitarCoachViewProps> = ({
     if (!summaryData) return;
     const timeSpent = Math.max(30, summaryData.durationSeconds);
 
+    let updatedProfile = progress.pedagogicalProfile || createInitialPedagogicalProfile();
+    // Somente atualiza métricas de áudio quando houver uma medição real disponível (Fase 3, Regra 3)
+    if (summaryData.confirmedSwitches > 0 && isMicActive) {
+      updatedProfile = recordSkillEvidence(updatedProfile, 'skill-chord-transitions', {
+        source: 'guitar_coach_audio',
+        score: summaryData.accuracyPercent,
+        accuracyPercent: summaryData.accuracyPercent,
+        details: `Sessão Guitar Coach: ${summaryData.confirmedSwitches}/${summaryData.totalSwitches} trocas confirmadas acusticamente (${summaryData.accuracyPercent}% precisão a ${summaryData.bpm} BPM).`,
+      });
+    } else {
+      // Treino sem medição acústica comprovada: registra repetições motoras com metrônomo
+      updatedProfile = recordSkillEvidence(updatedProfile, 'skill-chord-transitions', {
+        source: 'exercise_repetitions',
+        score: Math.min(100, 50 + summaryData.totalSwitches * 3),
+        details: `Sessão Guitar Coach: ${summaryData.totalSwitches} trocas praticadas com metrônomo a ${summaryData.bpm} BPM.`,
+      });
+    }
+
     const updated: UserProgress = {
       ...progress,
       totalStudyTimeSeconds: (progress.totalStudyTimeSeconds || 0) + timeSpent,
       todayStudyTimeSeconds: (progress.todayStudyTimeSeconds || 0) + timeSpent,
       practicedBpm: Math.max(progress.practicedBpm || 60, summaryData.bpm),
+      pedagogicalProfile: updatedProfile,
       exerciseRepetitions: {
         ...(progress.exerciseRepetitions || {}),
         'guitar-coach-transitions': ((progress.exerciseRepetitions || {})['guitar-coach-transitions'] || 0) + summaryData.totalSwitches

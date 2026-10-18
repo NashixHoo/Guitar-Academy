@@ -23,8 +23,11 @@ import {
   Play,
   Pause,
   AlertCircle,
-  Radio
+  Radio,
+  ShieldCheck,
+  Compass
 } from 'lucide-react';
+import { LESSON_TO_SKILL_MAP, createInitialPedagogicalProfile } from '../../pedagogy/adaptiveEngine';
 
 interface LessonViewerProps {
   lesson: Lesson;
@@ -233,38 +236,17 @@ export const LessonViewer: React.FC<LessonViewerProps> = ({
     const totalQuestions = lesson.quiz.questions.length;
     const scorePct = Math.round((correctCount / totalQuestions) * 100);
 
-    const updatedCompleted = isCompleted
-      ? progress.completedLessons
-      : [...progress.completedLessons, lesson.id];
-
-    const updatedScores = {
-      ...progress.quizScores,
-      [lesson.id]: {
-        score: scorePct,
-        total: totalQuestions,
-        date: new Date().toISOString(),
-      },
-    };
-
-    const updated: UserProgress = {
-      ...progress,
-      completedLessons: updatedCompleted,
-      quizScores: updatedScores,
-      frequentErrors: errors,
-      achievements: [
-        ...progress.achievements,
-        ...(lesson.id === 'lesson-1' && !progress.achievements.includes('first-lesson')
-          ? ['first-lesson']
-          : []),
-      ],
-    };
+    const updated = storageService.recordQuizScore(lesson.id, scorePct, totalQuestions, errors);
+    if (lesson.id === 'lesson-1' && !updated.achievements.includes('first-lesson')) {
+      updated.achievements = [...updated.achievements, 'first-lesson'];
+      storageService.saveProgress(updated);
+    }
 
     if (scorePct >= 80) {
       audioEngine.playCompletionChime();
     }
 
     onUpdateProgress(updated);
-    storageService.saveProgress(updated);
   };
 
   const handleRetryQuiz = () => {
@@ -322,6 +304,36 @@ export const LessonViewer: React.FC<LessonViewerProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Informative Prerequisite Banner (Fase 3, Item 4) */}
+      {(() => {
+        const profile = progress.pedagogicalProfile || createInitialPedagogicalProfile();
+        const skillId = LESSON_TO_SKILL_MAP[lesson.id];
+        const skill = skillId ? profile.skills[skillId] : null;
+        const prereqSkills = (skill?.prerequisites || [])
+          .map((pId) => profile.skills[pId])
+          .filter(Boolean);
+        const pendingPrereqs = prereqSkills.filter((p) => p.masteryScore < 60);
+
+        if (pendingPrereqs.length === 0) return null;
+
+        return (
+          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+            <div className="flex items-start sm:items-center gap-2.5">
+              <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5 sm:mt-0" />
+              <div>
+                <strong className="text-amber-900 block font-bold">
+                  Recomendação Pedagógica de Pré-Requisito:
+                </strong>
+                <span className="text-amber-800">
+                  Esta aula pressupõe domínio prévio de{' '}
+                  <strong>{pendingPrereqs.map((p) => p.name).join(', ')}</strong> (domínio atual: {pendingPrereqs[0].masteryScore}%). Você é livre para estudar esta aula agora ou praticar os fundamentos primeiro.
+                </span>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Lesson Navigation Tab Bar */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1">

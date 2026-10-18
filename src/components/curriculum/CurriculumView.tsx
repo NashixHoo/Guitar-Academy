@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { CURRICULUM_LEVELS } from '../../data/curriculum';
 import { UserProgress } from '../../types';
-import { GraduationCap, CheckCircle2, ChevronRight, Clock, Award } from 'lucide-react';
+import { GraduationCap, CheckCircle2, ChevronRight, Clock, Award, AlertCircle, ShieldCheck } from 'lucide-react';
+import { LESSON_TO_SKILL_MAP, createInitialPedagogicalProfile } from '../../pedagogy/adaptiveEngine';
 
 interface CurriculumViewProps {
   progress: UserProgress;
@@ -97,6 +98,16 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({ progress, onSele
             const isCompleted = progress.completedLessons.includes(lesson.id);
             const isCurrent = progress.currentLessonId === lesson.id;
 
+            // Memória Pedagógica: Checagem de Pré-Requisitos (Fase 3, Item 4)
+            const profile = progress.pedagogicalProfile || createInitialPedagogicalProfile();
+            const skillId = LESSON_TO_SKILL_MAP[lesson.id];
+            const skill = skillId ? profile.skills[skillId] : null;
+            const prereqSkills = (skill?.prerequisites || [])
+              .map((pId) => profile.skills[pId])
+              .filter(Boolean);
+            const pendingPrereqs = prereqSkills.filter((p) => p.masteryScore < 60);
+            const hasPrereqs = prereqSkills.length > 0;
+
             return (
               <div
                 key={lesson.id}
@@ -120,14 +131,29 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({ progress, onSele
                     )}
                   </div>
 
-                  <div>
-                    <div className="flex items-center gap-2">
+                  <div className="space-y-1">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span className="text-[10px] text-[#666672] uppercase font-bold block">
                         {lesson.moduleTitle}
                       </span>
                       {lesson.practicalExercise && (
                         <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[#7B1E2B] bg-[#F5E8EA] px-2 py-0.2 rounded-md border border-[#E8D3D6]">
                           Ex. Prático ({lesson.practicalExercise.targetBpm} BPM)
+                        </span>
+                      )}
+
+                      {/* Pré-requisitos Pedagógicos */}
+                      {hasPrereqs && pendingPrereqs.length > 0 && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200" title={`Recomendado dominar: ${pendingPrereqs.map(p => p.name).join(', ')}`}>
+                          <AlertCircle className="w-3 h-3 text-amber-600" />
+                          <span>Pré-requisito pendente ({pendingPrereqs[0].name.split(' ')[0]}...)</span>
+                        </span>
+                      )}
+
+                      {hasPrereqs && pendingPrereqs.length === 0 && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                          <ShieldCheck className="w-3 h-3 text-emerald-600" />
+                          <span>Pré-requisitos dominados</span>
                         </span>
                       )}
                     </div>

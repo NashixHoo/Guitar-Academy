@@ -118,7 +118,7 @@ export interface LessonPracticeLog {
 export interface StudyPlanProfile {
   selectedLevel: number; // 0 to 5
   primaryGoal: 'fundamentals' | 'worship_open_chords' | 'pentatonics_solos' | 'technique_speed' | 'harmony_improvisation';
-  dailyRoutineMinutes: 10 | 20 | 30;
+  dailyRoutineMinutes: 5 | 10 | 15 | 20 | 30;
   startDate: string;
 }
 
@@ -164,6 +164,8 @@ export interface UserProgress {
   preferredTuning: 'standard' | 'dropD' | 'halfStepDown';
   dailyGoalMinutes: number;
   achievements: string[];
+  pedagogicalProfile?: PedagogicalProfile;
+  practiceSessions?: PracticeSessionRecord[];
 }
 
 export interface MetronomeConfig {
@@ -186,6 +188,7 @@ export type NavigationTab =
   | 'curriculum'
   | 'practice-routine'
   | 'guitar-coach'
+  | 'professor-ai'
   | 'tuner'
   | 'fretboard'
   | 'chords'
@@ -196,5 +199,146 @@ export type NavigationTab =
   | 'technique'
   | 'library'
   | 'progress'
-  | 'settings';
+  | 'settings'
+  | 'diagnostics';
+
+export interface ProfessorMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: string;
+  suggestedAction?: {
+    label: string;
+    tab: NavigationTab;
+  };
+}
+
+export interface ProfessorExercise {
+  question: string;
+  options: string[];
+  correctIndex: number;
+  explanation: string;
+  skillEvaluated: string;
+}
+
+export interface ProfessorEvaluation {
+  isCorrect: boolean;
+  feedback: string;
+  masteredSkill?: string | null;
+  pointToReview?: string | null;
+  nextDrill: string;
+}
+
+export interface ProfessorRecommendation {
+  title: string;
+  recommendedAction: 'lesson' | 'guitar-coach' | 'practice-routine' | 'tuner' | 'theory' | 'technique' | 'ear-training';
+  rationale: string;
+  suggestedDurationMinutes: number;
+  focusAreas: string[];
+  motivationalNote: string;
+}
+
+// ==========================================
+// MEMÓRIA PEDAGÓGICA & ENSINO ADAPTATIVO (Fase 3)
+// ==========================================
+
+export type SkillCategory = 
+  | 'notes'          // Reconhecimento de notas e cifras
+  | 'intervals'      // Intervalos musicais e distâncias
+  | 'rhythm'         // Tempo, pulsação e metrônomo
+  | 'reading'        // Leitura de cifras e tablaturas
+  | 'chord_shapes'   // Formação e digitação de acordes (tríades, pestanas)
+  | 'scales'         // Pentatônica, maiores e CAGED
+  | 'harmony'        // Campo harmônico e cadências
+  | 'ear_training'   // Reconhecimento auditivo de intervalos e acordes
+  | 'technique'      // Postura, afinação, palhetada alternada e ligados
+  | 'improvisation';  // Aplicação criativa e frases melódicas
+
+export type MasteryLevel = 'not_started' | 'introductory' | 'practicing' | 'proficient' | 'mastered';
+
+export interface SkillEvidence {
+  id: string;
+  source: 'lesson_quiz' | 'exercise_repetitions' | 'guitar_coach_audio' | 'professor_exercise' | 'practice_session' | 'self_evaluation';
+  date: string;
+  score?: number; // 0 a 100
+  accuracyPercent?: number;
+  details: string;
+}
+
+export interface PracticeSessionStepRecord {
+  stepId: string;
+  stepTitle: string;
+  skillId?: string;
+  category: string;
+  initialBpm?: number;
+  finalBpm?: number;
+  targetBpm?: number;
+  repetitionsCompleted: number;
+  effectiveSeconds: number;
+  completed: boolean;
+  selfRating?: 'needs_work' | 'consistent' | 'mastered';
+  notes?: string;
+}
+
+export interface PracticeSessionRecord {
+  id: string;
+  date: string; // ISO string
+  durationPlannedMinutes: 5 | 10 | 15 | 20 | 30;
+  effectiveStudyTimeSeconds: number; // tempo real cronometrado com guitarra em execução
+  stepsCount: number;
+  stepsCompleted: number;
+  skillsPracticed: string[];
+  averageBpm?: number;
+  highestBpm?: number;
+  overallRating?: 'needs_work' | 'good' | 'flawless';
+  studentNotes?: string;
+  abandoned?: boolean;
+  recommendationGiven?: string;
+  steps: PracticeSessionStepRecord[];
+}
+
+export interface SkillProfile {
+  id: string;
+  name: string;
+  category: SkillCategory;
+  level: number; // 0 a 5
+  masteryScore: number; // 0 a 100
+  masteryLevel: MasteryLevel;
+  attemptsCount: number;
+  correctCount: number;
+  incorrectCount: number;
+  recurringErrors: Record<string, number>; // ex: { 'confundiu_terca_quarta': 2 }
+  lastPracticedDate: string | null;
+  lastReviewedDate: string | null;
+  nextReviewDate: string | null; // ISO YYYY-MM-DD para repetição espaçada
+  reviewIntervalDays: number; // 1, 3, 7, 14, 30...
+  prerequisites: string[]; // IDs de skills pré-requisito
+  evidences: SkillEvidence[];
+}
+
+export interface PedagogicalProfile {
+  skills: Record<string, SkillProfile>;
+  overallMasteryPercent: number;
+  lastAdaptationDate: string;
+}
+
+export interface AdaptiveRecommendation {
+  actionType: 
+    | 'teach_prerequisite'
+    | 'reexplain_concept'
+    | 'instrumental_practice'
+    | 'spaced_review'
+    | 'simplify_activity'
+    | 'advance_next_level';
+  targetSkillId: string;
+  targetSkillName: string;
+  targetLessonId?: string;
+  targetTab: NavigationTab;
+  title: string;
+  rationale: string;
+  difficultyAdjustment: 'easier' | 'same' | 'challenging';
+  suggestedMinutes: number;
+  pendingReviewsCount: number;
+}
+
 
