@@ -49,6 +49,7 @@ import {
   QUICK_SEARCH_SUGGESTIONS,
 } from './src/services/searchService';
 import fs from 'fs';
+import path from 'path';
 
 let totalTests = 0;
 let passedTests = 0;
@@ -1335,6 +1336,112 @@ assert(
   'App.tsx aplica a transição .page-enter de forma atômica no container de conteúdo preservando o cabeçalho e navegação'
 );
 
+// -------------------------------------------------------------
+// GRUPO 15: Fase 6 — Estabilização, Auditoria e GitHub Pages
+// -------------------------------------------------------------
+console.log('\n--- GRUPO 15: Fase 6 — Auditoria Técnica, GitHub Pages & Resiliência ---');
+
+// 1. Workflow do GitHub Actions para Deploy
+const deployYmlPath = '.github/workflows/deploy.yml';
+assert(fs.existsSync(deployYmlPath), 'Arquivo de workflow .github/workflows/deploy.yml existe');
+const deployYml = fs.readFileSync(deployYmlPath, 'utf-8');
+assert(
+  deployYml.includes('npm run lint'),
+  'Workflow do GitHub Actions executa checagem de tipos e lint (npm run lint)'
+);
+assert(
+  deployYml.includes('npm test'),
+  'Workflow do GitHub Actions executa a suíte completa de testes (npm test)'
+);
+assert(
+  deployYml.includes("BASE_URL: '/Guitar-Academy/'"),
+  "Workflow do GitHub Actions define BASE_URL: '/Guitar-Academy/' para o bundle de produção"
+);
+assert(
+  deployYml.includes('actions/deploy-pages@v4'),
+  'Workflow do GitHub Actions utiliza a action oficial de publicação de páginas v4'
+);
+
+// 2. Configuração do Vite para GitHub Pages e PWA
+const viteConfigContent = fs.readFileSync('vite.config.ts', 'utf-8');
+assert(
+  viteConfigContent.includes('/Guitar-Academy/') || viteConfigContent.includes('process.env.BASE_URL'),
+  'vite.config.ts configura caminho base compatível com o GitHub Pages (/Guitar-Academy/)'
+);
+assert(
+  viteConfigContent.includes('VitePWA('),
+  'vite.config.ts configura o plugin de PWA para suporte offline e instalabilidade'
+);
+assert(
+  viteConfigContent.includes('#F8F7F4'),
+  'Manifesto PWA preserva a cor canônica #F8F7F4 da identidade visual'
+);
+
+// 3. Segurança e Ausência de Alertas Bloqueantes
+// Varre todos os arquivos de src para garantir ausência total de window.alert
+function scanDirForAlerts(dir: string): string[] {
+  let found: string[] = [];
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    const fullPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      found = found.concat(scanDirForAlerts(fullPath));
+    } else if (entry.isFile() && (entry.name.endsWith('.ts') || entry.name.endsWith('.tsx'))) {
+      const code = fs.readFileSync(fullPath, 'utf-8');
+      // Procura chamadas alert(...) desconsiderando alertCircle ou alert-dialog
+      if (/\balert\s*\(/.test(code)) {
+        found.push(fullPath);
+      }
+    }
+  }
+  return found;
+}
+const alertFiles = scanDirForAlerts('src');
+assert(
+  alertFiles.length === 0,
+  `Ausência total de window.alert no código-fonte de src (arquivos com alert: ${alertFiles.join(', ') || 'nenhum'})`
+);
+
+// 4. Segurança do Backend e Chaves de API
+const serverTsContent = fs.readFileSync('server.ts', 'utf-8');
+assert(
+  serverTsContent.includes('process.env.GEMINI_API_KEY'),
+  'GEMINI_API_KEY é lida estritamente de process.env no backend Node.js'
+);
+assert(
+  !serverTsContent.includes('AIzaSy'),
+  'Nenhuma chave de API do Gemini está hardcoded no código do servidor'
+);
+
+// 5. Integridade do Currículo e Central de Prática
+const allLessonsCount = CURRICULUM_LEVELS.reduce((acc, lvl) => acc + lvl.lessons.length, 0);
+assert(
+  allLessonsCount === 18,
+  `Todas as 18 aulas canônicas do currículo estão preservadas e íntegras (encontradas: ${allLessonsCount})`
+);
+assert(
+  CANONICAL_SKILLS.length === 21,
+  `Todas as 21 habilidades pedagógicas canônicas continuam ativas (encontradas: ${CANONICAL_SKILLS.length})`
+);
+assert(
+  [5, 10, 15, 30].every((dur) => {
+    const r = generatePracticeRoutine(dur as 5 | 10 | 15 | 30, INITIAL_PROGRESS);
+    return r && r.durationMinutes === dur && r.exercises.length >= 2;
+  }),
+  'Central de Prática gera rotinas estruturadas e válidas para 5, 10, 15 e 30 minutos'
+);
+
+// 6. Resiliência do Professor IA no Frontend sem Backend
+const profViewCode = fs.readFileSync('src/components/professor/ProfessorAiView.tsx', 'utf-8');
+assert(
+  profViewCode.includes('LOCAL_FALLBACK_EXERCISES'),
+  'ProfessorAiView implementa catálogo local determinístico para geração de exercícios sem backend'
+);
+assert(
+  profViewCode.includes('Modo Resiliente Local'),
+  'ProfessorAiView orienta amigavelmente o aluno no modo resiliente local quando o backend não responde'
+);
+
 console.log('\n===========================================================');
 console.log(`TOTAL DE TESTES: ${totalTests}`);
 console.log(`PASSOU: ${passedTests}`);
@@ -1344,6 +1451,6 @@ console.log('===========================================================');
 if (failedTests > 0) {
   process.exit(1);
 } else {
-  console.log('✓ Todos os testes de integração do motor musical, detector, currículo, Central de Prática, Busca Global e Fase 5.2 foram APROVADOS com sucesso!\n');
+  console.log('✓ Todos os testes de integração do motor musical, detector, currículo, Central de Prática, Busca Global e Fase 6 foram APROVADOS com sucesso!\n');
 }
 

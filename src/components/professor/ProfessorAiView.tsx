@@ -54,6 +54,56 @@ interface ProfessorAiViewProps {
   onNavigateTab: (tab: NavigationTab) => void;
 }
 
+const LOCAL_FALLBACK_EXERCISES: Record<string, ProfessorExercise> = {
+  'afina': {
+    question: 'Qual é a sequência canônica de afinação padrão da guitarra, da 6ª corda (mais grave) para a 1ª corda (mais aguda)?',
+    options: ['E - A - D - G - B - E', 'E - B - G - D - A - E', 'D - G - C - F - A - D', 'E - A - D - F# - B - E'],
+    correctIndex: 0,
+    explanation: 'A afinação padrão (Standard Tuning) é Mi (6ª), Lá (5ª), Ré (4ª), Sol (3ª), Si (2ª) e Mi (1ª).',
+    skillEvaluated: 'Afinação Padrão e Cordas (E-A-D-G-B-E)',
+  },
+  'harmonia': {
+    question: 'Quais notas formam a tríade de Dó Maior (C) e qual é a sua fórmula intervalar fundamental?',
+    options: ['C, E, G (Tônica, 3ª Maior, 5ª Justa)', 'C, Eb, G (Tônica, 3ª Menor, 5ª Justa)', 'C, E, G# (Tônica, 3ª Maior, 5ª Aumentada)', 'C, F, G (Tônica, 4ª Justa, 5ª Justa)'],
+    correctIndex: 0,
+    explanation: 'A tríade maior é formada por Tônica (1), 3ª Maior (2 tons) e 5ª Justa (3,5 tons): C - E - G.',
+    skillEvaluated: 'Formação de Tríades e Harmonia',
+  },
+  'caged': {
+    question: 'No Sistema CAGED, ao montar o acorde de C Maior na 5ª casa utilizando o shape derivado de Lá (A), onde repousa a tônica principal?',
+    options: ['5ª corda (Lá) na 3ª casa', '6ª corda (Mi) na 5ª casa', '4ª corda (Ré) na 3ª casa', '3ª corda (Sol) na 5ª casa'],
+    correctIndex: 0,
+    explanation: 'O formato do shape de Lá tem sua tônica na 5ª corda. Ao transportar a pestana para a casa 3 da 5ª corda (nota C), formamos C Maior.',
+    skillEvaluated: 'Sistema CAGED e Shapes de Guitarra',
+  },
+  'tétrade': {
+    question: 'Qual é a diferença intervalar crucial entre um acorde com sétima maior (ex: Cmaj7) e um acorde com sétima dominante (ex: C7)?',
+    options: [
+      'Cmaj7 possui 7ª maior (11 semitons), enquanto C7 possui 7ª menor (10 semitons)',
+      'C7 possui 7ª maior e Cmaj7 possui 7ª diminuta',
+      'Cmaj7 não tem quinta justa na sua formação',
+      'Ambos possuem rigorosamente os mesmos intervalos'
+    ],
+    correctIndex: 0,
+    explanation: 'Cmaj7 (C - E - G - B) possui sétima maior (B). Já C7 (C - E - G - Bb) possui sétima menor (Bb), sendo a sétima menor responsável pela tensão dominante.',
+    skillEvaluated: 'Formação de Tétrades e Sétimas',
+  },
+  'pentat': {
+    question: 'Quais graus compõem a fórmula intervalar da Escala Pentatônica Menor a partir da tônica?',
+    options: ['1, b3, 4, 5, b7', '1, 2, 3, 5, 6', '1, b3, 4, b5, 5, b7', '1, 3, 4, 5, 7'],
+    correctIndex: 0,
+    explanation: 'A Pentatônica Menor é formada por 5 notas: Tônica (1), Terça Menor (b3), Quarta Justa (4), Quinta Justa (5) e Sétima Menor (b7).',
+    skillEvaluated: 'Escala Pentatônica e Aplicação Solo',
+  },
+  'cifra': {
+    question: 'Se uma progressão está em Sol Maior (G) com a sequência G - Em - C - D, quais serão os acordes ao transpor 1 tom acima (Lá Maior - A)?',
+    options: ['A - F#m - D - E', 'A - Fm - Dm - E', 'A - Bm - D - E', 'B - G#m - E - F#'],
+    correctIndex: 0,
+    explanation: 'Transpondo 1 tom acima (2 semitons): G vira A (I), Em vira F#m (vi), C vira D (IV) e D vira E (V).',
+    skillEvaluated: 'Leitura de Cifras e Transposição',
+  },
+};
+
 export const ProfessorAiView: React.FC<ProfessorAiViewProps> = ({
   progress,
   onUpdateProgress,
@@ -164,10 +214,13 @@ export const ProfessorAiView: React.FC<ProfessorAiViewProps> = ({
 
       setMessages((prev) => [...prev, assistantMsg]);
     } catch (err: any) {
+      const isBackendUnavailable = !status?.available;
       const errorMsg: ProfessorMessage = {
         id: `error-${Date.now()}`,
         role: 'assistant',
-        content: `⚠️ Não foi possível consultar o Professor IA: ${err?.message || 'Falha na conexão com o servidor.'}`,
+        content: isBackendUnavailable
+          ? `💡 **Professor IA (Modo Resiliente Local)**: O backend de IA está em modo estático/offline. Para orientações da aula atual (*${currentLesson ? currentLesson.title : 'Fundamentos'}*), consulte as tablaturas e o diagrama de braço interativo no Currículo ou acesse o Círculo de Quintas na aba Teoria!`
+          : `⚠️ Não foi possível consultar o Professor IA: ${err?.message || 'Falha na conexão com o servidor.'}`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
       setMessages((prev) => [...prev, errorMsg]);
@@ -186,8 +239,11 @@ export const ProfessorAiView: React.FC<ProfessorAiViewProps> = ({
     try {
       const ex = await professorService.generateExercise(selectedLevel, selectedTopic);
       setCurrentExercise(ex);
-    } catch (err: any) {
-      alert(`Erro ao gerar exercício: ${err?.message || 'Tente novamente.'}`);
+    } catch {
+      // Fallback determinístico local resiliente (compatível com GitHub Pages / sem backend)
+      const topicLower = selectedTopic.toLowerCase();
+      const fallbackKey = Object.keys(LOCAL_FALLBACK_EXERCISES).find((k) => topicLower.includes(k)) || 'harmonia';
+      setCurrentExercise(LOCAL_FALLBACK_EXERCISES[fallbackKey]);
     } finally {
       setIsGeneratingExercise(false);
     }
@@ -270,8 +326,22 @@ export const ProfessorAiView: React.FC<ProfessorAiViewProps> = ({
     try {
       const rec = await professorService.getRecommendation(progress);
       setRecommendation(rec);
-    } catch (err: any) {
-      alert(`Erro ao obter recomendação: ${err?.message || 'Tente novamente.'}`);
+    } catch {
+      // Fallback determinístico local transparente (Garante funcionamento no GitHub Pages / sem backend)
+      setRecommendation({
+        title: deterministicRec.title,
+        recommendedAction:
+          deterministicRec.actionType === 'instrumental_practice'
+            ? 'practice-routine'
+            : deterministicRec.actionType === 'spaced_review'
+            ? 'lesson'
+            : 'theory',
+        rationale: deterministicRec.rationale,
+        suggestedDurationMinutes: deterministicRec.suggestedMinutes,
+        focusAreas: [deterministicRec.targetSkillName],
+        motivationalNote:
+          'A consistência diária de 10 a 15 minutos com metrônomo supera horas desordenadas no final de semana. Mantenha o foco!',
+      });
     } finally {
       setIsLoadingRecommendation(false);
     }

@@ -37,6 +37,9 @@ jobs:
       - name: Run Linting & Typecheck
         run: npm run lint
 
+      - name: Run Integration Tests
+        run: npm test
+
       - name: Build production bundle for GitHub Pages
         run: npm run build
         env:

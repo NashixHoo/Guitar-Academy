@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { UserProgress } from '../../types';
 import { storageService } from '../../services/storageService';
 import { CURRICULUM_LEVELS } from '../../data/curriculum';
@@ -33,11 +33,16 @@ export const ProgressView: React.FC<ProgressViewProps> = ({
   const completedCount = progress.completedLessons.length;
   const progressPercent = Math.round((completedCount / totalLessons) * 100);
 
+  const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+
   const hours = Math.floor(progress.totalStudyTimeSeconds / 3600);
   const minutes = Math.floor((progress.totalStudyTimeSeconds % 3600) / 60);
 
   const handleExportBackup = () => {
     storageService.exportBackup();
+    setStatusMessage({ type: 'success', text: 'Backup exportado com sucesso!' });
+    setTimeout(() => setStatusMessage(null), 3500);
   };
 
   const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -52,27 +57,51 @@ export const ProgressView: React.FC<ProgressViewProps> = ({
         if (success) {
           const reloaded = storageService.loadProgress();
           onUpdateProgress(reloaded);
-          alert('Dados e progresso importados com sucesso!');
+          setStatusMessage({ type: 'success', text: 'Dados e progresso importados com sucesso!' });
         } else {
-          alert('Erro ao importar arquivo de backup.');
+          setStatusMessage({ type: 'error', text: 'Erro ao importar arquivo de backup. Formato inválido.' });
         }
+        setTimeout(() => setStatusMessage(null), 4000);
       }
     };
     reader.readAsText(file);
+    // Limpa o input para permitir selecionar o mesmo arquivo novamente
+    e.target.value = '';
   };
 
-  const handleResetProgress = () => {
-    if (confirm('Tem certeza de que deseja reiniciar todo o seu progresso? Esta ação não pode ser desfeita.')) {
-      storageService.resetAll();
-      const fresh = storageService.loadProgress();
-      onUpdateProgress(fresh);
-    }
+  const handleConfirmReset = () => {
+    storageService.resetAll();
+    const fresh = storageService.loadProgress();
+    onUpdateProgress(fresh);
+    setShowResetConfirm(false);
+    setStatusMessage({ type: 'success', text: 'Todo o progresso foi reiniciado com sucesso.' });
+    setTimeout(() => setStatusMessage(null), 3500);
   };
 
   const frequentErrorsList = Object.entries(progress.frequentErrors || {}).sort((a, b) => b[1] - a[1]);
 
   return (
     <div className="max-w-5xl mx-auto space-y-6 pb-12">
+      {/* Toast de Notificação Inline */}
+      {statusMessage && (
+        <div
+          role="status"
+          className={`p-4 rounded-2xl border text-sm font-bold flex items-center justify-between transition-all ${
+            statusMessage.type === 'success'
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+              : 'bg-rose-50 border-rose-200 text-rose-800'
+          }`}
+        >
+          <span>{statusMessage.text}</span>
+          <button
+            onClick={() => setStatusMessage(null)}
+            className="text-xs opacity-75 hover:opacity-100 font-mono-code px-2 py-0.5"
+          >
+            Fechar
+          </button>
+        </div>
+      )}
+
       {/* Header */}
       <div className="bg-white border border-[#D9D9D9] rounded-3xl p-6 shadow-xs flex flex-wrap items-center justify-between gap-4">
         <div>
@@ -308,13 +337,35 @@ export const ProgressView: React.FC<ProgressViewProps> = ({
 
       {/* Reset Data */}
       <div className="pt-4 flex justify-end">
-        <button
-          onClick={handleResetProgress}
-          className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-rose-700 hover:text-rose-800 hover:bg-rose-50 text-xs font-bold transition border border-rose-200"
-        >
-          <RotateCcw className="w-3.5 h-3.5" />
-          <span>Zerar Progresso</span>
-        </button>
+        {!showResetConfirm ? (
+          <button
+            onClick={() => setShowResetConfirm(true)}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-rose-700 hover:text-rose-800 hover:bg-rose-50 text-xs font-bold transition border border-rose-200"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span>Zerar Progresso</span>
+          </button>
+        ) : (
+          <div className="bg-rose-50 border border-rose-300 rounded-2xl p-4 flex flex-col sm:flex-row items-center gap-3">
+            <span className="text-xs font-bold text-rose-900 text-center sm:text-left">
+              Tem certeza? Esta ação apagará todo o histórico e progresso de estudo.
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleConfirmReset}
+                className="px-3 py-1.5 rounded-xl bg-rose-700 hover:bg-rose-800 text-white font-bold text-xs transition shadow-xs"
+              >
+                Sim, Zerar Tudo
+              </button>
+              <button
+                onClick={() => setShowResetConfirm(false)}
+                className="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs transition border border-slate-300"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
