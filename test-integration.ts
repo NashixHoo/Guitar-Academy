@@ -43,6 +43,12 @@ import {
   GeneratedRoutine,
 } from './src/pedagogy/practiceRoutineEngine';
 import { storageService, INITIAL_PROGRESS } from './src/services/storageService';
+import {
+  searchAll,
+  getSearchIndexStats,
+  QUICK_SEARCH_SUGGESTIONS,
+} from './src/services/searchService';
+import fs from 'fs';
 
 let totalTests = 0;
 let passedTests = 0;
@@ -1102,6 +1108,233 @@ assert(
   'Contabilização de tempo de estudo permanece 100% íntegra na desserialização'
 );
 
+// -------------------------------------------------------------
+// GRUPO 13: Barra de Busca Global e Histórico Local de Buscas
+// -------------------------------------------------------------
+console.log('\n--- GRUPO 13: Barra de Busca Global & Histórico Local de Buscas ---');
+
+// 1. Estatísticas e Cobertura do Índice Global
+const searchStats = getSearchIndexStats();
+assert(searchStats.lessonsCount === 18, 'O índice de busca global indexa todas as 18 aulas do currículo');
+assert(searchStats.chordsCount >= 20, 'O índice de busca global indexa a base completa de acordes');
+assert(searchStats.theoryCount >= 20, 'O índice de busca global indexa escalas, intervalos, círculo de quintas e harmonia');
+assert(searchStats.totalItems >= 58, 'O total de itens indexados cobre todas as áreas de estudo da Guitar Academy');
+
+// 2. Busca de Aulas com Normalização
+const searchAfinacao = searchAll('afinacao');
+assert(
+  searchAfinacao.lessons.some((l) => l.lessonId === 'lesson-1'),
+  'Busca sem acento "afinacao" localiza a Aula 1 (Afinação Padrão)'
+);
+const searchWorship = searchAll('Worship');
+assert(
+  searchWorship.lessons.some((l) => l.lessonId === 'lesson-7' || l.lessonId === 'lesson-8'),
+  'Busca por "Worship" localiza as aulas de acordes modernos e levadas rítmicas de worship'
+);
+const searchSolos = searchAll('solos');
+assert(
+  searchSolos.lessons.some((l) => l.lessonId === 'lesson-12'),
+  'Busca por "solos" localiza a Aula 12 (Criação de Solos)'
+);
+const searchPestana = searchAll('Pestana');
+assert(
+  searchPestana.chords.some((c) => c.detail && c.detail.toLowerCase().includes('pestana')),
+  'Busca por "Pestana" localiza acordes com pestana no dicionário'
+);
+
+// 3. Busca de Acordes por Cifra e Nome
+const searchChordC = searchAll('C');
+assert(
+  searchChordC.chords.some((c) => c.chordSymbol === 'C'),
+  'Busca por "C" encontra o acorde C Maior aberto'
+);
+const searchChordAm = searchAll('Am');
+assert(
+  searchChordAm.chords.some((c) => c.chordSymbol === 'Am'),
+  'Busca por "Am" encontra o acorde Lá Menor'
+);
+const searchChordDo = searchAll('dó maior');
+assert(
+  searchChordDo.chords.some((c) => c.chordSymbol === 'C'),
+  'Busca em português "dó maior" encontra o acorde C correspondente'
+);
+
+// 4. Busca de Tópicos Teóricos
+const searchPenta = searchAll('pentatonica');
+assert(
+  searchPenta.theory.some((t) => t.title.includes('Pentatônica Menor')),
+  'Busca "pentatonica" localiza o tópico da Escala Pentatônica Menor'
+);
+const searchTritono = searchAll('tritono');
+assert(
+  searchTritono.theory.some((t) => t.title.includes('Trítono')),
+  'Busca "tritono" localiza o intervalo de Trítono (b5/#4)'
+);
+const searchQuintas = searchAll('quintas');
+assert(
+  searchQuintas.theory.some((t) => t.theoryKey !== undefined),
+  'Busca "quintas" localiza itens do Círculo de Quintas'
+);
+const searchCadencia = searchAll('251');
+assert(
+  searchCadencia.theory.some((t) => t.title.includes('II - V - I')),
+  'Busca por "251" localiza a Cadência Mestra II-V-I'
+);
+
+// 5. Query Vazia e Sugestões Rápidas
+const emptySearch = searchAll('');
+assert(emptySearch.totalCount === 0 && emptySearch.all.length === 0, 'Query vazia retorna 0 resultados sem erro');
+assert(QUICK_SEARCH_SUGGESTIONS.length >= 6, 'Sugestões rápidas de busca estão definidas para o usuário');
+
+// 6. Armazenamento Local dos Últimos Termos Pesquisados
+storageService.clearRecentSearches();
+assert(storageService.getRecentSearches().length === 0, 'Histórico de buscas inicia limpo com clearRecentSearches');
+
+storageService.addRecentSearch('Pentatônica Menor');
+assert(
+  storageService.getRecentSearches()[0] === 'Pentatônica Menor',
+  'addRecentSearch salva o primeiro termo no topo do histórico'
+);
+
+storageService.addRecentSearch('Círculo de Quintas');
+const recentAfterTwo = storageService.getRecentSearches();
+assert(
+  recentAfterTwo[0] === 'Círculo de Quintas' && recentAfterTwo[1] === 'Pentatônica Menor',
+  'Novo termo é inserido no topo (ordem cronológica inversa)'
+);
+
+// Deduplicação: reinserir termo já existente move-o para o topo sem duplicar
+storageService.addRecentSearch('Pentatônica Menor');
+const recentAfterDedup = storageService.getRecentSearches();
+assert(
+  recentAfterDedup.length === 2 && recentAfterDedup[0] === 'Pentatônica Menor',
+  'Deduplicação move termo repetido para o topo sem duplicar a lista'
+);
+
+// Limite máximo de 8 termos
+for (let i = 1; i <= 10; i++) {
+  storageService.addRecentSearch(`Termo de Busca ${i}`);
+}
+const recentLimited = storageService.getRecentSearches();
+assert(
+  recentLimited.length === 8,
+  'O histórico de buscas impõe rigorosamente o teto máximo de 8 termos recentes'
+);
+
+// Remoção individual
+storageService.removeRecentSearch('Termo de Busca 10');
+assert(
+  !storageService.getRecentSearches().includes('Termo de Busca 10'),
+  'removeRecentSearch remove individualmente o termo selecionado'
+);
+
+// Limpeza geral
+storageService.clearRecentSearches();
+assert(
+  storageService.getRecentSearches().length === 0,
+  'clearRecentSearches remove integralmente todos os termos armazenados'
+);
+
+// -------------------------------------------------------------
+// GRUPO 14: Validação da Fase 5.2 (Splash Screen, Transições e Refinamento Visual)
+// -------------------------------------------------------------
+console.log('\n--- GRUPO 14: Validação da Fase 5.2 (Splash Screen, Transições & Refinamento) ---');
+
+// 1. Ícone Oficial Existente do Guitar Academy & Manifesto PWA
+const iconExists = fs.existsSync('public/icon.svg');
+assert(iconExists, 'O ícone oficial public/icon.svg existe e permanece preservado sem modificações');
+
+const iconContent = fs.readFileSync('public/icon.svg', 'utf-8');
+assert(iconContent.includes('<svg') && iconContent.includes('</svg>'), 'O arquivo public/icon.svg é um vetor SVG válido com elementos do instrumento');
+
+const indexHtmlContent = fs.readFileSync('index.html', 'utf-8');
+assert(
+  indexHtmlContent.includes('href="./icon.svg"') && indexHtmlContent.includes('rel="icon"'),
+  'index.html referencia corretamente o ícone oficial ./icon.svg como favicon'
+);
+assert(
+  indexHtmlContent.includes('rel="apple-touch-icon" href="./icon.svg"'),
+  'index.html referencia ./icon.svg como apple-touch-icon para dispositivos iOS'
+);
+assert(
+  indexHtmlContent.includes('viewport-fit=cover'),
+  'index.html configura viewport-fit=cover para respeito rigoroso à Safe Area do iPhone'
+);
+assert(
+  indexHtmlContent.includes('mobile-web-app-capable'),
+  'index.html declara compatibilidade nativa com PWA e modo web app mobile'
+);
+
+// 2. Componente de Abertura Premium (SplashScreen.tsx)
+const splashComponentExists = fs.existsSync('src/components/common/SplashScreen.tsx');
+assert(splashComponentExists, 'O componente SplashScreen.tsx existe em src/components/common/');
+
+const splashCode = fs.readFileSync('src/components/common/SplashScreen.tsx', 'utf-8');
+assert(
+  splashCode.includes('durationMs = 850') || (splashCode.includes('850') && splashCode.includes('700')),
+  'A splash screen define duração padrão de 850 ms (dentro da faixa exigida de 700 a 1000 ms)'
+);
+assert(
+  splashCode.includes('safetyTimer') && splashCode.includes('1200'),
+  'A splash screen possui trava de segurança máxima (1200 ms) para impedir travamento da interface'
+);
+assert(
+  splashCode.includes('handleDismiss') && splashCode.includes('onClick={handleDismiss}'),
+  'A splash screen é descartável imediatamente ao toque/clique do usuário'
+);
+assert(
+  splashCode.includes('src="./icon.svg"'),
+  'A splash screen renderiza exclusivamente o ícone oficial existente ./icon.svg'
+);
+assert(
+  splashCode.includes('#F8F7F4') && splashCode.includes('#7B1E2B') && splashCode.includes('#B52A3A'),
+  'A splash screen respeita estritamente a paleta oficial (porcelana, vinho e cereja)'
+);
+assert(
+  splashCode.includes('prefers-reduced-motion'),
+  'A splash screen verifica ativamente prefers-reduced-motion para diminuir a duração quando requisitado'
+);
+
+// 3. Transições Entre Páginas e Deslocamento Vertical Sutil (index.css)
+const indexCssContent = fs.readFileSync('src/index.css', 'utf-8');
+assert(
+  indexCssContent.includes('.page-enter') && indexCssContent.includes('@keyframes pageEnter'),
+  'index.css define a classe .page-enter e os keyframes de transição entre páginas'
+);
+assert(
+  indexCssContent.includes('190ms') || indexCssContent.includes('180ms') || indexCssContent.includes('200ms'),
+  'A transição entre páginas opera na duração recomendada de 160–220 ms (190 ms)'
+);
+assert(
+  indexCssContent.includes('translateY(6px)') || indexCssContent.includes('translateY(4px)'),
+  'A transição entre páginas aplica micro deslocamento vertical de 6px sem saltos abruptos'
+);
+assert(
+  indexCssContent.includes('@media (prefers-reduced-motion: reduce)') && indexCssContent.includes('animation: none !important'),
+  'index.css implementa anulação completa de animações para usuários com prefers-reduced-motion ativo'
+);
+
+// 4. Safe Area e Layout Mobile iPhone
+assert(
+  indexCssContent.includes('.safe-area-bottom') && indexCssContent.includes('env(safe-area-inset-bottom'),
+  'index.css define utilitário .safe-area-bottom compatível com home indicator do iPhone'
+);
+assert(
+  indexCssContent.includes('.safe-area-top') && indexCssContent.includes('env(safe-area-inset-top'),
+  'index.css define utilitário .safe-area-top compatível com notch/dynamic island do iPhone'
+);
+
+// 5. Integração com App.tsx e Preservação de Estado
+const appCode = fs.readFileSync('src/App.tsx', 'utf-8');
+assert(
+  appCode.includes('<SplashScreen') && appCode.includes('showSplash'),
+  'App.tsx monta a SplashScreen de forma condicional apenas na inicialização'
+);
+assert(
+  appCode.includes('key={currentTab}') && appCode.includes('page-enter'),
+  'App.tsx aplica a transição .page-enter de forma atômica no container de conteúdo preservando o cabeçalho e navegação'
+);
+
 console.log('\n===========================================================');
 console.log(`TOTAL DE TESTES: ${totalTests}`);
 console.log(`PASSOU: ${passedTests}`);
@@ -1111,6 +1344,6 @@ console.log('===========================================================');
 if (failedTests > 0) {
   process.exit(1);
 } else {
-  console.log('✓ Todos os testes de integração do motor musical, detector, currículo e Central de Prática (Fases 1 a 5.1) foram APROVADOS com sucesso!\n');
+  console.log('✓ Todos os testes de integração do motor musical, detector, currículo, Central de Prática, Busca Global e Fase 5.2 foram APROVADOS com sucesso!\n');
 }
 

@@ -31,6 +31,50 @@ export default function App() {
   const [progress, setProgress] = useState<UserProgress>(() => storageService.loadProgress());
   const [selectedLessonId, setSelectedLessonId] = useState<string | null>(null);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [searchTargetChord, setSearchTargetChord] = useState<{ symbol: string; id?: string } | null>(null);
+  const [searchTargetTheoryKey, setSearchTargetTheoryKey] = useState<string | null>(null);
+  const [focusSearchTrigger, setFocusSearchTrigger] = useState(0);
+
+  // Ouvinte global de eventos de teclado no App.tsx para focar a barra de busca ao pressionar Ctrl+K ou Cmd+K
+  // e selecionar integralmente o texto existente para permitir reescrita imediata
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setFocusSearchTrigger((prev) => prev + 1);
+
+        const focusAndSelectSearch = () => {
+          const input = (document.getElementById('global-search-input') ||
+            document.getElementById('global-search-mobile-input') ||
+            document.querySelector('header input[type="text"]')) as HTMLInputElement | null;
+
+          if (input) {
+            input.focus();
+            input.select();
+            return true;
+          }
+          return false;
+        };
+
+        // Foco e seleção de texto imediata se o elemento já estiver montado
+        if (!focusAndSelectSearch()) {
+          requestAnimationFrame(() => {
+            if (!focusAndSelectSearch()) {
+              setTimeout(focusAndSelectSearch, 40);
+            }
+          });
+        } else {
+          // Reafirma a seleção de todo o texto após a conclusão do ciclo de foco do browser
+          setTimeout(focusAndSelectSearch, 30);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleGlobalKeyDown);
+    };
+  }, []);
 
   // Note: Em conformidade com a REGRA 3, tempo com o app apenas aberto em repouso
   // não é contado como tempo de estudo. O tempo é contabilizado exclusivamente durante
@@ -49,6 +93,20 @@ export default function App() {
   const handleGoToFirstLesson = () => {
     setSelectedLessonId('lesson-1');
     setCurrentTab('curriculum');
+  };
+
+  const handleSelectChordFromSearch = (symbol: string, chordId?: string) => {
+    setSearchTargetChord({ symbol, id: chordId });
+    setCurrentTab('chords');
+    setSelectedLessonId(null);
+  };
+
+  const handleSelectTheoryTopicFromSearch = (_topic: string, key?: string) => {
+    if (key) {
+      setSearchTargetTheoryKey(key);
+    }
+    setCurrentTab('theory');
+    setSelectedLessonId(null);
   };
 
   const handleOpenMetronomeAtBpm = (bpm: number) => {
@@ -83,6 +141,14 @@ export default function App() {
         currentTab={currentTab}
         onToggleMobileNav={() => setMobileNavOpen((prev) => !prev)}
         onGoToFirstLesson={handleGoToFirstLesson}
+        onSelectLesson={handleSelectLesson}
+        onNavigateTab={(tab) => {
+          setCurrentTab(tab);
+          setSelectedLessonId(null);
+        }}
+        onSelectChord={handleSelectChordFromSearch}
+        onSelectTheoryTopic={handleSelectTheoryTopicFromSearch}
+        focusSearchTrigger={focusSearchTrigger}
       />
 
       {/* Main Workspace: Sidebar + Content */}
@@ -199,6 +265,8 @@ export default function App() {
             <ChordDictionaryView
               favoriteChords={progress.favoriteChords}
               onToggleFavorite={handleToggleFavoriteChord}
+              initialSearchTerm={searchTargetChord?.symbol}
+              initialChordId={searchTargetChord?.id}
             />
           )}
 
@@ -206,7 +274,9 @@ export default function App() {
           {currentTab === 'metronome' && <MetronomeView />}
 
           {/* TAB 6: Teoria Musical */}
-          {currentTab === 'theory' && <MusicTheoryView />}
+          {currentTab === 'theory' && (
+            <MusicTheoryView initialKey={searchTargetTheoryKey || undefined} />
+          )}
 
           {/* TAB 7: Leitura Musical */}
           {currentTab === 'reading' && <SightReadingView />}

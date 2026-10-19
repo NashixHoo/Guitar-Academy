@@ -66,9 +66,9 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
       <div className="absolute top-0 left-0 right-0 h-1.5 tortoiseshell-badge" />
 
       <div className="flex flex-col items-center text-center px-6 max-w-sm w-full animate-splash-content">
-        {/* Ícone Oficial Existente do Guitar Academy (Giannini 101 HSS Branco c/ Escudo Rajado) */}
+        {/* Ícone Oficial Existente do Guitar Academy com Borda Luthier Ouro */}
         <div className="relative mb-5 group">
-          <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-3xl bg-white border border-[#D9D9D9] shadow-xl flex items-center justify-center p-3.5 tortoiseshell-card glow-wine">
+          <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-3xl bg-white border border-[#C5A059]/50 shadow-xl flex items-center justify-center p-3.5 tortoiseshell-card glow-wine">
             <img
               src="./icon.svg"
               alt="Ícone Oficial Guitar Academy"
@@ -77,17 +77,17 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
             />
           </div>
           <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full tortoiseshell-badge border-2 border-white flex items-center justify-center shadow-xs">
-            <span className="text-[10px] font-black text-white leading-none">★</span>
+            <span className="text-[10px] font-black text-[#FAF4E6] leading-none">★</span>
           </div>
         </div>
 
-        {/* Tipografia Oficial Guitar Academy com Hierarquia Premium */}
-        <div className="space-y-1">
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#F5E8EA] border border-[#E8D3D6] text-[#7B1E2B] text-[10px] font-bold uppercase tracking-wider mb-1">
-            <span>Edição Giannini 101 HSS</span>
+        {/* Tipografia Oficial Guitar Academy com Hierarquia Luxuosa */}
+        <div className="space-y-1.5">
+          <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full luxury-gold-badge text-[10px] font-bold uppercase tracking-widest mb-1 font-mono-code">
+            <span>Conservatório Pro • 101 HSS</span>
           </div>
 
-          <h1 className="text-2xl sm:text-3xl font-black text-[#25252A] tracking-tight leading-tight">
+          <h1 className="text-2xl sm:text-3xl font-display font-extrabold text-[#1A1A1F] tracking-[0.12em] leading-tight">
             GUITAR ACADEMY
           </h1>
 

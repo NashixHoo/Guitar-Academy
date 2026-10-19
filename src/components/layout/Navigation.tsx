@@ -61,8 +61,11 @@ export const Navigation: React.FC<NavigationProps> = ({
 
   const navContent = (
     <div className="flex flex-col h-full py-4 px-3 space-y-1">
-      <div className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-[#666672]">
-        Navegação Principal
+      <div className="px-3 py-2 font-display text-[11px] font-bold uppercase tracking-[0.12em] text-[#8C5F18] flex items-center justify-between">
+        <span>Currículo & Prática</span>
+        <span className="text-[9px] font-mono-code px-1.5 py-0.5 rounded-sm bg-[#FAF4E6] text-[#8C5F18] border border-[#C5A059]/30">
+          PRO
+        </span>
       </div>
 
       <nav className="flex-1 space-y-1 overflow-y-auto pr-1">
@@ -76,18 +79,18 @@ export const Navigation: React.FC<NavigationProps> = ({
               onClick={() => handleItemClick(item.id)}
               className={`w-full min-h-[44px] flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition group ${
                 isActive
-                  ? 'bg-[#7B1E2B] text-white shadow-xs font-extrabold'
-                  : 'text-[#25252A] hover:text-[#7B1E2B] hover:bg-[#F5E8EA]'
+                  ? 'bg-gradient-to-r from-[#7B1E2B] via-[#8E2232] to-[#A82739] text-white shadow-sm font-extrabold border-l-2 border-[#C5A059]'
+                  : 'text-[#25252A] hover:text-[#7B1E2B] hover:bg-gradient-to-r hover:from-[#FAF1F2] hover:to-white'
               }`}
             >
               <div className="flex items-center gap-3">
-                <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-[#7B1E2B] group-hover:scale-110 transition-transform'}`} />
+                <Icon className={`w-4 h-4 ${isActive ? 'text-[#FAF4E6]' : 'text-[#7B1E2B] group-hover:scale-110 transition-transform'}`} />
                 <span>{item.label}</span>
               </div>
 
               {item.badge && (
                 <span className={`text-[9px] px-1.5 py-0.5 rounded-md font-mono-code font-bold ${
-                  isActive ? 'bg-white/20 text-white' : 'bg-[#F5E8EA] text-[#7B1E2B] border border-[#E8D3D6]'
+                  isActive ? 'bg-black/20 text-[#FAF4E6] border border-white/20' : 'bg-[#F5E8EA] text-[#7B1E2B] border border-[#E8D3D6]'
                 }`}>
                   {item.badge}
                 </span>
@@ -97,9 +100,14 @@ export const Navigation: React.FC<NavigationProps> = ({
         })}
       </nav>
 
-      {/* Footer info banner */}
-      <div className="pt-4 border-t border-[#D9D9D9] px-2 text-[11px] text-[#666672] text-center font-medium">
-        Guitar Academy • Giannini 101 HSS
+      {/* Footer info banner with luxury conservatory crest */}
+      <div className="pt-4 border-t border-[#D9D9D9] px-3 py-2 text-center space-y-0.5">
+        <span className="font-display text-[10px] tracking-[0.14em] text-[#8C5F18] uppercase font-bold block">
+          Guitar Academy
+        </span>
+        <span className="text-[10px] text-[#666672] font-medium block">
+          Giannini 101 HSS Vintage Spec
+        </span>
       </div>
     </div>
   );

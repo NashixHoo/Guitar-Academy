@@ -137,30 +137,30 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
       )}
 
-      {/* Hero: Giannini 101 HSS White with Red Tortoiseshell Pickguard Accent */}
-      <div className="relative overflow-hidden rounded-3xl bg-white border border-[#D9D9D9] p-6 sm:p-10 shadow-xs">
-        {/* Subtle decorative tortoiseshell top accent line */}
+      {/* Hero: Conservatório & Giannini 101 HSS White with Red Tortoiseshell Accent */}
+      <div className="relative overflow-hidden rounded-3xl luxury-hero-banner p-6 sm:p-10 shadow-xs">
+        {/* Subtle decorative tortoiseshell top accent line with gold trim */}
         <div className="absolute top-0 left-0 right-0 h-1.5 tortoiseshell-badge" />
 
         {/* Faint guitar silhouette in the background */}
-        <div className="absolute top-0 right-0 p-8 opacity-[0.04] pointer-events-none hidden md:block">
+        <div className="absolute top-0 right-0 p-8 opacity-[0.05] pointer-events-none hidden md:block">
           <Guitar className="w-64 h-64 text-[#7B1E2B]" />
         </div>
 
         <div className="relative z-10 max-w-2xl space-y-4">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-[#F5E8EA] border border-[#E8D3D6] text-[#7B1E2B] text-xs font-bold">
-            <Sparkles className="w-3.5 h-3.5 text-[#B52A3A]" />
-            <span>Trilha de Formação Musical • Guitar Academy</span>
+          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-[#FAF4E6] border border-[#C5A059]/40 text-[#8C5F18] text-xs font-bold shadow-2xs">
+            <Sparkles className="w-3.5 h-3.5 text-[#C5A059]" />
+            <span className="font-display tracking-wider">Trilha de Formação Musical • Conservatório</span>
           </div>
 
           <div>
-            <span className="text-xs text-[#666672] font-semibold uppercase tracking-wider block">
+            <span className="text-xs text-[#8C5F18] font-bold uppercase tracking-wider block">
               {currentLesson.moduleTitle}
             </span>
-            <h1 className="text-2xl sm:text-4xl font-black text-[#25252A] mt-1 leading-tight tracking-tight">
+            <h1 className="text-2xl sm:text-4xl font-serif-luxury font-black text-[#1C1C21] mt-1 leading-tight tracking-tight">
               {currentLesson.title}
             </h1>
-            <p className="text-sm sm:text-base text-[#666672] mt-2 font-medium">
+            <p className="text-sm sm:text-base text-[#666672] mt-2 font-medium leading-relaxed">
               {currentLesson.subtitle}
             </p>
           </div>
@@ -168,7 +168,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <div className="flex flex-wrap items-center gap-3.5 pt-2">
             <button
               onClick={() => onSelectLesson(currentLesson.id)}
-              className="flex items-center gap-3 px-7 py-3.5 rounded-2xl bg-[#7B1E2B] text-white hover:bg-[#B52A3A] active:scale-95 font-bold text-sm sm:text-base shadow-sm transition"
+              className="luxury-btn-primary flex items-center gap-3 px-7 py-3.5 rounded-2xl active:scale-95 font-bold text-sm sm:text-base transition"
             >
               <Play className="w-5 h-5 fill-current" />
               <span>Continuar Aula Atual</span>
@@ -176,7 +176,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
             <button
               onClick={() => onNavigateTab('practice-routine')}
-              className="flex items-center gap-2 px-6 py-3.5 rounded-2xl bg-[#F5E8EA] hover:bg-[#ebd3d6] text-[#7B1E2B] font-bold text-xs sm:text-sm border border-[#E8D3D6] transition"
+              className="flex items-center gap-2 px-6 py-3.5 rounded-2xl bg-[#FAF1F2] hover:bg-[#F3E2E5] text-[#7B1E2B] font-bold text-xs sm:text-sm border border-[#E8D3D6] transition shadow-2xs"
             >
               <Flame className="w-4 h-4 text-[#B52A3A]" />
               <span>Central de Prática (5/10/15/30 min)</span>
@@ -184,7 +184,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
             <button
               onClick={() => onNavigateTab('curriculum')}
-              className="flex items-center gap-2 px-5 py-3.5 rounded-2xl bg-[#F8F7F4] hover:bg-[#F5E8EA] text-[#25252A] font-bold text-xs sm:text-sm border border-[#D9D9D9] transition"
+              className="flex items-center gap-2 px-5 py-3.5 rounded-2xl bg-white hover:bg-[#FAF1F2] text-[#25252A] font-bold text-xs sm:text-sm border border-[#D9D9D9] transition shadow-2xs"
             >
               <BookOpen className="w-4 h-4 text-[#7B1E2B]" />
               <span>Ver Trilha (6 Níveis)</span>
@@ -503,53 +503,53 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
       {/* Quick Metrics Bar: Study Time, Completed Lessons, Daily Goal */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-white border border-[#D9D9D9] rounded-2xl p-4 shadow-xs flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-[#F5E8EA] flex items-center justify-center text-[#7B1E2B] border border-[#E8D3D6]">
+        <div className="luxury-card rounded-2xl p-4 shadow-xs flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-[#FAF4E6] flex items-center justify-center text-[#8C5F18] border border-[#C5A059]/40 shrink-0">
             <Clock className="w-5 h-5" />
           </div>
           <div>
-            <span className="text-[10px] text-[#666672] uppercase font-bold block">Tempo Total</span>
-            <span className="text-base sm:text-lg font-black text-[#25252A] font-mono-code">
+            <span className="text-[10px] text-[#666672] uppercase font-bold tracking-wider block">Tempo Total</span>
+            <span className="text-base sm:text-lg font-black text-[#1F1F24] font-mono-code">
               {hours > 0 ? `${hours}h ` : ''}{minutes}m
             </span>
           </div>
         </div>
 
-        <div className="bg-white border border-[#D9D9D9] rounded-2xl p-4 shadow-xs flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600 border border-emerald-100">
+        <div className="luxury-card rounded-2xl p-4 shadow-xs flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-700 border border-emerald-200 shrink-0">
             <CheckCircle2 className="w-5 h-5" />
           </div>
           <div>
-            <span className="text-[10px] text-[#666672] uppercase font-bold block">Aulas Concluídas</span>
-            <span className="text-base sm:text-lg font-black text-[#25252A] font-mono-code">
+            <span className="text-[10px] text-[#666672] uppercase font-bold tracking-wider block">Aulas Concluídas</span>
+            <span className="text-base sm:text-lg font-black text-[#1F1F24] font-mono-code">
               {completedCount} <span className="text-xs font-normal text-[#666672]">/ {allLessons.length}</span>
             </span>
           </div>
         </div>
 
-        <div className="bg-white border border-[#D9D9D9] rounded-2xl p-4 shadow-xs flex items-center gap-3">
-          <div className={`w-10 h-10 rounded-xl flex items-center justify-center border ${
+        <div className="luxury-card rounded-2xl p-4 shadow-xs flex items-center gap-3">
+          <div className={`w-10 h-10 rounded-xl flex items-center justify-center border shrink-0 ${
             isGoalReached 
-              ? 'bg-emerald-50 text-emerald-600 border-emerald-100' 
-              : 'bg-[#F5E8EA] text-[#B52A3A] border-[#E8D3D6]'
+              ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+              : 'bg-[#FAF1F2] text-[#B52A3A] border-[#E8D3D6]'
           }`}>
             <Flame className="w-5 h-5" />
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between">
-              <span className="text-[10px] text-[#666672] uppercase font-bold block">Meta Hoje</span>
-              <span className={`text-[10px] font-black ${isGoalReached ? 'text-[#10B981]' : 'text-[#7B1E2B]'}`}>
+              <span className="text-[10px] text-[#666672] uppercase font-bold tracking-wider block">Meta Hoje</span>
+              <span className={`text-[10px] font-black font-mono-code ${isGoalReached ? 'text-[#059669]' : 'text-[#7B1E2B]'}`}>
                 {goalPercentage}%
               </span>
             </div>
-            <span className="text-base sm:text-lg font-black text-[#25252A] font-mono-code block">
+            <span className="text-base sm:text-lg font-black text-[#1F1F24] font-mono-code block">
               {todayMinutes} <span className="text-xs font-normal text-[#666672]">/ {dailyGoalMinutes}m</span>
             </span>
             {/* Miniature linear progress bar inside metric card */}
             <div className="w-full bg-[#EAEAEA] rounded-full h-1.5 mt-1 overflow-hidden">
               <div 
                 className={`h-full rounded-full transition-all duration-500 ${
-                  isGoalReached ? 'bg-[#10B981]' : 'bg-[#7B1E2B]'
+                  isGoalReached ? 'bg-gradient-to-r from-emerald-500 to-emerald-600' : 'bg-gradient-to-r from-[#7B1E2B] to-[#B52A3A]'
                 }`}
                 style={{ width: `${clampedPercentage}%` }}
               />
@@ -557,12 +557,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
 
-        <div className="bg-white border border-[#D9D9D9] rounded-2xl p-4 shadow-xs flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-[#F8F7F4] flex items-center justify-center text-[#7B1E2B] border border-[#D9D9D9]">
+        <div className="luxury-card rounded-2xl p-4 shadow-xs flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-[#FAF1F2] flex items-center justify-center text-[#7B1E2B] border border-[#E8D3D6] shrink-0">
             <Trophy className="w-5 h-5" />
           </div>
           <div>
-            <span className="text-[10px] text-[#666672] uppercase font-bold block">Progresso Geral</span>
+            <span className="text-[10px] text-[#666672] uppercase font-bold tracking-wider block">Progresso Geral</span>
             <span className="text-base sm:text-lg font-black text-[#7B1E2B] font-mono-code">
               {progressPercent}%
             </span>

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { CHORD_DATABASE } from '../../data/chordDatabase';
 import { ChordDiagram } from './ChordDiagram';
 import { NoteCipher, ChordType } from '../../types';
@@ -9,18 +9,44 @@ import { Search, BookOpen, Star, Sparkles, Layers, CheckCircle2, AlertCircle } f
 interface ChordDictionaryViewProps {
   favoriteChords: string[];
   onToggleFavorite: (chordId: string) => void;
+  initialSearchTerm?: string;
+  initialChordId?: string;
 }
 
 export const ChordDictionaryView: React.FC<ChordDictionaryViewProps> = ({
   favoriteChords,
   onToggleFavorite,
+  initialSearchTerm,
+  initialChordId,
 }) => {
   const [activeTabMode, setActiveTabMode] = useState<'dictionary' | 'reverse' | 'caged' | 'validator'>('dictionary');
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState(initialSearchTerm || '');
   const [selectedRoot, setSelectedRoot] = useState<NoteCipher | 'ALL'>('ALL');
   const [selectedType, setSelectedType] = useState<ChordType | 'ALL'>('ALL');
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
-  const [selectedChordId, setSelectedChordId] = useState<string>(CHORD_DATABASE[0]?.id || '');
+  const [selectedChordId, setSelectedChordId] = useState<string>(
+    initialChordId || CHORD_DATABASE[0]?.id || ''
+  );
+
+  useEffect(() => {
+    if (initialChordId) {
+      setSelectedChordId(initialChordId);
+      setActiveTabMode('dictionary');
+      setSelectedRoot('ALL');
+      setSelectedType('ALL');
+      setSelectedCategory('ALL');
+    }
+  }, [initialChordId]);
+
+  useEffect(() => {
+    if (initialSearchTerm !== undefined) {
+      setSearchTerm(initialSearchTerm);
+      setActiveTabMode('dictionary');
+      setSelectedRoot('ALL');
+      setSelectedType('ALL');
+      setSelectedCategory('ALL');
+    }
+  }, [initialSearchTerm]);
 
   // Reverse Finder State
   const [reverseNotesInput, setReverseNotesInput] = useState<string>('C E G');

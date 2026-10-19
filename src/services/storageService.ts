@@ -8,6 +8,7 @@ import {
 
 const PROGRESS_KEY = 'guitar_academy_user_progress_v1';
 const METRONOME_KEY = 'guitar_academy_metronome_v1';
+const SEARCH_HISTORY_KEY = 'guitar_academy_search_history_v1';
 
 export const INITIAL_PROGRESS: UserProgress = {
   currentLessonId: 'lesson-1',
@@ -409,8 +410,52 @@ export const storageService = {
     }
   },
 
+  getRecentSearches(): string[] {
+    try {
+      const data = localStorage.getItem(SEARCH_HISTORY_KEY);
+      if (!data) return [];
+      const parsed = JSON.parse(data);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  },
+
+  addRecentSearch(term: string): string[] {
+    const cleanTerm = term.trim();
+    if (!cleanTerm) return this.getRecentSearches();
+    try {
+      const current = this.getRecentSearches();
+      const updated = [cleanTerm, ...current.filter((t) => t.toLowerCase() !== cleanTerm.toLowerCase())].slice(0, 8);
+      localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(updated));
+      return updated;
+    } catch {
+      return [cleanTerm];
+    }
+  },
+
+  removeRecentSearch(term: string): string[] {
+    try {
+      const current = this.getRecentSearches();
+      const updated = current.filter((t) => t.toLowerCase() !== term.toLowerCase());
+      localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(updated));
+      return updated;
+    } catch {
+      return [];
+    }
+  },
+
+  clearRecentSearches(): void {
+    try {
+      localStorage.removeItem(SEARCH_HISTORY_KEY);
+    } catch {
+      // ignore
+    }
+  },
+
   resetAll(): void {
     localStorage.removeItem(PROGRESS_KEY);
     localStorage.removeItem(METRONOME_KEY);
+    localStorage.removeItem(SEARCH_HISTORY_KEY);
   }
 };

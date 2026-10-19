@@ -1,9 +1,19 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CIRCLE_OF_FIFTHS, INTERVALS } from '../../data/musicTheory';
 import { Compass, Layers, Sparkles } from 'lucide-react';
 
-export const MusicTheoryView: React.FC = () => {
-  const [selectedKey, setSelectedKey] = useState<string>('C');
+interface MusicTheoryViewProps {
+  initialKey?: string;
+}
+
+export const MusicTheoryView: React.FC<MusicTheoryViewProps> = ({ initialKey }) => {
+  const [selectedKey, setSelectedKey] = useState<string>(initialKey || 'C');
+
+  useEffect(() => {
+    if (initialKey) {
+      setSelectedKey(initialKey);
+    }
+  }, [initialKey]);
 
   const circleKeyInfo = CIRCLE_OF_FIFTHS.find((k) => k.major === selectedKey) || CIRCLE_OF_FIFTHS[0];
 
