@@ -21,7 +21,13 @@ export default defineConfig(({command}) => {
       VitePWA({
         base,
         registerType: 'autoUpdate',
-        includeAssets: ['icon.svg'],
+        includeAssets: [
+          'icon.svg', 
+          'stage-hero.webp', 
+          'stage-hero.jpg', 
+          'images/guitar-academy-background.webp', 
+          'images/guitar-academy-background.jpg'
+        ],
         manifest: {
           id: base,
           name: 'Guitar Academy — Formação Musical',
@@ -42,7 +48,7 @@ export default defineConfig(({command}) => {
           ],
         },
         workbox: {
-          globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
+          globPatterns: ['**/*.{js,css,html,ico,png,svg,webp,jpg,woff,woff2}'],
         },
         devOptions: {
           enabled: true,

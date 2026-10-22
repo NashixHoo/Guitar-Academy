@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 450" width="300" height="450">
+  <defs>
+    <!-- Rosewood/Mahogany Headstock Tone -->
+    <linearGradient id="headstockWood" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2D1217" />
+      <stop offset="50%" stop-color="#4E1E26" />
+      <stop offset="100%" stop-color="#1A070B" />
+    </linearGradient>
+
+    <!-- Chrome Pegs -->
+    <linearGradient id="pegChrome" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="40%" stop-color="#D1D5DB" />
+      <stop offset="100%" stop-color="#6B7280" />
+    </linearGradient>
+  </defs>
+
+  <!-- Neck extending downward -->
+  <path d="M 95 310 L 95 450 L 205 450 L 205 310 Z" fill="#3D1820" stroke="#1A070B" stroke-width="2" />
+  
+  <!-- Fret 1 wire & nut -->
+  <rect x="92" y="305" width="116" height="12" rx="3" fill="#F8F7F4" stroke="#D9D9D9" stroke-width="1.5" />
+  <rect x="94" y="380" width="112" height="4" fill="#C5A059" />
+
+  <!-- 6 Strings crossing nut -->
+  <line x1="102" y1="280" x2="102" y2="450" stroke="#E5E7EB" stroke-width="3" />
+  <line x1="121" y1="280" x2="121" y2="450" stroke="#E5E7EB" stroke-width="2.6" />
+  <line x1="140" y1="280" x2="140" y2="450" stroke="#E5E7EB" stroke-width="2.2" />
+  <line x1="160" y1="280" x2="160" y2="450" stroke="#E5E7EB" stroke-width="1.8" />
+  <line x1="179" y1="280" x2="179" y2="450" stroke="#E5E7EB" stroke-width="1.5" />
+  <line x1="198" y1="280" x2="198" y2="450" stroke="#E5E7EB" stroke-width="1.2" />
+
+  <!-- Headstock Contour (Classic Strat/Ibanez Hybrid) -->
+  <path d="M 95 305 
+           L 95 160 
+           C 95 90, 110 50, 150 40 
+           C 180 32, 210 55, 205 95 
+           C 200 135, 175 160, 195 190 
+           C 205 205, 205 250, 205 305 Z" 
+        fill="url(#headstockWood)" 
+        stroke="#7B1E2B" 
+        stroke-width="3" />
+
+  <!-- Guitar Academy G Inlay Logo on Headstock -->
+  <circle cx="152" cy="115" r="16" fill="rgba(245, 197, 66, 0.25)" stroke="#F5C542" stroke-width="1.5" />
+  <text x="146" y="122" font-family="'Montserrat', sans-serif" font-weight="900" font-size="18" fill="#F5C542">G</text>
+
+  <!-- Left 3 Tuning Pegs -->
+  <g fill="url(#pegChrome)">
+    <!-- Peg 1 (Low E - 6th) -->
+    <rect x="52" y="240" width="36" height="10" rx="3" />
+    <circle cx="48" cy="245" r="14" />
+    <!-- Peg 2 (A - 5th) -->
+    <rect x="52" y="180" width="36" height="10" rx="3" />
+    <circle cx="48" cy="185" r="14" />
+    <!-- Peg 3 (D - 4th) -->
+    <rect x="52" y="120" width="36" height="10" rx="3" />
+    <circle cx="48" cy="125" r="14" />
+
+    <!-- Right 3 Tuning Pegs -->
+    <!-- Peg 4 (G - 3rd) -->
+    <rect x="212" y="120" width="36" height="10" rx="3" />
+    <circle cx="252" cy="125" r="14" />
+    <!-- Peg 5 (B - 2nd) -->
+    <rect x="212" y="180" width="36" height="10" rx="3" />
+    <circle cx="252" cy="185" r="14" />
+    <!-- Peg 6 (High E - 1st) -->
+    <rect x="212" y="240" width="36" height="10" rx="3" />
+    <circle cx="252" cy="245" r="14" />
+  </g>
+</svg>

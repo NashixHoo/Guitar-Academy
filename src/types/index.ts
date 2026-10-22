@@ -163,6 +163,7 @@ export interface UserProgress {
   notationPreference: 'cipher' | 'portuguese' | 'both';
   preferredTuning: 'standard' | 'dropD' | 'halfStepDown';
   dailyGoalMinutes: number;
+  themePreference?: 'light' | 'dark' | 'system';
   achievements: string[];
   pedagogicalProfile?: PedagogicalProfile;
   practiceSessions?: PracticeSessionRecord[];

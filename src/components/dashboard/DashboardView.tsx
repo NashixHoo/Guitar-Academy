@@ -137,13 +137,31 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
       )}
 
-      {/* Hero: Conservatório & Giannini 101 HSS White with Red Tortoiseshell Accent */}
+      {/* Hero: Conservatório & Giannini 101 HSS White with Red Tortoiseshell Accent & Palco Cinematográfico */}
       <div className="relative overflow-hidden rounded-3xl luxury-hero-banner p-6 sm:p-10 shadow-xs">
         {/* Subtle decorative tortoiseshell top accent line with gold trim */}
         <div className="absolute top-0 left-0 right-0 h-1.5 tortoiseshell-badge" />
 
+        {/* Cenário de Palco Cinematográfico: Guitarra elétrica, bateria e iluminação vinho/âmbar */}
+        <div className="absolute inset-0 pointer-events-none overflow-hidden select-none">
+          <picture className="absolute right-0 top-0 bottom-0 w-full sm:w-3/5 lg:w-1/2">
+            <source srcSet="./stage-hero.webp" type="image/webp" />
+            <img
+              src="./stage-hero.jpg"
+              alt=""
+              aria-hidden="true"
+              className="w-full h-full object-cover object-center filter opacity-30 brightness-[1.05] contrast-[1.10] mix-blend-multiply"
+              loading="lazy"
+              decoding="async"
+            />
+          </picture>
+          {/* Camada de Contraste Protetor para Garantir Leitura Perfeita de Textos e Controles */}
+          <div className="absolute inset-0 bg-gradient-to-r from-[#FFFFFF] via-[#FFFFFF]/90 sm:via-[#FFFFFF]/85 to-[#FFFFFF]/40" />
+          <div className="absolute inset-0 bg-gradient-to-t from-[#FCFAF7] via-transparent to-transparent opacity-80" />
+        </div>
+
         {/* Faint guitar silhouette in the background */}
-        <div className="absolute top-0 right-0 p-8 opacity-[0.05] pointer-events-none hidden md:block">
+        <div className="absolute top-0 right-0 p-8 opacity-[0.04] pointer-events-none hidden md:block">
           <Guitar className="w-64 h-64 text-[#7B1E2B]" />
         </div>
 
@@ -154,13 +172,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
 
           <div>
-            <span className="text-xs text-[#8C5F18] font-bold uppercase tracking-wider block">
+            <span className="text-xs text-[#8C5F18] dark:text-[#F5D38A] font-bold uppercase tracking-wider block">
               {currentLesson.moduleTitle}
             </span>
-            <h1 className="text-2xl sm:text-4xl font-serif-luxury font-black text-[#1C1C21] mt-1 leading-tight tracking-tight">
+            <h1 className="text-2xl sm:text-4xl font-display font-black text-[#1C1C21] dark:text-[#F8F7F4] mt-1 leading-tight tracking-tight">
               {currentLesson.title}
             </h1>
-            <p className="text-sm sm:text-base text-[#666672] mt-2 font-medium leading-relaxed">
+            <p className="text-sm sm:text-base text-[#666672] dark:text-[#B8B3C0] mt-2 font-medium leading-relaxed">
               {currentLesson.subtitle}
             </p>
           </div>

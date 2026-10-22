@@ -389,19 +389,28 @@ export const PracticeRoutineView: React.FC<PracticeRoutineViewProps> = ({
       )}
 
       {/* TOP BANNER: CENTRAL DE PRÁTICA DIÁRIA */}
-      <div className="bg-white border border-[#D9D9D9] rounded-3xl p-6 sm:p-8 shadow-xs relative overflow-hidden">
+      <div className="bg-white dark:bg-[#22141A] border border-[#D9D9D9] dark:border-[#422933] rounded-3xl p-6 sm:p-8 shadow-xs relative overflow-hidden">
+        {/* Subtle pillar banner background */}
+        <div className="absolute right-0 top-0 bottom-0 w-2/5 pointer-events-none opacity-20 hidden md:block">
+          <img
+            src="./images/backgrounds/banner-praticar.svg"
+            alt=""
+            aria-hidden="true"
+            className="w-full h-full object-cover object-right"
+          />
+        </div>
         <div className="absolute top-0 left-0 right-0 h-1.5 bg-[#7B1E2B]" />
 
-        <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="relative z-10 flex flex-wrap items-center justify-between gap-4">
           <div>
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#F5E8EA] border border-[#E8D3D6] text-[#7B1E2B] text-xs font-bold mb-2">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#F5E8EA] dark:bg-[#381A25] border border-[#E8D3D6] dark:border-[#7B1E2B]/40 text-[#7B1E2B] dark:text-[#FF6B81] text-xs font-bold mb-2">
               <Guitar className="w-3.5 h-3.5 text-[#B52A3A]" />
               <span>Central de Prática Instrumental • Guitarra Física</span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-black text-[#25252A] leading-tight">
+            <h1 className="text-2xl sm:text-3xl font-display font-black text-[#25252A] dark:text-[#F8F7F4] leading-tight">
               Treino Diário Estruturado
             </h1>
-            <p className="text-xs sm:text-sm text-[#666672] mt-1 font-medium max-w-xl">
+            <p className="text-xs sm:text-sm text-[#666672] dark:text-[#B8B3C0] mt-1 font-medium max-w-xl">
               Exercícios reais com metrônomo integrado, controle de andamento, palhetada alternada e progressão mensurável.
             </p>
           </div>

@@ -1,0 +1,85 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 180" width="720" height="180">
+  <defs>
+    <!-- Wine-Cherry Gradient from Guitar Academy Brand Spec -->
+    <linearGradient id="logoPickWine" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#9B2433" />
+      <stop offset="35%" stop-color="#7B1E2B" />
+      <stop offset="70%" stop-color="#B52A3A" />
+      <stop offset="100%" stop-color="#5A121C" />
+    </linearGradient>
+
+    <filter id="logoPickShadow" x="-15%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#120406" flood-opacity="0.30" />
+    </filter>
+  </defs>
+
+  <!-- Left: Pick Shield Symbol -->
+  <g transform="translate(18, 10)">
+    <path d="M 80 12 
+             C 120 12, 144 32, 139 78 
+             C 134 118, 97 146, 80 155 
+             C 63 146, 26 118, 21 78 
+             C 16 32, 40 12, 80 12 Z" 
+          fill="url(#logoPickWine)" 
+          filter="url(#logoPickShadow)" />
+
+    <!-- Headstock & Stylized G in White -->
+    <g fill="#FFFFFF">
+      <!-- Headstock Silhouette -->
+      <path d="M 86 28 
+               C 89 28, 93 29, 95 33 
+               C 96 36, 95 40, 93 43 
+               L 91 45 
+               C 90 48, 92 50, 94 51 
+               C 97 52, 98 56, 97 59 
+               C 95 64, 89 67, 84 67 
+               L 75 67 
+               L 75 33 
+               C 75 30, 79 28, 86 28 Z" />
+
+      <!-- Tuning Pegs -->
+      <circle cx="71" cy="36" r="2.5" />
+      <circle cx="70" cy="47" r="2.5" />
+      <circle cx="69" cy="58" r="2.5" />
+      <circle cx="99" cy="36" r="2.5" />
+      <circle cx="100" cy="47" r="2.5" />
+      <circle cx="101" cy="58" r="2.5" />
+
+      <!-- G Stroke -->
+      <path d="M 90 76 
+               C 114 76, 127 92, 123 112 
+               C 119 132, 99 144, 80 145 
+               C 54 144, 38 126, 41 103 
+               C 43 81, 62 68, 85 68 
+               C 92 68, 100 70, 106 73 
+               L 99 84 
+               C 95 81, 89 80, 84 80 
+               C 70 80, 56 89, 54 104 
+               C 52 117, 61 130, 79 130 
+               C 92 130, 105 122, 108 110 
+               L 90 110 
+               L 90 98 
+               L 119 98 
+               C 121 106, 121 115, 118 122 
+               C 116 128, 110 134, 103 138 
+               C 90 145, 70 145, 57 135 
+               C 66 143, 76 147, 90 145 
+               C 105 142, 115 131, 118 116 
+               C 120 106, 116 95, 108 90 
+               L 114 84 
+               C 107 81, 98 80, 90 76 Z" />
+    </g>
+  </g>
+
+  <!-- Right: Typography (Montserrat Style) -->
+  <g transform="translate(185, 20)">
+    <!-- GUITAR in Deep Graphite #25252A -->
+    <text x="0" y="68" font-family="'Montserrat', 'Plus Jakarta Sans', system-ui, sans-serif" font-weight="900" font-size="64" letter-spacing="4" fill="#25252A">GUITAR</text>
+    
+    <!-- ACADEMY in Cherry Red #B52A3A with Wide Spacing -->
+    <text x="3" y="108" font-family="'Montserrat', 'Plus Jakarta Sans', system-ui, sans-serif" font-weight="800" font-size="28" letter-spacing="12" fill="#B52A3A">ACADEMY</text>
+
+    <!-- Subtitle: DO ZERO AO SEU MELHOR COM A GUITARRA -->
+    <text x="3" y="136" font-family="'Montserrat', 'Plus Jakarta Sans', system-ui, sans-serif" font-weight="600" font-size="12" letter-spacing="3.5" fill="#666672">DO ZERO AO SEU MELHOR COM A GUITARRA</text>
+  </g>
+</svg>

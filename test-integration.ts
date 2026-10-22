@@ -1442,6 +1442,262 @@ assert(
   'ProfessorAiView orienta amigavelmente o aluno no modo resiliente local quando o backend não responde'
 );
 
+// -------------------------------------------------------------
+// GRUPO 16: Seletor de Tema (Dark Mode / Light Mode) & Variáveis CSS
+// -------------------------------------------------------------
+console.log('\n--- GRUPO 16: Seletor de Tema (Dark Mode / Light Mode) & Variáveis CSS ---');
+
+assert(
+  indexCssContent.includes('--bg-porcelain') &&
+  indexCssContent.includes('--surface-white') &&
+  indexCssContent.includes('--red-wine') &&
+  indexCssContent.includes('--red-cherry') &&
+  indexCssContent.includes('--text-graphite') &&
+  indexCssContent.includes('--text-muted') &&
+  indexCssContent.includes('--border-silver'),
+  'index.css define as variáveis CSS de cor oficiais do Guitar Academy'
+);
+
+assert(
+  indexCssContent.includes('[data-theme="dark"]') || indexCssContent.includes('.dark'),
+  'index.css define o escopo de variáveis de cor para o Modo Escuro (Dark Mode)'
+);
+
+assert(
+  indexCssContent.includes('--card-surface') && indexCssContent.includes('--overlay-color'),
+  'index.css implementa variáveis dinâmicas de superfície e sobreposição translúcida de palco'
+);
+
+const themeServiceCode = fs.readFileSync('src/services/themeService.ts', 'utf-8');
+assert(
+  themeServiceCode.includes('LIGHT_THEME') && themeServiceCode.includes('DARK_THEME'),
+  'themeService.ts define os esquemas de cores de alto contraste LIGHT_THEME e DARK_THEME'
+);
+assert(
+  themeServiceCode.includes('setProperty(\'--bg-porcelain\'') && themeServiceCode.includes('setProperty(\'--text-graphite\''),
+  'themeService.ts atualiza dinamicamente as variáveis CSS de cor no elemento raiz'
+);
+
+const headerCode = fs.readFileSync('src/components/layout/Header.tsx', 'utf-8');
+assert(
+  headerCode.includes('<ThemeToggle') || headerCode.includes('ThemeToggle'),
+  'Header.tsx inclui o botão de alternância rápida de tema (ThemeToggle)'
+);
+
+const settingsCode = fs.readFileSync('src/components/settings/SettingsView.tsx', 'utf-8');
+assert(
+  settingsCode.includes('themePreference') && settingsCode.includes('handleSelectTheme'),
+  'SettingsView.tsx implementa o seletor completo de tema (Modo Claro, Escuro e Automático)'
+);
+assert(
+  settingsCode.includes('WCAG AAA Contraste') || settingsCode.includes('Contraste de Leitura'),
+  'SettingsView.tsx informa e assegura o contraste de leitura adequado para cifras e estudos'
+);
+
+// -------------------------------------------------------------
+// GRUPO 17: Navegação Profissional V2 (Barra Inferior + Gestos + Voltar + Histórico)
+// -------------------------------------------------------------
+console.log('\n--- GRUPO 17: Navegação Profissional V2 ---');
+
+// 1. Abrir cada uma das três abas pela barra inferior
+import { 
+  navigationService, 
+  TAB_TO_PRIMARY_MAP, 
+  PRIMARY_TAB_DEFAULTS,
+  PRIMARY_TABS_ORDER 
+} from './src/services/navigationService';
+
+assert(
+  PRIMARY_TABS_ORDER.length === 3 &&
+  PRIMARY_TABS_ORDER.includes('estudar') &&
+  PRIMARY_TABS_ORDER.includes('praticar') &&
+  PRIMARY_TABS_ORDER.includes('evoluir'),
+  '1. Três abas principais definidas na ordem canônica: Estudar, Praticar, Evoluir'
+);
+
+const bottomNavCode = fs.readFileSync('src/components/layout/BottomNavBar.tsx', 'utf-8');
+const bottomNavigationCode = fs.readFileSync('src/components/layout/BottomNavigation.tsx', 'utf-8');
+assert(
+  bottomNavCode.includes('Estudar') &&
+  bottomNavCode.includes('Praticar') &&
+  bottomNavCode.includes('Evoluir') &&
+  bottomNavigationCode.includes('BottomNavigation'),
+  '1. BottomNavigation.tsx e BottomNavBar.tsx renderizam as três abas principais com rótulos e ícones reconhecíveis'
+);
+
+assert(
+  Object.keys(TAB_TO_PRIMARY_MAP).length >= 17,
+  '1. Todas as 17 telas canônicas estão devidamente mapeadas nas 3 abas principais sem exclusão'
+);
+
+// 2. Trocar de aba por gestos nas duas direções
+assert(
+  navigationService.getNextPrimaryTab('estudar') === 'praticar' &&
+  navigationService.getNextPrimaryTab('praticar') === 'evoluir' &&
+  navigationService.getNextPrimaryTab('evoluir') === null,
+  '2. Deslizar para a esquerda avança na ordem Estudar -> Praticar -> Evoluir sem ciclo nas extremidades'
+);
+
+assert(
+  navigationService.getPreviousPrimaryTab('evoluir') === 'praticar' &&
+  navigationService.getPreviousPrimaryTab('praticar') === 'estudar' &&
+  navigationService.getPreviousPrimaryTab('estudar') === null,
+  '2. Deslizar para a direita recua na ordem Evoluir -> Praticar -> Estudar sem ciclo nas extremidades'
+);
+
+// 3. Não trocar de aba durante rolagem vertical
+const swipeHookCode = fs.readFileSync('src/hooks/useSwipeNavigation.ts', 'utf-8');
+assert(
+  swipeHookCode.includes('Math.abs(dy) > Math.abs(dx)') && swipeHookCode.includes('1.6 * absY'),
+  '3. Gesto lateral descarta movimentação vertical e não interfere na rolagem da página'
+);
+
+// 4. Não interceptar interações com controles e campos
+assert(
+  swipeHookCode.includes('input') &&
+  swipeHookCode.includes('textarea') &&
+  swipeHookCode.includes('button') &&
+  swipeHookCode.includes('slider') &&
+  swipeHookCode.includes('interactive-fretboard'),
+  '4. Gesto lateral protege controles interativos, sliders, inputs e braço interativo contra conflitos'
+);
+
+// 5. Abrir uma aula e voltar para a lista correta
+const fallbackLesson = navigationService.getSafeFallback('curriculum', 'lesson-2');
+assert(
+  fallbackLesson.tab === 'curriculum' && fallbackLesson.lessonId === null,
+  '5. Ao abrir uma aula a partir da lista, Voltar retorna à lista de aulas (currículo)'
+);
+
+// 6. Abrir uma rotina e voltar para a Central de Prática
+const fallbackPractice = navigationService.getSafeFallback('tuner', null);
+assert(
+  fallbackPractice.tab === 'practice-routine',
+  '6. Ao abrir ferramenta de treino (ex: afinador/metrônomo), Voltar retorna à Central de Prática'
+);
+
+// 7. Navegar por várias telas e voltar na ordem correta
+navigationService.resetHistory('home');
+navigationService.push('curriculum', null);
+navigationService.push('chords', null);
+navigationService.push('progress', null);
+
+const back1 = navigationService.pop();
+assert(back1?.tab === 'chords', '7. Primeiro Voltar retorna para chords');
+const back2 = navigationService.pop();
+assert(back2?.tab === 'curriculum', '7. Segundo Voltar retorna para curriculum');
+const back3 = navigationService.pop();
+assert(back3?.tab === 'home', '7. Terceiro Voltar retorna para home');
+
+// Deduplicação: push da mesma tela consecutiva não duplica entrada
+navigationService.push('home', null);
+const stackLengthBefore = navigationService.getHistoryStack().length;
+navigationService.push('home', null);
+assert(
+  navigationService.getHistoryStack().length === stackLengthBefore,
+  '7. Entradas duplicadas consecutivas são descartadas pelo histórico de navegação'
+);
+
+// 8. Usar Voltar sem histórico e verificar o destino seguro
+navigationService.resetHistory('settings');
+const safeDest = navigationService.getSafeFallback('settings', null);
+assert(
+  safeDest.tab === 'progress',
+  '8. Usar Voltar em Configurações sem histórico prévio direciona ao destino seguro (Meu Progresso)'
+);
+
+// 9. Preservar posição de rolagem, filtros e contexto quando aplicável
+navigationService.saveScrollPosition('curriculum', 380);
+assert(
+  navigationService.getScrollPosition('curriculum') === 380,
+  '9. Posição de rolagem é devidamente salva e recuperada pelo serviço de histórico'
+);
+
+// 10. Confirmar que a sessão de prática e o metrônomo não reiniciam ao trocar de aba
+assert(
+  appCode.includes("currentTab === 'practice-routine' ? 'block' : 'hidden'") &&
+  appCode.includes("currentTab === 'metronome' ? 'block' : 'hidden'"),
+  '10. Central de Prática e Metrônomo são mantidos montados (hidden) para não reiniciar sessão nem áudio'
+);
+
+// 11. Verificar o comportamento com atualização da página e popstate
+const popStateRestored = navigationService.handlePopState({ tab: 'theory', lessonId: null });
+assert(
+  popStateRestored?.tab === 'theory',
+  '11. Integração com popstate restaura rotas válidas do navegador sem criar histórico falso'
+);
+
+// 12. Verificar responsividade e áreas seguras do iPhone
+assert(
+  bottomNavCode.includes('safe-area-bottom') &&
+  bottomNavCode.includes('fixed bottom-0'),
+  '12. Barra inferior fixa respeita safe-area-bottom e home indicator do iPhone'
+);
+assert(
+  appCode.includes('pb-28') || appCode.includes('pb-24') || appCode.includes('pb-32'),
+  '12. Espaçamento inferior suficiente reservado no main para não cobrir botões nem exercícios'
+);
+
+// 13. AUDITORIA: DESIGN SYSTEM COMPLETO & PACK VISUAL
+console.log('\n--- 13. AUDITORIA DO DESIGN SYSTEM & PACK VISUAL ---');
+
+const dsCssContent = fs.readFileSync('src/index.css', 'utf-8');
+const dsHtmlContent = fs.readFileSync('index.html', 'utf-8');
+
+// 13.1 Verificação dos tokens de cor obrigatórios
+assert(
+  dsCssContent.includes('#F8F7F4') &&
+  dsCssContent.includes('#7B1E2B') &&
+  dsCssContent.includes('#B52A3A') &&
+  dsCssContent.includes('#25252A') &&
+  (dsCssContent.includes('#F5C542') || dsCssContent.includes('#F5D38A')),
+  '13.1 Tokens visuais oficiais configurados no index.css (Porcelana, Vinho, Cereja, Grafite, Dourado)'
+);
+
+// 13.2 Verificação de tipografia Montserrat + Plus Jakarta Sans
+assert(
+  dsHtmlContent.includes('Montserrat') &&
+  dsHtmlContent.includes('Plus+Jakarta+Sans') &&
+  dsCssContent.includes('Montserrat'),
+  '13.2 Tipografia oficial ativa (Montserrat para display/títulos e Plus Jakarta Sans para leitura)'
+);
+
+// 13.3 Verificação dos componentes reutilizáveis do Design System
+const designSystemComponents = [
+  'src/components/common/LuxuryCard.tsx',
+  'src/components/common/SectionTitle.tsx',
+  'src/components/common/PrimaryButton.tsx',
+  'src/components/common/SecondaryButton.tsx',
+  'src/components/common/ProgressBar.tsx',
+  'src/components/common/Badge.tsx'
+];
+
+designSystemComponents.forEach((compPath) => {
+  assert(
+    fs.existsSync(compPath),
+    `13.3 Componente do Design System presente: ${path.basename(compPath)}`
+  );
+});
+
+// 13.4 Verificação do pack de recursos visuais
+const visualPackAssets = [
+  'public/images/branding/guitar-academy-symbol.svg',
+  'public/images/branding/guitar-academy-logo.svg',
+  'public/images/branding/guitar-academy-logo-dark.svg',
+  'public/icons/guitar-academy-app-icon.svg',
+  'public/images/backgrounds/banner-estudar.svg',
+  'public/images/backgrounds/banner-praticar.svg',
+  'public/images/backgrounds/banner-evoluir.svg',
+  'public/images/instruments/electric-guitar-headstock.svg'
+];
+
+visualPackAssets.forEach((assetPath) => {
+  assert(
+    fs.existsSync(assetPath) && fs.statSync(assetPath).size > 100,
+    `13.4 Recurso visual do pack presente e válido: ${assetPath}`
+  );
+});
+
 console.log('\n===========================================================');
 console.log(`TOTAL DE TESTES: ${totalTests}`);
 console.log(`PASSOU: ${passedTests}`);

@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { UserProgress, NavigationTab } from '../../types';
 import { storageService } from '../../services/storageService';
 import { PWAInstallButton } from '../common/PWAInstallButton';
-import { Settings, Music, Clock, Sliders, Smartphone, Check, Target, ShieldCheck } from 'lucide-react';
+import { Settings, Music, Clock, Sliders, Smartphone, Check, Target, ShieldCheck, Sun, Moon, Monitor } from 'lucide-react';
 import { DailyGoalSettings } from '../dashboard/DailyGoalSettings';
+import { themeService, ThemeMode } from '../../services/themeService';
 
 interface SettingsViewProps {
   progress: UserProgress;
@@ -17,6 +18,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ progress, onUpdatePr
     const updated = { ...progress, [key]: value };
     onUpdateProgress(updated);
     storageService.saveProgress(updated);
+  };
+
+  const handleSelectTheme = (mode: ThemeMode) => {
+    updateSetting('themePreference', mode);
+    themeService.applyTheme(mode);
   };
 
   return (
@@ -36,6 +42,92 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ progress, onUpdatePr
 
       {/* Settings Grid */}
       <div className="space-y-4">
+        {/* Seletor de Tema: Modo Claro / Modo Escuro (Identidade Visual & Contraste) */}
+        <div className="bg-white border border-[#D9D9D9] rounded-2xl p-6 shadow-xs space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-[#25252A] font-bold text-sm">
+              <Sun className="w-4 h-4 text-[#7B1E2B]" />
+              <span>Tema Visual & Modo de Estudo (Contraste de Leitura)</span>
+            </div>
+            <span className="text-[10px] font-mono-code font-bold px-2 py-0.5 rounded-full bg-[#FAF1F2] text-[#7B1E2B] border border-[#E8D3D6]">
+              WCAG AAA Contraste
+            </span>
+          </div>
+          <p className="text-xs text-[#666672]">
+            Altera as variáveis CSS de cor no aplicativo, mantendo o contraste de leitura adequado para a interface de estudo de cifras, tablaturas e acordes.
+          </p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+            {[
+              {
+                id: 'light',
+                icon: Sun,
+                label: 'Modo Claro',
+                subtitle: 'Conservatório Porcelana',
+                desc: 'Fundo porcelana (#F8F7F4), superfícies brancas e vinho clássico. Ideal para ambientes iluminados.',
+              },
+              {
+                id: 'dark',
+                icon: Moon,
+                label: 'Modo Escuro',
+                subtitle: 'Palco & Noturno',
+                desc: 'Fundo profundo de palco, contraste otimizado e vinho vibrante. Reduz cansaço visual em estudos noturnos.',
+              },
+              {
+                id: 'system',
+                icon: Monitor,
+                label: 'Automático',
+                subtitle: 'Sistema Operacional',
+                desc: 'Sincroniza automaticamente com o tema claro ou escuro configurado no seu dispositivo ou celular.',
+              },
+            ].map((opt) => {
+              const activeTheme = progress.themePreference || 'light';
+              const isSelected = activeTheme === opt.id;
+              const IconComp = opt.icon;
+
+              return (
+                <button
+                  key={opt.id}
+                  onClick={() => handleSelectTheme(opt.id as ThemeMode)}
+                  className={`p-4 rounded-xl border text-left transition flex flex-col justify-between ${
+                    isSelected
+                      ? 'bg-[#F5E8EA] border-[#7B1E2B] text-[#7B1E2B] shadow-xs'
+                      : 'bg-[#F8F7F4] border-[#D9D9D9] text-[#666672] hover:text-[#25252A]'
+                  }`}
+                  aria-pressed={isSelected}
+                  aria-label={`Selecionar ${opt.label} (${opt.subtitle})`}
+                >
+                  <div className="flex items-center justify-between font-bold text-xs w-full">
+                    <div className="flex items-center gap-2">
+                      <IconComp className="w-4 h-4 text-[#7B1E2B]" />
+                      <span>{opt.label}</span>
+                    </div>
+                    {isSelected && <Check className="w-4 h-4 text-[#7B1E2B]" />}
+                  </div>
+                  <span className="text-[10px] font-semibold mt-1 opacity-80">{opt.subtitle}</span>
+                  <p className="text-[10px] text-[#666672] mt-1.5 leading-relaxed">{opt.desc}</p>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Amostra ao Vivo de Contraste e Cifras */}
+          <div className="p-3.5 rounded-xl bg-[#F8F7F4] border border-[#D9D9D9] flex flex-wrap items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <span className="font-bold text-[#25252A]">Prévia de Leitura:</span>
+              <span className="font-mono-code font-bold px-2 py-0.5 rounded bg-white text-[#7B1E2B] border border-[#D9D9D9]">
+                Acorde C (Dó Maior)
+              </span>
+              <span className="font-mono-code text-[#25252A]">
+                E: 0 · B: 1 · G: 0 · D: 2 · A: 3 · E: X
+              </span>
+            </div>
+            <span className="text-[11px] text-[#666672]">
+              Cores calibradas para leitura de alta fidelidade
+            </span>
+          </div>
+        </div>
+
         {/* Preferred Notation */}
         <div className="bg-white border border-[#D9D9D9] rounded-2xl p-6 shadow-xs space-y-3">
           <div className="flex items-center gap-2 text-[#25252A] font-bold text-sm">

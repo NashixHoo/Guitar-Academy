@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
 import { NavigationTab } from '../../types';
 import { PWAInstallButton } from '../common/PWAInstallButton';
+import { ThemeToggle } from '../common/ThemeToggle';
 import { audioEngine } from '../../audio/audioEngine';
 import { GlobalSearchBar } from './GlobalSearchBar';
 import { 
   Menu, 
   Volume2, 
   VolumeX, 
-  BookOpen
+  BookOpen,
+  ArrowLeft
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -19,6 +21,9 @@ interface HeaderProps {
   onSelectChord?: (chordSymbol: string, chordId?: string) => void;
   onSelectTheoryTopic?: (topic: string, key?: string) => void;
   focusSearchTrigger?: number;
+  canGoBack?: boolean;
+  onGoBack?: () => void;
+  backTitle?: string;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -30,6 +35,9 @@ export const Header: React.FC<HeaderProps> = ({
   onSelectChord,
   onSelectTheoryTopic,
   focusSearchTrigger,
+  canGoBack,
+  onGoBack,
+  backTitle,
 }) => {
   const [volume, setVolume] = useState<number>(0.8);
   const [isMuted, setIsMuted] = useState<boolean>(false);
@@ -56,8 +64,20 @@ export const Header: React.FC<HeaderProps> = ({
       aria-label="Cabeçalho principal do Guitar Academy"
       className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-[#D9D9D9] px-3 sm:px-6 py-2.5 flex items-center justify-between gap-2 sm:gap-4 shadow-xs safe-area-top"
     >
-      {/* Left: Mobile hamburger & Brand */}
+      {/* Left: Voltar button (if available), Mobile hamburger & Brand */}
       <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+        {canGoBack && onGoBack && (
+          <button
+            onClick={onGoBack}
+            className="p-2 sm:px-3 sm:py-1.5 rounded-xl bg-[#F8F7F4] hover:bg-[#F5E8EA] text-[#7B1E2B] transition border border-[#D9D9D9] flex items-center gap-1.5 min-w-[40px] min-h-[40px] font-bold text-xs shadow-xs focus:outline-hidden focus:ring-2 focus:ring-[#7B1E2B]/30"
+            aria-label={backTitle ? `Voltar para ${backTitle}` : 'Voltar para a tela anterior'}
+            title={backTitle ? `Voltar para ${backTitle}` : 'Voltar'}
+          >
+            <ArrowLeft className="w-4 h-4 text-[#7B1E2B]" aria-hidden="true" />
+            <span className="hidden sm:inline">Voltar</span>
+          </button>
+        )}
+
         <button
           onClick={onToggleMobileNav}
           className="lg:hidden p-2 rounded-xl bg-[#F8F7F4] hover:bg-[#F5E8EA] text-[#25252A] transition border border-[#D9D9D9] min-w-[40px] min-h-[40px] flex items-center justify-center focus:outline-hidden focus:ring-2 focus:ring-[#7B1E2B]/20"
@@ -72,13 +92,13 @@ export const Header: React.FC<HeaderProps> = ({
             <img src="./icon.svg" alt="Guitar Academy Ícone" className="w-full h-full object-contain" />
           </div>
           <div>
-            <span className="font-display font-bold text-[#1F1F24] text-sm sm:text-base tracking-[0.08em] flex items-center gap-1.5 leading-none">
+            <span className="font-display font-bold text-[#1F1F24] dark:text-[#F8F7F4] text-sm sm:text-base tracking-[0.08em] flex items-center gap-1.5 leading-none">
               GUITAR ACADEMY
               <span className="hidden xs:inline-block text-[9px] sm:text-[10px] font-mono-code font-bold px-1.5 py-0.5 rounded-md luxury-gold-badge">
                 101 HSS
               </span>
             </span>
-            <span className="hidden md:block text-[10px] text-[#666672] tracking-wide leading-none mt-1 font-medium">
+            <span className="hidden md:block text-[10px] text-[#666672] dark:text-[#B8B3C0] tracking-wide leading-none mt-1 font-medium">
               Conservatório Musical para Guitarristas
             </span>
           </div>
@@ -133,6 +153,9 @@ export const Header: React.FC<HeaderProps> = ({
             aria-label="Volume geral de áudio do aplicativo"
           />
         </div>
+
+        {/* Theme Toggle (Modo Claro / Modo Escuro) */}
+        <ThemeToggle />
 
         {/* PWA Install Button */}
         <PWAInstallButton variant="header" />

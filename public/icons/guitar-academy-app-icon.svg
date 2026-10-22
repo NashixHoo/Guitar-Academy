@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Background Gradient: Deep Wine Stage Red -->
+    <linearGradient id="bgIcon" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#9E2234" />
+      <stop offset="50%" stop-color="#7B1E2B" />
+      <stop offset="100%" stop-color="#4E0E17" />
+    </linearGradient>
+
+    <!-- Pick Body Gradient -->
+    <linearGradient id="pickGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#BA293A" />
+      <stop offset="40%" stop-color="#8E202E" />
+      <stop offset="100%" stop-color="#60141E" />
+    </linearGradient>
+
+    <!-- Subtle Bevel Border -->
+    <linearGradient id="bevel" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.3" />
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.4" />
+    </linearGradient>
+
+    <filter id="iconShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#000000" flood-opacity="0.5" />
+    </filter>
+  </defs>
+
+  <!-- Squircle Base for App Icon / PWA -->
+  <rect width="512" height="512" rx="114" fill="url(#bgIcon)" />
+  <rect width="504" height="504" x="4" y="4" rx="110" fill="none" stroke="url(#bevel)" stroke-width="3" />
+
+  <!-- Center Guitar Pick Shield in Contrast Wine -->
+  <path d="M 256 68 
+           C 362 68, 426 122, 412 250 
+           C 400 358, 298 436, 256 460 
+           C 214 436, 112 358, 100 250 
+           C 86 122, 150 68, 256 68 Z" 
+        fill="url(#pickGrad)" 
+        stroke="#FFFFFF" 
+        stroke-width="6" 
+        filter="url(#iconShadow)" />
+
+  <!-- Guitar Headstock & Flowing "G" -->
+  <g fill="#FFFFFF">
+    <!-- Headstock Silhouette -->
+    <path d="M 274 116 
+             C 282 116, 294 120, 299 130 
+             C 303 138, 301 148, 294 157 
+             L 289 164 
+             C 287 171, 291 176, 298 180 
+             C 305 184, 309 193, 305 202 
+             C 300 214, 284 223, 269 223 
+             L 244 223 
+             L 244 130 
+             C 244 121, 255 116, 274 116 Z" />
+
+    <!-- 6 Tuning Pegs & Posts -->
+    <circle cx="233" cy="139" r="7" />
+    <circle cx="231" cy="167" r="7" />
+    <circle cx="229" cy="195" r="7" />
+    <circle cx="310" cy="139" r="7" />
+    <circle cx="312" cy="167" r="7" />
+    <circle cx="314" cy="195" r="7" />
+
+    <rect x="235" y="136" width="11" height="6" rx="2" />
+    <rect x="233" y="164" width="13" height="6" rx="2" />
+    <rect x="231" y="192" width="15" height="6" rx="2" />
+    <rect x="296" y="136" width="11" height="6" rx="2" />
+    <rect x="298" y="164" width="13" height="6" rx="2" />
+    <rect x="300" y="192" width="13" height="6" rx="2" />
+
+    <!-- Flowing "G" Stroke -->
+    <path d="M 284 246 
+             C 350 246, 388 290, 377 345 
+             C 365 400, 310 434, 256 436 
+             C 184 434, 139 386, 147 322 
+             C 154 261, 207 225, 270 225 
+             C 290 225, 311 230, 327 239 
+             L 309 269 
+             C 297 262, 282 258, 266 258 
+             C 226 258, 189 283, 183 324 
+             C 178 361, 203 397, 254 397 
+             C 290 397, 326 375, 335 341 
+             C 337 334, 333 329, 326 329 
+             L 284 329 
+             L 284 293 
+             L 365 293 
+             C 370 316, 370 341, 363 359 
+             C 356 375, 340 393, 320 404 
+             C 284 423, 228 423, 192 397 
+             C 217 418, 246 431, 284 425 
+             C 325 418, 356 388, 365 347 
+             C 370 320, 360 288, 336 272 
+             L 352 256 
+             C 333 249, 308 246, 284 246 Z" />
+  </g>
+</svg>

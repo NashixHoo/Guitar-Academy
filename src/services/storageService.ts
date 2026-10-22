@@ -31,6 +31,7 @@ export const INITIAL_PROGRESS: UserProgress = {
   notationPreference: 'cipher',
   preferredTuning: 'standard',
   dailyGoalMinutes: 20,
+  themePreference: 'light',
   achievements: ['welcome-pioneer'],
   pedagogicalProfile: createInitialPedagogicalProfile(),
 };

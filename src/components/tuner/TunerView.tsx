@@ -410,21 +410,35 @@ export const TunerView: React.FC<TunerViewProps> = ({ onOpenLessonTuning }) => {
         </div>
       </div>
 
-      {/* String Reference Pitch & Ear Tuning Section */}
-      <div className="bg-white border border-[#D9D9D9] rounded-3xl p-6 shadow-xs space-y-4">
+      {/* String Reference Pitch & Ear Tuning Section with Headstock Visualization */}
+      <div className="bg-white dark:bg-[#22141A] border border-[#D9D9D9] dark:border-[#422933] rounded-3xl p-6 shadow-xs space-y-4">
         <div className="flex items-center justify-between">
           <div className="space-y-0.5">
-            <h3 className="font-bold text-[#25252A] text-sm sm:text-base flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-[#7B1E2B]" />
+            <h3 className="font-bold text-[#25252A] dark:text-[#F8F7F4] text-sm sm:text-base flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-[#7B1E2B] dark:text-[#E05368]" />
               Afinação das Cordas & Tons de Referência
             </h3>
-            <p className="text-xs text-[#666672]">
+            <p className="text-xs text-[#666672] dark:text-[#B8B3C0]">
               Clique em qualquer corda para ouvir a frequência senoidal de referência gerada via sintetizador Web Audio.
             </p>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
+        <div className="flex flex-col md:flex-row items-center gap-5">
+          {/* Headstock Instrument Artwork */}
+          <div className="hidden md:flex flex-col items-center justify-center p-3 rounded-2xl bg-[#F8F7F4] dark:bg-[#1A1216] border border-[#D9D9D9] dark:border-[#422933] shrink-0 w-28 shadow-inner">
+            <img
+              src="./images/instruments/electric-guitar-headstock.svg"
+              alt="Mão da Guitarra (Headstock)"
+              className="w-20 h-auto object-contain filter drop-shadow-sm"
+              loading="lazy"
+            />
+            <span className="text-[10px] font-mono-code font-bold text-[#666672] dark:text-[#B8B3C0] mt-1">
+              6 Cordas
+            </span>
+          </div>
+
+          <div className="flex-1 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3 w-full">
           {activeStrings.map((str) => {
             const isPlaying = playingRefString === str.stringNumber;
             const isCurrentDetected =
@@ -480,6 +494,7 @@ export const TunerView: React.FC<TunerViewProps> = ({ onOpenLessonTuning }) => {
               </div>
             );
           })}
+          </div>
         </div>
       </div>
 

@@ -1,0 +1,100 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Wine-Cherry Gradient from Guitar Academy Brand Spec -->
+    <linearGradient id="gaBrandWine" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#9B2433" />
+      <stop offset="35%" stop-color="#7B1E2B" />
+      <stop offset="70%" stop-color="#B52A3A" />
+      <stop offset="100%" stop-color="#5A121C" />
+    </linearGradient>
+
+    <!-- Chrome/Silver Highlight -->
+    <linearGradient id="gaHighlight" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.35" />
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0.0" />
+    </linearGradient>
+
+    <!-- Soft Drop Shadow for Pick Body -->
+    <filter id="pickShadow" x="-15%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#120406" flood-opacity="0.45" />
+    </filter>
+  </defs>
+
+  <!-- Outer Pick Shape with Smooth Curvature -->
+  <path d="M 256 36 
+           C 375 36, 448 98, 432 240 
+           C 418 362, 305 450, 256 476 
+           C 207 450, 94 362, 80 240 
+           C 64 98, 137 36, 256 36 Z" 
+        fill="url(#gaBrandWine)" 
+        filter="url(#pickShadow)" />
+
+  <!-- Subtle Inner Border Highlight -->
+  <path d="M 256 46 
+           C 366 46, 434 104, 420 236 
+           C 407 350, 301 434, 256 459 
+           C 211 434, 105 350, 92 236 
+           C 78 104, 146 46, 256 46 Z" 
+        fill="none" 
+        stroke="url(#gaHighlight)" 
+        stroke-width="3" />
+
+  <!-- The Stylized Guitar Headstock & "G" Emblem in White -->
+  <g fill="#FFFFFF">
+    <!-- Guitar Headstock Silhouette inside the upper pick -->
+    <!-- Headstock Body -->
+    <path d="M 276 90 
+             C 285 90, 298 94, 304 106 
+             C 308 114, 306 126, 298 136 
+             L 292 144 
+             C 290 152, 294 158, 302 162 
+             C 310 166, 314 176, 310 186 
+             C 304 200, 286 210, 270 210 
+             L 242 210 
+             L 242 106 
+             C 242 96, 254 90, 276 90 Z" />
+
+    <!-- 3 Left Tuning Pegs -->
+    <circle cx="230" cy="116" r="8" />
+    <circle cx="228" cy="148" r="8" />
+    <circle cx="226" cy="180" r="8" />
+
+    <!-- 3 Right Tuning Pegs -->
+    <circle cx="316" cy="116" r="8" />
+    <circle cx="318" cy="148" r="8" />
+    <circle cx="320" cy="180" r="8" />
+
+    <!-- Tuning Peg Posts connecting to headstock -->
+    <rect x="232" y="113" width="12" height="6" rx="2" />
+    <rect x="230" y="145" width="14" height="6" rx="2" />
+    <rect x="228" y="177" width="16" height="6" rx="2" />
+    <rect x="300" y="113" width="12" height="6" rx="2" />
+    <rect x="302" y="145" width="14" height="6" rx="2" />
+    <rect x="304" y="177" width="14" height="6" rx="2" />
+
+    <!-- Dynamic Flowing "G" Stroke wrapping around the lower pick -->
+    <path d="M 288 236 
+             C 362 236, 404 286, 392 348 
+             C 378 410, 316 448, 256 450 
+             C 176 448, 126 394, 134 322 
+             C 142 254, 202 212, 272 212 
+             C 294 212, 318 218, 336 228 
+             L 316 262 
+             C 302 254, 286 250, 268 250 
+             C 224 250, 182 278, 176 324 
+             C 170 366, 198 406, 254 406 
+             C 294 406, 334 382, 344 344 
+             C 346 336, 342 330, 334 330 
+             L 288 330 
+             L 288 290 
+             L 378 290 
+             C 384 316, 384 344, 376 364 
+             C 368 382, 350 402, 328 414 
+             C 288 436, 226 436, 186 406 
+             C 214 430, 246 444, 288 438 
+             C 334 430, 368 396, 378 350 
+             C 384 320, 372 284, 346 266 
+             L 364 248 
+             C 342 240, 314 236, 288 236 Z" />
+  </g>
+</svg>

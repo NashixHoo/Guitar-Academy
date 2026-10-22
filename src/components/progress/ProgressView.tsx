@@ -102,14 +102,25 @@ export const ProgressView: React.FC<ProgressViewProps> = ({
         </div>
       )}
 
-      {/* Header */}
-      <div className="bg-white border border-[#D9D9D9] rounded-3xl p-6 shadow-xs flex flex-wrap items-center justify-between gap-4">
-        <div>
+      {/* Header with Evoluir Banner */}
+      <div className="bg-white dark:bg-[#22141A] border border-[#D9D9D9] dark:border-[#422933] rounded-3xl p-6 sm:p-8 shadow-xs flex flex-wrap items-center justify-between gap-4 relative overflow-hidden">
+        {/* Subtle pillar banner background */}
+        <div className="absolute right-0 top-0 bottom-0 w-2/5 pointer-events-none opacity-20 hidden md:block">
+          <img
+            src="./images/backgrounds/banner-evoluir.svg"
+            alt=""
+            aria-hidden="true"
+            className="w-full h-full object-cover object-right"
+          />
+        </div>
+        <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-[#7B1E2B] via-[#B52A3A] to-[#F5C542]" />
+
+        <div className="relative z-10">
           <div className="flex items-center gap-2">
-            <Trophy className="w-5 h-5 text-[#7B1E2B]" />
-            <h1 className="text-2xl font-black text-[#25252A]">Meu Progresso & Estatísticas</h1>
+            <Trophy className="w-5 h-5 text-[#F5C542]" />
+            <h1 className="text-2xl font-display font-black text-[#25252A] dark:text-[#F8F7F4]">Meu Progresso & Estatísticas</h1>
           </div>
-          <p className="text-xs sm:text-sm text-[#666672] mt-1 font-medium">
+          <p className="text-xs sm:text-sm text-[#666672] dark:text-[#B8B3C0] mt-1 font-medium">
             Seu diário de bordo musical registrado 100% no seu navegador sem rastreadores.
           </p>
         </div>

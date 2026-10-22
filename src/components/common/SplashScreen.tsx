@@ -54,7 +54,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
       aria-live="polite"
       aria-label="Carregando Guitar Academy"
       onClick={handleDismiss}
-      className={`fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#F8F7F4] select-none cursor-pointer transition-all duration-200 ease-out ${
+      className={`fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#F8F7F4] select-none cursor-pointer overflow-hidden transition-all duration-200 ease-out ${
         isFadingOut ? 'opacity-0 scale-[0.99] pointer-events-none' : 'opacity-100 scale-100'
       }`}
       style={{
@@ -62,48 +62,69 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
         paddingBottom: 'env(safe-area-inset-bottom, 0px)',
       }}
     >
-      {/* Decorative subtle ambient backdrop element */}
-      <div className="absolute top-0 left-0 right-0 h-1.5 tortoiseshell-badge" />
+      {/* Cenário Cinematográfico: Palco com guitarra elétrica, bateria ao fundo e iluminação vinho/âmbar */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+        <picture>
+          <source srcSet="./stage-hero.webp" type="image/webp" />
+          <img
+            src="./stage-hero.jpg"
+            alt=""
+            aria-hidden="true"
+            className="w-full h-full object-cover object-center filter brightness-[0.40] contrast-[1.15] scale-105 transition-transform duration-1000 ease-out"
+            loading="eager"
+            decoding="async"
+          />
+        </picture>
+        {/* Camada de Contraste e Vinheta Cinematográfica em Tons de Vinho (#7B1E2B), Cereja (#B52A3A) e Grafite Escuro */}
+        <div className="absolute inset-0 bg-gradient-to-b from-[#140608]/90 via-[#220B10]/80 to-[#0F0507]/95" />
+        <div className="absolute inset-0 bg-radial from-transparent via-[#100507]/45 to-[#050203]/90" />
+      </div>
 
-      <div className="flex flex-col items-center text-center px-6 max-w-sm w-full animate-splash-content">
-        {/* Ícone Oficial Existente do Guitar Academy com Borda Luthier Ouro */}
+      {/* Friso sutil de acabamento superior */}
+      <div className="absolute top-0 left-0 right-0 h-1.5 tortoiseshell-badge opacity-90 z-10" />
+
+      {/* Conteúdo Central da Apresentação */}
+      <div className="relative z-10 flex flex-col items-center text-center px-6 max-w-md w-full animate-splash-content">
+        {/* Ícone Oficial Existente do Guitar Academy (Palheta de Instrumento com Detalhes Luthier) */}
         <div className="relative mb-5 group">
-          <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-3xl bg-white border border-[#C5A059]/50 shadow-xl flex items-center justify-center p-3.5 tortoiseshell-card glow-wine">
+          <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-3xl bg-white/95 backdrop-blur-md border border-[#C5A059]/60 shadow-2xl flex items-center justify-center p-3.5 tortoiseshell-card glow-wine ring-4 ring-[#7B1E2B]/30">
             <img
               src="./icon.svg"
               alt="Ícone Oficial Guitar Academy"
-              className="w-full h-full object-contain filter drop-shadow-sm"
+              className="w-full h-full object-contain filter drop-shadow-md"
               loading="eager"
             />
           </div>
-          <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full tortoiseshell-badge border-2 border-white flex items-center justify-center shadow-xs">
-            <span className="text-[10px] font-black text-[#FAF4E6] leading-none">★</span>
+          {/* Selo Dourado Conservatório */}
+          <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full tortoiseshell-badge border-2 border-white flex items-center justify-center shadow-md">
+            <span className="text-[11px] font-black text-[#FAF4E6] leading-none">★</span>
           </div>
         </div>
 
-        {/* Tipografia Oficial Guitar Academy com Hierarquia Luxuosa */}
-        <div className="space-y-1.5">
-          <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full luxury-gold-badge text-[10px] font-bold uppercase tracking-widest mb-1 font-mono-code">
+        {/* Tipografia Oficial Guitar Academy com Hierarquia Cinematográfica Luxuosa */}
+        <div className="space-y-2">
+          <div className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-[#FAF4E6]/95 border border-[#C5A059]/60 text-[10px] font-bold uppercase tracking-widest mb-0.5 text-[#8C5F18] shadow-sm font-mono-code">
             <span>Conservatório Pro • 101 HSS</span>
           </div>
 
-          <h1 className="text-2xl sm:text-3xl font-display font-extrabold text-[#1A1A1F] tracking-[0.12em] leading-tight">
+          <h1 className="text-3xl sm:text-4xl font-display font-extrabold text-white tracking-[0.14em] leading-tight drop-shadow-md">
             GUITAR ACADEMY
           </h1>
 
-          <p className="text-xs sm:text-sm font-semibold text-[#666672] max-w-xs mx-auto leading-relaxed">
-            Formação Musical de Excelência para Guitarristas
+          {/* Frase Oficial Requisitada */}
+          <p className="text-sm sm:text-base font-semibold text-[#F2DFE3] max-w-xs sm:max-w-sm mx-auto leading-relaxed drop-shadow-sm">
+            “Do zero ao seu melhor com a guitarra”
           </p>
         </div>
 
-        {/* Barra de Progresso Sutil com Gradiente Vermelho Rajado */}
-        <div className="w-36 h-1 rounded-full overflow-hidden bg-[#E8D3D6] mt-6 relative">
-          <div className="h-full w-full bg-gradient-to-r from-[#7B1E2B] via-[#B52A3A] to-[#7B1E2B] rounded-full animate-splash-bar" />
+        {/* Barra de Progresso Elegante com Gradiente Vinho (#7B1E2B) & Cereja (#B52A3A) */}
+        <div className="w-40 sm:w-48 h-1.5 rounded-full overflow-hidden bg-white/20 mt-6 relative backdrop-blur-xs">
+          <div className="h-full w-full bg-gradient-to-r from-[#7B1E2B] via-[#B52A3A] to-[#C5A059] rounded-full animate-splash-bar shadow-sm" />
         </div>
 
-        {/* Legenda de Inicialização Rápida e Área Segura */}
-        <span className="text-[10px] font-mono-code text-[#888896] mt-4 tracking-wide">
-          Carregando plataforma...
+        {/* Legenda de Acesso Rápido e Área Segura */}
+        <span className="text-[11px] font-mono-code text-[#D9C4C7] mt-4 tracking-wide">
+          Toque para entrar • Inicialização rápida
         </span>
       </div>
     </div>

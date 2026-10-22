@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" width="1200" height="400">
+  <defs>
+    <linearGradient id="bgEstudar" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4E0E17" />
+      <stop offset="45%" stop-color="#7B1E2B" />
+      <stop offset="85%" stop-color="#2D080E" />
+      <stop offset="100%" stop-color="#150306" />
+    </linearGradient>
+
+    <radialGradient id="stageGlowEstudar" cx="80%" cy="40%" r="60%">
+      <stop offset="0%" stop-color="#E0485C" stop-opacity="0.35" />
+      <stop offset="100%" stop-color="#4E0E17" stop-opacity="0.0" />
+    </radialGradient>
+
+    <linearGradient id="fretLineGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.1" />
+      <stop offset="50%" stop-color="#FFFFFF" stop-opacity="0.3" />
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0.05" />
+    </linearGradient>
+
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FCE182" />
+      <stop offset="50%" stop-color="#F5C542" />
+      <stop offset="100%" stop-color="#C4931A" />
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="400" rx="24" fill="url(#bgEstudar)" />
+  <rect width="1200" height="400" rx="24" fill="url(#stageGlowEstudar)" />
+
+  <!-- Guitar Fretboard Strings & Frets Artwork on the Right -->
+  <g opacity="0.45" transform="rotate(-12, 950, 200)">
+    <!-- Frets -->
+    <line x1="720" y1="50" x2="720" y2="350" stroke="url(#fretLineGrad)" stroke-width="3" />
+    <line x1="790" y1="50" x2="790" y2="350" stroke="url(#fretLineGrad)" stroke-width="3" />
+    <line x1="860" y1="50" x2="860" y2="350" stroke="url(#fretLineGrad)" stroke-width="3" />
+    <line x1="930" y1="50" x2="930" y2="350" stroke="url(#fretLineGrad)" stroke-width="3.5" />
+    <line x1="1000" y1="50" x2="1000" y2="350" stroke="url(#fretLineGrad)" stroke-width="4" />
+    <line x1="1070" y1="50" x2="1070" y2="350" stroke="url(#fretLineGrad)" stroke-width="4.5" />
+    <line x1="1140" y1="50" x2="1140" y2="350" stroke="url(#fretLineGrad)" stroke-width="5" />
+
+    <!-- Fret Markers -->
+    <circle cx="825" cy="200" r="8" fill="#F5C542" opacity="0.6" />
+    <circle cx="965" cy="200" r="8" fill="#F5C542" opacity="0.6" />
+    <circle cx="1105" cy="140" r="7" fill="#F5C542" opacity="0.6" />
+    <circle cx="1105" cy="260" r="7" fill="#F5C542" opacity="0.6" />
+
+    <!-- 6 Strings -->
+    <line x1="680" y1="90" x2="1180" y2="90" stroke="#FFFFFF" stroke-width="1.5" opacity="0.7" />
+    <line x1="680" y1="134" x2="1180" y2="134" stroke="#FFFFFF" stroke-width="2" opacity="0.75" />
+    <line x1="680" y1="178" x2="1180" y2="178" stroke="#FFFFFF" stroke-width="2.5" opacity="0.8" />
+    <line x1="680" y1="222" x2="1180" y2="222" stroke="#FFFFFF" stroke-width="3" opacity="0.85" />
+    <line x1="680" y1="266" x2="1180" y2="266" stroke="#FFFFFF" stroke-width="3.5" opacity="0.9" />
+    <line x1="680" y1="310" x2="1180" y2="310" stroke="#FFFFFF" stroke-width="4" opacity="0.95" />
+  </g>
+
+  <!-- Left: Pillar Typography & Branding -->
+  <g transform="translate(60, 80)">
+    <!-- Small Category Tag -->
+    <rect x="0" y="0" width="130" height="28" rx="6" fill="rgba(245, 197, 66, 0.15)" stroke="#F5C542" stroke-width="1.2" />
+    <text x="14" y="19" font-family="'Montserrat', sans-serif" font-weight="700" font-size="11" letter-spacing="2" fill="#F5C542">ESTUDAR</text>
+
+    <!-- Headline -->
+    <text x="0" y="78" font-family="'Montserrat', sans-serif" font-weight="900" font-size="44" fill="#FFFFFF" letter-spacing="1">Formação &amp; Currículo</text>
+    <text x="0" y="118" font-family="'Montserrat', sans-serif" font-weight="900" font-size="34" fill="url(#goldGrad)" letter-spacing="0.5">Níveis 0 a 5 — Do Zero ao Domínio</text>
+
+    <!-- Subtitle -->
+    <text x="0" y="160" font-family="'Montserrat', sans-serif" font-weight="500" font-size="16" fill="#E5D6D8" letter-spacing="0.3">Aulas progressivas, teoria musical aplicada, tablaturas e acordes comentados.</text>
+  </g>
+</svg>
