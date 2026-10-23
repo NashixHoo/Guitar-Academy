@@ -23,15 +23,16 @@ export const PWAInstallButton: React.FC<{ variant?: 'header' | 'banner' | 'setti
       {isInstallable && (
         <button
           onClick={install}
-          className={`flex items-center gap-2 rounded-xl font-bold transition shadow-xs ${
+          className={`flex items-center gap-1.5 rounded-xl font-bold transition shadow-xs ${
             variant === 'header'
-              ? 'bg-[#F5E8EA] text-[#7B1E2B] hover:bg-[#ebd3d6] border border-[#E8D3D6] px-3 py-1.5 text-xs'
+              ? 'bg-[#F5E8EA] dark:bg-[#381A25] text-[#7B1E2B] dark:text-[#FF6B81] hover:bg-[#ebd3d6] dark:hover:bg-[#4a2432] border border-[#E8D3D6] dark:border-[#422933] p-2 sm:px-3 sm:py-1.5 text-xs min-w-[40px] min-h-[40px] justify-center shrink-0'
               : 'bg-[#7B1E2B] text-white hover:bg-[#B52A3A] px-4 py-2.5 text-sm w-full justify-center'
           }`}
           title="Instalar Guitar Academy no seu dispositivo"
+          aria-label="Instalar Guitar Academy no dispositivo"
         >
-          <Download className="w-3.5 h-3.5" />
-          <span>Instalar App</span>
+          <Download className="w-4 h-4 text-[#7B1E2B] dark:text-[#FF6B81]" aria-hidden="true" />
+          <span className={variant === 'header' ? 'hidden md:inline whitespace-nowrap' : ''}>Instalar App</span>
         </button>
       )}
 
@@ -39,14 +40,16 @@ export const PWAInstallButton: React.FC<{ variant?: 'header' | 'banner' | 'setti
         <>
           <button
             onClick={() => setShowIOSGuide(true)}
-            className={`flex items-center gap-2 rounded-xl font-bold transition ${
+            className={`flex items-center gap-1.5 rounded-xl font-bold transition ${
               variant === 'header'
-                ? 'bg-[#F8F7F4] text-[#7B1E2B] hover:bg-[#F5E8EA] border border-[#D9D9D9] px-3 py-1.5 text-xs'
+                ? 'bg-[#F8F7F4] dark:bg-[#1A1216] text-[#7B1E2B] dark:text-[#FF6B81] hover:bg-[#F5E8EA] dark:hover:bg-[#381A25] border border-[#D9D9D9] dark:border-[#422933] p-2 sm:px-3 sm:py-1.5 text-xs min-w-[40px] min-h-[40px] justify-center shrink-0'
                 : 'bg-white text-[#7B1E2B] border border-[#D9D9D9] hover:bg-[#F5E8EA] px-4 py-2.5 text-sm w-full justify-center'
             }`}
+            title="Instalar Guitar Academy no iPhone / iPad"
+            aria-label="Instalar Guitar Academy no iPhone"
           >
-            <Smartphone className="w-3.5 h-3.5 text-[#B52A3A]" />
-            <span>Instalar no iPhone</span>
+            <Smartphone className="w-4 h-4 text-[#B52A3A] dark:text-[#FF6B81]" aria-hidden="true" />
+            <span className={variant === 'header' ? 'hidden md:inline whitespace-nowrap' : ''}>Instalar no iPhone</span>
           </button>
 
           {showIOSGuide && (

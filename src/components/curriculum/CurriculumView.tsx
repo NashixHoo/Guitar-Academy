@@ -157,10 +157,10 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({ progress, onSele
                         </span>
                       )}
                     </div>
-                    <h3 className="font-bold text-[#25252A] text-sm sm:text-base group-hover:text-[#7B1E2B]">
+                    <h3 className="font-bold text-[#25252A] dark:text-[#F8F7F4] text-sm sm:text-base group-hover:text-[#7B1E2B] dark:group-hover:text-[#FF6B81] transition-colors">
                       {lesson.title}
                     </h3>
-                    <p className="text-xs text-[#666672] line-clamp-1">{lesson.subtitle}</p>
+                    <p className="text-xs text-[#4D4D54] dark:text-[#B8B3C0] line-clamp-1">{lesson.subtitle}</p>
                   </div>
                 </div>
 

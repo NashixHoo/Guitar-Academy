@@ -148,19 +148,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
 
         <div className="relative z-10 max-w-2xl space-y-4">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-[#FAF4E6] border border-[#C5A059]/40 text-[#8C5F18] text-xs font-bold shadow-2xs">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-[#FAF4E6] dark:bg-[#382810] border border-[#C5A059]/40 text-[#8C5F18] dark:text-[#F5D38A] text-xs font-bold shadow-2xs">
             <Sparkles className="w-3.5 h-3.5 text-[#C5A059]" />
             <span className="font-display tracking-wider">Trilha de Formação Musical • Conservatório</span>
           </div>
 
           <div>
-            <span className="text-xs text-[#8C5F18] dark:text-[#F5D38A] font-bold uppercase tracking-wider block">
+            <span className="text-xs text-[#7B1E2B] dark:text-[#FF6B81] font-bold uppercase tracking-wider block font-mono-code">
               {currentLesson.moduleTitle}
             </span>
-            <h1 className="text-2xl sm:text-4xl font-display font-black text-[#1C1C21] dark:text-[#F8F7F4] mt-1 leading-tight tracking-tight">
+            <h1 className="text-xl xs:text-2xl sm:text-3xl lg:text-4xl font-display font-black text-[#25252A] dark:text-[#F8F7F4] mt-1.5 leading-tight tracking-tight">
               {currentLesson.title}
             </h1>
-            <p className="text-sm sm:text-base text-[#666672] dark:text-[#B8B3C0] mt-2 font-medium leading-relaxed">
+            <p className="text-xs xs:text-sm sm:text-base text-[#4D4D54] dark:text-[#B8B3C0] mt-2 font-medium leading-relaxed">
               {currentLesson.subtitle}
             </p>
           </div>

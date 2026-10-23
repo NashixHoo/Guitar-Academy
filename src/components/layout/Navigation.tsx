@@ -20,6 +20,7 @@ import {
   ShieldCheck,
   X
 } from 'lucide-react';
+import { PWAInstallButton } from '../common/PWAInstallButton';
 
 interface NavigationProps {
   currentTab: NavigationTab;
@@ -84,6 +85,11 @@ export const Navigation: React.FC<NavigationProps> = ({
         <span className="text-[9px] font-mono-code px-1.5 py-0.5 rounded-sm bg-[#FAF4E6] text-[#8C5F18] border border-[#C5A059]/30">
           PRO
         </span>
+      </div>
+
+      {/* PWA App Install Callout in Drawer */}
+      <div className="px-1">
+        <PWAInstallButton variant="header" />
       </div>
 
       <nav className="flex-1 space-y-4 overflow-y-auto pr-1">

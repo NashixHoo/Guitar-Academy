@@ -62,43 +62,43 @@ export const Header: React.FC<HeaderProps> = ({
     <header 
       role="banner" 
       aria-label="Cabeçalho principal do Guitar Academy"
-      className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-[#D9D9D9] px-3 sm:px-6 py-2.5 flex items-center justify-between gap-2 sm:gap-4 shadow-xs safe-area-top"
+      className="sticky top-0 z-40 bg-white/95 dark:bg-[#1A1216]/95 backdrop-blur-md border-b border-[#D9D9D9] dark:border-[#422933] px-2.5 xs:px-3 sm:px-6 py-2 sm:py-2.5 flex items-center justify-between gap-1.5 sm:gap-4 shadow-xs safe-area-top transition-colors"
     >
       {/* Left: Voltar button (if available), Mobile hamburger & Brand */}
-      <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+      <div className="flex items-center gap-1.5 sm:gap-3 shrink-0 min-w-0">
         {canGoBack && onGoBack && (
           <button
             onClick={onGoBack}
-            className="p-2 sm:px-3 sm:py-1.5 rounded-xl bg-[#F8F7F4] hover:bg-[#F5E8EA] text-[#7B1E2B] transition border border-[#D9D9D9] flex items-center gap-1.5 min-w-[40px] min-h-[40px] font-bold text-xs shadow-xs focus:outline-hidden focus:ring-2 focus:ring-[#7B1E2B]/30"
+            className="p-2 sm:px-3 sm:py-1.5 rounded-xl bg-[#F8F7F4] dark:bg-[#1A1216] hover:bg-[#F5E8EA] dark:hover:bg-[#381A25] text-[#7B1E2B] dark:text-[#FF6B81] transition border border-[#D9D9D9] dark:border-[#422933] flex items-center gap-1.5 min-w-[40px] min-h-[40px] font-bold text-xs shadow-xs focus:outline-hidden focus:ring-2 focus:ring-[#7B1E2B]/30"
             aria-label={backTitle ? `Voltar para ${backTitle}` : 'Voltar para a tela anterior'}
             title={backTitle ? `Voltar para ${backTitle}` : 'Voltar'}
           >
-            <ArrowLeft className="w-4 h-4 text-[#7B1E2B]" aria-hidden="true" />
+            <ArrowLeft className="w-4 h-4 text-[#7B1E2B] dark:text-[#FF6B81]" aria-hidden="true" />
             <span className="hidden sm:inline">Voltar</span>
           </button>
         )}
 
         <button
           onClick={onToggleMobileNav}
-          className="lg:hidden p-2 rounded-xl bg-[#F8F7F4] hover:bg-[#F5E8EA] text-[#25252A] transition border border-[#D9D9D9] min-w-[40px] min-h-[40px] flex items-center justify-center focus:outline-hidden focus:ring-2 focus:ring-[#7B1E2B]/20"
+          className="lg:hidden p-2 rounded-xl bg-[#F8F7F4] dark:bg-[#1A1216] hover:bg-[#F5E8EA] dark:hover:bg-[#381A25] text-[#25252A] dark:text-[#F8F7F4] transition border border-[#D9D9D9] dark:border-[#422933] min-w-[40px] min-h-[40px] flex items-center justify-center focus:outline-hidden focus:ring-2 focus:ring-[#7B1E2B]/20"
           aria-label="Abrir Menu de Navegação"
         >
-          <Menu className="w-5 h-5 text-[#7B1E2B]" aria-hidden="true" />
+          <Menu className="w-5 h-5 text-[#7B1E2B] dark:text-[#FF6B81]" aria-hidden="true" />
         </button>
 
-        <div className="flex items-center gap-1.5 sm:gap-2.5">
+        <div className="flex items-center gap-1.5 sm:gap-2.5 min-w-0">
           {/* Logo icon box using official icon.svg with tortoiseshell gold trim */}
-          <div className="w-7 h-7 xs:w-8 xs:h-8 sm:w-9 sm:h-9 rounded-xl bg-white border border-[#C5A059]/40 flex items-center justify-center shadow-xs overflow-hidden p-1 tortoiseshell-card shrink-0">
+          <div className="w-7 h-7 xs:w-8 xs:h-8 sm:w-9 sm:h-9 rounded-xl bg-white dark:bg-[#22141A] border border-[#C5A059]/40 flex items-center justify-center shadow-xs overflow-hidden p-1 tortoiseshell-card shrink-0">
             <img src="./icon.svg" alt="Guitar Academy Ícone" className="w-full h-full object-contain" />
           </div>
-          <div>
-            <span className="font-display font-bold text-[#1F1F24] dark:text-[#F8F7F4] text-xs xs:text-sm sm:text-base tracking-[0.06em] sm:tracking-[0.08em] flex items-center gap-1 sm:gap-1.5 leading-none">
-              GUITAR ACADEMY
-              <span className="hidden sm:inline-block text-[9px] sm:text-[10px] font-mono-code font-bold px-1.5 py-0.5 rounded-md luxury-gold-badge">
+          <div className="min-w-0">
+            <span className="font-display font-bold text-[#1F1F24] dark:text-[#F8F7F4] text-xs xs:text-sm sm:text-base tracking-[0.03em] sm:tracking-[0.08em] flex items-center gap-1 sm:gap-1.5 leading-none">
+              <span className="truncate">GUITAR ACADEMY</span>
+              <span className="hidden sm:inline-block text-[9px] sm:text-[10px] font-mono-code font-bold px-1.5 py-0.5 rounded-md luxury-gold-badge shrink-0">
                 101 HSS
               </span>
             </span>
-            <span className="hidden md:block text-[10px] text-[#666672] dark:text-[#B8B3C0] tracking-wide leading-none mt-1 font-medium">
+            <span className="hidden md:block text-[10px] text-[#666672] dark:text-[#B8B3C0] tracking-wide leading-none mt-1 font-medium truncate">
               Conservatório Musical para Guitarristas
             </span>
           </div>
@@ -128,17 +128,17 @@ export const Header: React.FC<HeaderProps> = ({
         </button>
 
         {/* Master Audio Volume Control */}
-        <div className="flex items-center gap-1 bg-[#F8F7F4] p-1 sm:px-2.5 sm:py-1.5 rounded-xl border border-[#D9D9D9]">
+        <div className="flex items-center gap-1 bg-[#F8F7F4] dark:bg-[#1A1216] p-1 sm:px-2.5 sm:py-1.5 rounded-xl border border-[#D9D9D9] dark:border-[#422933]">
           <button
             onClick={handleToggleMute}
-            className="text-[#666672] hover:text-[#7B1E2B] transition p-1.5 sm:p-0.5 rounded-md min-w-[36px] min-h-[36px] sm:min-w-0 sm:min-h-0 flex items-center justify-center focus:outline-hidden focus:ring-1 focus:ring-[#7B1E2B]"
+            className="text-[#666672] dark:text-[#B8B3C0] hover:text-[#7B1E2B] dark:hover:text-[#FF6B81] transition p-1.5 sm:p-0.5 rounded-md min-w-[36px] min-h-[36px] sm:min-w-0 sm:min-h-0 flex items-center justify-center focus:outline-hidden focus:ring-1 focus:ring-[#7B1E2B]"
             title={isMuted ? 'Desmutar áudio' : 'Mutar áudio'}
             aria-label={isMuted ? 'Desmutar áudio do aplicativo' : 'Mutar áudio do aplicativo'}
           >
             {isMuted || volume === 0 ? (
-              <VolumeX className="w-4 h-4 text-[#B52A3A]" aria-hidden="true" />
+              <VolumeX className="w-4 h-4 text-[#B52A3A] dark:text-[#FF6B81]" aria-hidden="true" />
             ) : (
-              <Volume2 className="w-4 h-4 text-[#7B1E2B]" aria-hidden="true" />
+              <Volume2 className="w-4 h-4 text-[#7B1E2B] dark:text-[#FF6B81]" aria-hidden="true" />
             )}
           </button>
           <input

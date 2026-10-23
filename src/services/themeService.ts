@@ -138,8 +138,8 @@ export const themeService = {
     root.style.setProperty(
       '--ga-wallpaper-overlay',
       effective === 'dark'
-        ? 'linear-gradient(145deg, rgba(14, 7, 9, 0.78) 0%, rgba(24, 10, 14, 0.70) 45%, rgba(10, 4, 6, 0.84) 100%)'
-        : 'linear-gradient(145deg, rgba(248, 247, 244, 0.76) 0%, rgba(248, 247, 244, 0.68) 45%, rgba(248, 247, 244, 0.82) 100%)'
+        ? 'linear-gradient(145deg, rgba(14, 7, 9, 0.72) 0%, rgba(24, 10, 14, 0.64) 45%, rgba(10, 4, 6, 0.78) 100%)'
+        : 'linear-gradient(145deg, rgba(248, 247, 244, 0.68) 0%, rgba(248, 247, 244, 0.58) 45%, rgba(248, 247, 244, 0.74) 100%)'
     );
     root.style.setProperty('--body-text', colors.bodyText);
     root.style.setProperty('--header-bg', colors.headerBg);

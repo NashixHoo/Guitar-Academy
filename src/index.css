@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, [data-theme="dark"], [data-theme="dark"] *));
+
 @layer base {
   :root {
     /* Tokens Canônicos Guitar Academy */
@@ -38,9 +40,9 @@
     /* Papel de Parede Fixo Global - Modo Claro */
     --ga-wallpaper-overlay: linear-gradient(
       145deg,
-      rgba(248, 247, 244, 0.76) 0%,
-      rgba(248, 247, 244, 0.68) 45%,
-      rgba(248, 247, 244, 0.82) 100%
+      rgba(248, 247, 244, 0.68) 0%,
+      rgba(248, 247, 244, 0.58) 45%,
+      rgba(248, 247, 244, 0.74) 100%
     );
   }
 
@@ -84,9 +86,9 @@
     /* Papel de Parede Fixo Global - Modo Escuro */
     --ga-wallpaper-overlay: linear-gradient(
       145deg,
-      rgba(14, 7, 9, 0.78) 0%,
-      rgba(24, 10, 14, 0.70) 45%,
-      rgba(10, 4, 6, 0.84) 100%
+      rgba(14, 7, 9, 0.72) 0%,
+      rgba(24, 10, 14, 0.64) 45%,
+      rgba(10, 4, 6, 0.78) 100%
     );
   }
 
@@ -185,11 +187,17 @@
 }
 
 .luxury-hero-banner {
-  background: linear-gradient(140deg, var(--card-surface, rgba(255, 255, 255, 0.96)) 0%, var(--card-surface-end, rgba(252, 250, 247, 0.93)) 50%, var(--card-surface-end, rgba(245, 236, 233, 0.90)) 100%);
-  border: 1px solid rgba(197, 160, 89, 0.40);
-  box-shadow: 0 12px 35px -5px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(255, 255, 255, 0.8) inset;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: linear-gradient(140deg, rgba(255, 255, 255, 0.90) 0%, rgba(252, 250, 247, 0.86) 50%, rgba(248, 243, 240, 0.82) 100%);
+  border: 1px solid rgba(197, 160, 89, 0.45);
+  box-shadow: 0 8px 30px -4px rgba(0, 0, 0, 0.10), 0 0 0 1px rgba(255, 255, 255, 0.85) inset;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.dark .luxury-hero-banner {
+  background: linear-gradient(140deg, rgba(34, 20, 26, 0.94) 0%, rgba(26, 14, 19, 0.92) 50%, rgba(20, 10, 15, 0.96) 100%);
+  border-color: rgba(224, 83, 104, 0.35);
+  box-shadow: 0 12px 35px -5px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(224, 83, 104, 0.20) inset;
 }
 
 /* Superfícies Translúcidas de Cards e Painéis com Máximo Contraste de Leitura */

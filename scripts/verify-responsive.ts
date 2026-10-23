@@ -197,6 +197,38 @@ addCheck(
   headerHasMinTouchTargets ? 'Hitboxes dimensionadas para toque mobile' : 'ausente'
 );
 
+// 4.1 PWA INSTALL BUTTON RESPONSIVENESS IN HEADER
+const pwaBtnPath = path.resolve('src/components/common/PWAInstallButton.tsx');
+const pwaBtnContent = fs.readFileSync(pwaBtnPath, 'utf-8');
+const pwaHasResponsiveText = pwaBtnContent.includes('hidden md:inline') && pwaBtnContent.includes('min-w-[40px]');
+addCheck(
+  'RESP-HEADER-01',
+  'Header iPhone Responsivo',
+  'Botão de Instalação no cabeçalho colapsa texto em celulares para não cortar na lateral do iPhone',
+  pwaHasResponsiveText,
+  pwaHasResponsiveText ? 'Botão colapsa rótulo em telas móveis e mantém área de toque 40x40px' : 'ausente'
+);
+
+// 4.2 CONTRASTE DO TÍTULO DA AULA
+const lessonTitleHasHighContrast = dashboardContent.includes('text-[#25252A]') && dashboardContent.includes('currentLesson.title');
+addCheck(
+  'RESP-CONTRAST-01',
+  'Contraste Visual do Título da Aula',
+  'Título da Aula no Dashboard utiliza grafite #25252A sobre superfícies claras',
+  lessonTitleHasHighContrast,
+  lessonTitleHasHighContrast ? 'Título com alto contraste text-[#25252A] garantido' : 'ausente'
+);
+
+// 4.3 CAMADA ÚNICA DO PAPEL DE PAREDE
+const singleWallpaperLayer = appTsx.includes('ga-wallpaper') && !indexHtml.includes('id="ga-wallpaper"');
+addCheck(
+  'RESP-WALL-06',
+  'Camada Única de Papel de Parede',
+  'Camada única e unificada de papel de parede sem duplicação de sobreposições opacas',
+  singleWallpaperLayer,
+  singleWallpaperLayer ? 'Camada única fixada gerenciada em App.tsx' : 'duplicação detectada'
+);
+
 // 5. METRONOME.TSX AUDIT
 const metronomePath = path.resolve('src/components/metronome/MetronomeView.tsx');
 const metronomeContent = fs.readFileSync(metronomePath, 'utf-8');

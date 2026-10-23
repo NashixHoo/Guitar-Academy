@@ -264,38 +264,38 @@ export const LessonViewer: React.FC<LessonViewerProps> = ({
   return (
     <div className="max-w-4xl mx-auto space-y-4 sm:space-y-6 pb-12">
       {/* Lesson Hero Header */}
-      <div className="bg-white border border-[#D9D9D9] rounded-3xl p-4 sm:p-8 shadow-xs relative overflow-hidden">
+      <div className="bg-white dark:bg-[#22141A] border border-[#D9D9D9] dark:border-[#422933] rounded-3xl p-4 sm:p-8 shadow-xs relative overflow-hidden">
         {/* Decorative wine red top accent */}
         <div className="absolute top-0 left-0 right-0 h-1.5 bg-[#7B1E2B]" />
 
         <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3 text-xs text-[#7B1E2B] font-semibold mb-2">
-          <span className="px-3 py-1 rounded-full bg-[#F5E8EA] border border-[#E8D3D6] font-bold">
+          <span className="px-3 py-1 rounded-full bg-[#F5E8EA] dark:bg-[#381A25] text-[#7B1E2B] dark:text-[#FF6B81] border border-[#E8D3D6] dark:border-[#422933] font-bold font-mono-code">
             {lesson.moduleTitle}
           </span>
-          <div className="flex items-center gap-2 text-[#666672]">
-            <Clock className="w-3.5 h-3.5 text-[#7B1E2B]" />
+          <div className="flex items-center gap-2 text-[#666672] dark:text-[#B8B3C0]">
+            <Clock className="w-3.5 h-3.5 text-[#7B1E2B] dark:text-[#FF6B81]" />
             <span>Estimado: {lesson.estimatedMinutes} min</span>
             {isCompleted && (
-              <span className="flex items-center gap-1 text-emerald-700 font-bold ml-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+              <span className="flex items-center gap-1 text-emerald-700 dark:text-emerald-400 font-bold ml-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                 Concluída
               </span>
             )}
           </div>
         </div>
 
-        <h1 className="text-2xl sm:text-3xl font-black text-[#25252A] mt-2 leading-tight tracking-tight">
+        <h1 className="text-2xl sm:text-3xl font-black text-[#25252A] dark:text-[#F8F7F4] mt-2 leading-tight tracking-tight">
           {lesson.title}
         </h1>
-        <p className="text-sm sm:text-base text-[#666672] mt-2 font-medium">
+        <p className="text-sm sm:text-base text-[#4D4D54] dark:text-[#B8B3C0] mt-2 font-medium leading-relaxed">
           {lesson.subtitle}
         </p>
 
         {/* Learning Objective Box */}
-        <div className="mt-4 p-4 rounded-2xl bg-[#F8F7F4] border border-[#D9D9D9] flex items-start gap-3">
-          <BookOpen className="w-5 h-5 text-[#7B1E2B] shrink-0 mt-0.5" />
+        <div className="mt-4 p-4 rounded-2xl bg-[#F8F7F4] dark:bg-[#1A1216] border border-[#D9D9D9] dark:border-[#422933] flex items-start gap-3">
+          <BookOpen className="w-5 h-5 text-[#7B1E2B] dark:text-[#FF6B81] shrink-0 mt-0.5" />
           <div>
-            <span className="text-xs font-bold text-[#7B1E2B] uppercase tracking-wider block">
+            <span className="text-xs font-bold text-[#7B1E2B] dark:text-[#FF6B81] uppercase tracking-wider block font-mono-code">
               Objetivo desta aula
             </span>
             <p className="text-xs sm:text-sm text-[#25252A] mt-0.5 font-medium leading-relaxed">
