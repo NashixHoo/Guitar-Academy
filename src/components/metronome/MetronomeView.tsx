@@ -150,7 +150,7 @@ export const MetronomeView: React.FC = () => {
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       {/* Top Main Meter Card */}
-      <div className="bg-white border border-[#D9D9D9] rounded-3xl p-6 sm:p-8 shadow-xs relative overflow-hidden">
+      <div className="bg-white border border-[#D9D9D9] rounded-3xl p-4 sm:p-8 shadow-xs relative overflow-hidden">
         {/* Subtle tortoiseshell top ribbon */}
         <div className="absolute top-0 left-0 right-0 h-1.5 tortoiseshell-badge" />
 
@@ -171,7 +171,7 @@ export const MetronomeView: React.FC = () => {
         </div>
 
         {/* Visual Beat Indicator Dots */}
-        <div className="flex items-center justify-center gap-3 sm:gap-4 my-6 py-4 bg-[#F8F7F4] rounded-2xl border border-[#D9D9D9]">
+        <div className="flex items-center justify-center gap-2 sm:gap-4 my-4 sm:my-6 py-3 sm:py-4 bg-[#F8F7F4] rounded-2xl border border-[#D9D9D9] overflow-x-auto no-scrollbar">
           {Array.from({ length: config.timeSignature.beats }).map((_, idx) => {
             const isCurrent = isRunning && currentBeat === idx;
             const isAccent = idx === 0 && config.accentFirstBeat;
@@ -179,20 +179,20 @@ export const MetronomeView: React.FC = () => {
             return (
               <div
                 key={`beat-indicator-${idx}`}
-                className="flex flex-col items-center gap-1.5"
+                className="flex flex-col items-center gap-1 shrink-0"
               >
                 <div
                   className={`transition-all duration-100 rounded-full flex items-center justify-center font-bold text-xs ${
                     isCurrent
                       ? isAccent
-                        ? 'w-12 h-12 sm:w-14 sm:h-14 bg-[#B52A3A] text-white shadow-md scale-110 ring-4 ring-[#B52A3A]/30'
-                        : 'w-12 h-12 sm:w-14 sm:h-14 bg-[#7B1E2B] text-white shadow-md scale-110 ring-4 ring-[#7B1E2B]/30'
-                      : 'w-10 h-10 sm:w-12 sm:h-12 bg-white text-[#666672] border border-[#D9D9D9]'
+                        ? 'w-10 h-10 sm:w-14 sm:h-14 bg-[#B52A3A] text-white shadow-md scale-105 ring-2 sm:ring-4 ring-[#B52A3A]/30'
+                        : 'w-10 h-10 sm:w-14 sm:h-14 bg-[#7B1E2B] text-white shadow-md scale-105 ring-2 sm:ring-4 ring-[#7B1E2B]/30'
+                      : 'w-8 h-8 sm:w-12 sm:h-12 bg-white text-[#666672] border border-[#D9D9D9]'
                   }`}
                 >
                   {idx + 1}
                 </div>
-                <span className="text-[10px] text-[#666672] font-mono-code font-semibold">
+                <span className="text-[9px] sm:text-[10px] text-[#666672] font-mono-code font-semibold">
                   {idx === 0 && config.accentFirstBeat ? 'Forte' : 'Fraco'}
                 </span>
               </div>
@@ -201,25 +201,25 @@ export const MetronomeView: React.FC = () => {
         </div>
 
         {/* Big BPM Display & Rapid Adjust Buttons */}
-        <div className="flex flex-col items-center justify-center my-4">
-          <div className="flex items-center gap-4 sm:gap-6">
+        <div className="flex flex-col items-center justify-center my-3 sm:my-4">
+          <div className="flex flex-wrap items-center justify-center gap-1.5 xs:gap-3 sm:gap-6">
             <button
               onClick={() => adjustBpm(-5)}
-              className="w-11 h-11 rounded-2xl bg-[#F8F7F4] hover:bg-[#F5E8EA] hover:text-[#7B1E2B] active:scale-95 text-[#25252A] flex items-center justify-center font-bold text-sm transition border border-[#D9D9D9]"
+              className="w-9 h-9 xs:w-10 xs:h-10 sm:w-11 sm:h-11 rounded-xl sm:rounded-2xl bg-[#F8F7F4] hover:bg-[#F5E8EA] hover:text-[#7B1E2B] active:scale-95 text-[#25252A] flex items-center justify-center font-bold text-xs sm:text-sm transition border border-[#D9D9D9]"
               title="-5 BPM"
             >
               -5
             </button>
             <button
               onClick={() => adjustBpm(-1)}
-              className="w-10 h-10 rounded-2xl bg-[#F8F7F4] hover:bg-[#F5E8EA] hover:text-[#7B1E2B] active:scale-95 text-[#25252A] flex items-center justify-center transition border border-[#D9D9D9]"
+              className="w-9 h-9 xs:w-10 xs:h-10 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-[#F8F7F4] hover:bg-[#F5E8EA] hover:text-[#7B1E2B] active:scale-95 text-[#25252A] flex items-center justify-center transition border border-[#D9D9D9]"
               title="-1 BPM"
             >
-              <Minus className="w-4 h-4" />
+              <Minus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </button>
 
             {/* Direct BPM Number Input */}
-            <div className="text-center px-4">
+            <div className="text-center px-1 sm:px-4">
               <input
                 type="number"
                 min={30}
@@ -231,23 +231,23 @@ export const MetronomeView: React.FC = () => {
                     setConfig((prev) => ({ ...prev, bpm: Math.max(30, Math.min(300, val)) }));
                   }
                 }}
-                className="w-32 sm:w-40 text-center font-black text-5xl sm:text-6xl text-[#25252A] bg-transparent border-b-2 border-[#7B1E2B]/40 focus:border-[#7B1E2B] focus:outline-none font-mono-code"
+                className="w-24 xs:w-28 sm:w-40 text-center font-black text-4xl sm:text-6xl text-[#25252A] bg-transparent border-b-2 border-[#7B1E2B]/40 focus:border-[#7B1E2B] focus:outline-none font-mono-code"
               />
-              <div className="text-xs font-bold text-[#7B1E2B] uppercase tracking-widest mt-1">
+              <div className="text-[10px] sm:text-xs font-bold text-[#7B1E2B] uppercase tracking-widest mt-1">
                 Batidas Por Minuto (BPM)
               </div>
             </div>
 
             <button
               onClick={() => adjustBpm(1)}
-              className="w-10 h-10 rounded-2xl bg-[#F8F7F4] hover:bg-[#F5E8EA] hover:text-[#7B1E2B] active:scale-95 text-[#25252A] flex items-center justify-center transition border border-[#D9D9D9]"
+              className="w-9 h-9 xs:w-10 xs:h-10 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-[#F8F7F4] hover:bg-[#F5E8EA] hover:text-[#7B1E2B] active:scale-95 text-[#25252A] flex items-center justify-center transition border border-[#D9D9D9]"
               title="+1 BPM"
             >
-              <Plus className="w-4 h-4" />
+              <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </button>
             <button
               onClick={() => adjustBpm(5)}
-              className="w-11 h-11 rounded-2xl bg-[#F8F7F4] hover:bg-[#F5E8EA] hover:text-[#7B1E2B] active:scale-95 text-[#25252A] flex items-center justify-center font-bold text-sm transition border border-[#D9D9D9]"
+              className="w-9 h-9 xs:w-10 xs:h-10 sm:w-11 sm:h-11 rounded-xl sm:rounded-2xl bg-[#F8F7F4] hover:bg-[#F5E8EA] hover:text-[#7B1E2B] active:scale-95 text-[#25252A] flex items-center justify-center font-bold text-xs sm:text-sm transition border border-[#D9D9D9]"
               title="+5 BPM"
             >
               +5

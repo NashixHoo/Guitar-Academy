@@ -262,13 +262,13 @@ export const LessonViewer: React.FC<LessonViewerProps> = ({
   const currentPartIndex = activeSection.startsWith('part-') ? parseInt(activeSection.replace('part-', ''), 10) : 0;
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6 pb-12">
+    <div className="max-w-4xl mx-auto space-y-4 sm:space-y-6 pb-12">
       {/* Lesson Hero Header */}
-      <div className="bg-white border border-[#D9D9D9] rounded-3xl p-6 sm:p-8 shadow-xs relative overflow-hidden">
+      <div className="bg-white border border-[#D9D9D9] rounded-3xl p-4 sm:p-8 shadow-xs relative overflow-hidden">
         {/* Decorative wine red top accent */}
         <div className="absolute top-0 left-0 right-0 h-1.5 bg-[#7B1E2B]" />
 
-        <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-[#7B1E2B] font-semibold mb-2">
+        <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3 text-xs text-[#7B1E2B] font-semibold mb-2">
           <span className="px-3 py-1 rounded-full bg-[#F5E8EA] border border-[#E8D3D6] font-bold">
             {lesson.moduleTitle}
           </span>
@@ -336,7 +336,7 @@ export const LessonViewer: React.FC<LessonViewerProps> = ({
       })()}
 
       {/* Lesson Navigation Tab Bar */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-1">
+      <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar pb-1">
         {lesson.parts.map((part, idx) => (
           <button
             key={part.id}

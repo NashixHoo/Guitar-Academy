@@ -200,12 +200,12 @@ export const DailyGoalSettings: React.FC<DailyGoalSettingsProps> = ({
       </div>
 
       {/* Botões de Ação */}
-      <div className="flex items-center justify-end gap-3 pt-2">
+      <div className="flex flex-wrap items-center justify-end gap-2.5 sm:gap-3 pt-2">
         {onClose && (
           <button
             type="button"
             onClick={onClose}
-            className="px-5 py-2.5 rounded-xl border border-[#D9D9D9] font-bold text-xs sm:text-sm text-[#666672] hover:bg-[#F2F2F2] transition"
+            className="w-full sm:w-auto px-5 py-2.5 rounded-xl border border-[#D9D9D9] font-bold text-xs sm:text-sm text-[#666672] hover:bg-[#F2F2F2] transition text-center"
           >
             Cancelar
           </button>
@@ -213,7 +213,7 @@ export const DailyGoalSettings: React.FC<DailyGoalSettingsProps> = ({
         <button
           type="button"
           onClick={handleSave}
-          className="px-6 py-2.5 rounded-xl bg-[#7B1E2B] hover:bg-[#B52A3A] text-white font-bold text-xs sm:text-sm shadow-xs transition flex items-center gap-2"
+          className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-[#7B1E2B] hover:bg-[#B52A3A] text-white font-bold text-xs sm:text-sm shadow-xs transition flex items-center justify-center gap-2"
         >
           <Check className="w-4 h-4 stroke-[2.5]" />
           <span>Confirmar Meta de {selectedMinutes} Minutos</span>
@@ -224,7 +224,7 @@ export const DailyGoalSettings: React.FC<DailyGoalSettingsProps> = ({
 
   if (variant === 'inline') {
     return (
-      <div className="bg-white border border-[#D9D9D9] rounded-3xl p-6 sm:p-8 shadow-xs">
+      <div className="bg-white border border-[#D9D9D9] rounded-3xl p-4 sm:p-8 shadow-xs">
         {content}
       </div>
     );
@@ -232,8 +232,8 @@ export const DailyGoalSettings: React.FC<DailyGoalSettingsProps> = ({
 
   // Modal Variant
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-white rounded-3xl border border-[#D9D9D9] max-w-2xl w-full p-6 sm:p-8 shadow-2xl animate-in fade-in zoom-in-95 my-8">
+    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto safe-area-bottom">
+      <div className="bg-white rounded-3xl border border-[#D9D9D9] max-w-2xl w-full p-4 sm:p-8 shadow-2xl animate-in fade-in zoom-in-95 my-auto max-h-[90vh] overflow-y-auto">
         {content}
       </div>
     </div>

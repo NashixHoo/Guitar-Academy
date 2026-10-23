@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" width="1200" height="400">
+  <defs>
+    <linearGradient id="bgPraticar" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#7B1E2B" />
+      <stop offset="40%" stop-color="#9B2433" />
+      <stop offset="75%" stop-color="#4E0E17" />
+      <stop offset="100%" stop-color="#1A0408" />
+    </linearGradient>
+
+    <radialGradient id="stageGlowPraticar" cx="75%" cy="50%" r="55%">
+      <stop offset="0%" stop-color="#F5C542" stop-opacity="0.30" />
+      <stop offset="60%" stop-color="#B52A3A" stop-opacity="0.15" />
+      <stop offset="100%" stop-color="#1A0408" stop-opacity="0.0" />
+    </radialGradient>
+  </defs>
+
+  <rect width="1200" height="400" rx="24" fill="url(#bgPraticar)" />
+  <rect width="1200" height="400" rx="24" fill="url(#stageGlowPraticar)" />
+
+  <!-- Metronome & Soundwaves Graphic on Right -->
+  <g transform="translate(860, 200)" opacity="0.6">
+    <!-- Sound Waves -->
+    <circle cx="0" cy="0" r="160" fill="none" stroke="#FFFFFF" stroke-width="1.5" opacity="0.15" />
+    <circle cx="0" cy="0" r="120" fill="none" stroke="#FFFFFF" stroke-width="2" opacity="0.25" />
+    <circle cx="0" cy="0" r="80" fill="none" stroke="#F5C542" stroke-width="2.5" opacity="0.45" />
+
+    <!-- Stylized Metronome Pendulum -->
+    <polygon points="-40,110 40,110 15,-110 -15,-110" fill="none" stroke="#FFFFFF" stroke-width="3" opacity="0.7" />
+    <line x1="0" y1="90" x2="35" y2="-90" stroke="#F5C542" stroke-width="4" stroke-linecap="round" />
+    <circle cx="28" cy="-55" r="12" fill="#F5C542" />
+  </g>
+
+  <!-- Left: Typography & Routine Pills -->
+  <g transform="translate(60, 80)">
+    <!-- Small Category Tag -->
+    <rect x="0" y="0" width="130" height="28" rx="6" fill="rgba(181, 42, 58, 0.25)" stroke="#B52A3A" stroke-width="1.2" />
+    <text x="14" y="19" font-family="'Montserrat', sans-serif" font-weight="700" font-size="11" letter-spacing="2" fill="#FF8A98">PRATICAR</text>
+
+    <!-- Headline -->
+    <text x="0" y="78" font-family="'Montserrat', sans-serif" font-weight="900" font-size="44" fill="#FFFFFF" letter-spacing="1">Central de Prática</text>
+    <text x="0" y="118" font-family="'Montserrat', sans-serif" font-weight="900" font-size="34" fill="#F5C542" letter-spacing="0.5">Rotinas Guiadas de 5, 10, 15 e 30 min</text>
+
+    <!-- Subtitle -->
+    <text x="0" y="160" font-family="'Montserrat', sans-serif" font-weight="500" font-size="16" fill="#E5D6D8" letter-spacing="0.3">Metrônomo preciso, afinador de microfone real, shapes e treino auditivo.</text>
+  </g>
+</svg>

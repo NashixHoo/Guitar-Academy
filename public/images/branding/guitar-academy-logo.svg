@@ -1,14 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 180" width="720" height="180">
   <defs>
-    <!-- Wine-Cherry Gradient from Guitar Academy Brand Spec -->
-    <linearGradient id="logoPickWine" x1="0%" y1="0%" x2="100%" y2="100%">
+    <!-- Wine-Cherry Gradient -->
+    <linearGradient id="logoHrzWine" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#9B2433" />
       <stop offset="35%" stop-color="#7B1E2B" />
       <stop offset="70%" stop-color="#B52A3A" />
       <stop offset="100%" stop-color="#5A121C" />
     </linearGradient>
 
-    <filter id="logoPickShadow" x="-15%" y="-10%" width="130%" height="130%">
+    <filter id="logoHrzShadow" x="-15%" y="-10%" width="130%" height="130%">
       <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#120406" flood-opacity="0.30" />
     </filter>
   </defs>
@@ -20,8 +20,8 @@
              C 134 118, 97 146, 80 155 
              C 63 146, 26 118, 21 78 
              C 16 32, 40 12, 80 12 Z" 
-          fill="url(#logoPickWine)" 
-          filter="url(#logoPickShadow)" />
+          fill="url(#logoHrzWine)" 
+          filter="url(#logoHrzShadow)" />
 
     <!-- Headstock & Stylized G in White -->
     <g fill="#FFFFFF">

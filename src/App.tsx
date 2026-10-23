@@ -256,35 +256,18 @@ export default function App() {
     : undefined;
 
   return (
-    <div className="relative min-h-screen text-[#25252A] flex flex-col font-sans">
-      {/* 1. Camada Global de Fundo Cinematográfico em Tela Inteira (Palco, Guitarra Elétrica & Bateria) */}
+    <div className="relative min-h-screen min-h-[100dvh] text-[#25252A] flex flex-col font-sans bg-transparent">
+      {/* 1. PAPEL DE PAREDE FIXO GLOBAL (Estúdio Cinematográfico com Guitarra Elétrica e Bateria) */}
       <div 
         aria-hidden="true" 
-        className="fixed inset-0 pointer-events-none z-0 overflow-hidden select-none"
-      >
-        <picture className="w-full h-full block">
-          <source srcSet="./images/guitar-academy-background.webp" type="image/webp" />
-          <img 
-            src="./images/guitar-academy-background.webp" 
-            alt="" 
-            className="w-full h-full object-cover object-top filter brightness-[0.82] contrast-[1.10]"
-            decoding="async"
-          />
-        </picture>
+        className="ga-wallpaper"
+        style={{
+          backgroundImage: `var(--ga-wallpaper-overlay), url("${import.meta.env.BASE_URL}images/backgrounds/guitar-academy-background.webp"), url("./images/backgrounds/guitar-academy-background.webp"), url("/images/backgrounds/guitar-academy-background.webp")`
+        }}
+      />
 
-        {/* Camada escura translúcida sobre a imagem para garantir legibilidade de textos, cifras e diagramas */}
-        <div 
-          className="absolute inset-0 transition-colors duration-300 pointer-events-none" 
-          style={{ backgroundColor: 'var(--overlay-color, rgba(14, 7, 9, 0.85))' }}
-        />
-        <div className="absolute inset-0 bg-gradient-to-b from-[#180508]/60 via-[#120406]/50 to-[#0B0204]/70 backdrop-blur-[0.5px]" />
-        
-        {/* Iluminação de palco vinho, cereja e âmbar */}
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_50%_15%,_rgba(181,42,58,0.22),_rgba(8,2,4,0.60))]" />
-      </div>
-
-      {/* 2. Conteúdo do Aplicativo em Camada Superior com Rolagem Normal e Independente */}
-      <div className="relative z-10 flex flex-col min-h-screen">
+      {/* 2. Conteúdo do Aplicativo em Camada Superior (z-10) com Rolagem Fluida e Independente */}
+      <div className="relative z-10 flex flex-col min-h-screen min-h-[100dvh] min-w-0 bg-transparent">
         {/* Top Header com Botão Voltar Integrado */}
         <Header
           currentTab={currentTab}
@@ -308,7 +291,7 @@ export default function App() {
         />
 
         {/* Main Workspace: Sidebar + Content */}
-        <div className="flex-1 flex">
+        <div className="flex-1 flex min-w-0">
           <Navigation
             currentTab={currentTab}
             onSelectTab={(tab) => navigateToTab(tab, null)}
@@ -319,7 +302,7 @@ export default function App() {
           <main 
             ref={mainScrollRef}
             {...touchHandlers}
-            className="flex-1 p-3 sm:p-6 lg:p-8 overflow-y-auto safe-area-bottom pb-28 sm:pb-32 lg:pb-24"
+            className="flex-1 min-w-0 w-full p-3 sm:p-6 lg:p-8 overflow-y-auto safe-area-bottom pb-28 sm:pb-32 lg:pb-24"
           >
             <div key={currentTab} className="page-enter">
               {/* TAB 1: Início (Estudar) */}

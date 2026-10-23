@@ -15,13 +15,13 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({ progress, onSele
   const activeLevel = CURRICULUM_LEVELS[activeLevelIndex] || CURRICULUM_LEVELS[0];
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6 pb-12">
+    <div className="max-w-5xl mx-auto space-y-4 sm:space-y-6 pb-12">
       {/* Header */}
-      <div className="bg-white border border-[#D9D9D9] rounded-3xl p-6 shadow-xs flex flex-wrap items-center justify-between gap-4">
+      <div className="bg-white border border-[#D9D9D9] rounded-3xl p-4 sm:p-6 shadow-xs flex flex-wrap items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
             <GraduationCap className="w-5 h-5 text-[#7B1E2B]" />
-            <h1 className="text-2xl font-black text-[#25252A]">Minha Formação Musical</h1>
+            <h1 className="text-xl sm:text-2xl font-black text-[#25252A]">Minha Formação Musical</h1>
           </div>
           <p className="text-xs sm:text-sm text-[#666672] mt-1 font-medium">
             Trilha pedagógica completa em 6 níveis progressivos: do absoluto zero à maestria na guitarra.
@@ -75,7 +75,7 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({ progress, onSele
       </div>
 
       {/* Selected Level Overview */}
-      <div className="bg-white border border-[#D9D9D9] rounded-3xl p-6 sm:p-8 shadow-xs space-y-6">
+      <div className="bg-white border border-[#D9D9D9] rounded-3xl p-4 sm:p-8 shadow-xs space-y-6">
         <div className="pb-4 border-b border-[#D9D9D9]">
           <div className="flex items-center gap-2 text-xs font-bold text-[#7B1E2B] uppercase tracking-wider">
             <Award className="w-4 h-4 text-[#B52A3A]" />

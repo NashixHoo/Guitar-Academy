@@ -153,7 +153,7 @@ export const Navigation: React.FC<NavigationProps> = ({
             className="fixed inset-0 bg-[#0E0709]/70 backdrop-blur-xs animate-in fade-in"
             onClick={onCloseMobile}
           />
-          <div className="fixed inset-y-0 left-0 w-72 bg-white/96 backdrop-blur-xl border-r border-[#D9D9D9] shadow-2xl z-10 flex flex-col animate-in slide-in-from-left safe-area-top safe-area-bottom">
+          <div className="fixed inset-y-0 left-0 w-72 max-w-[85vw] bg-white/96 dark:bg-[#1A1216]/96 backdrop-blur-xl border-r border-[#D9D9D9] dark:border-[#422933] shadow-2xl z-10 flex flex-col animate-in slide-in-from-left safe-area-top safe-area-bottom">
             <div className="flex items-center justify-between p-4 border-b border-[#D9D9D9]">
               <span className="font-extrabold text-[#25252A] text-sm">Navegação Guitar Academy</span>
               <button

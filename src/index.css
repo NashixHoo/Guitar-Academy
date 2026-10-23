@@ -2,6 +2,13 @@
 
 @layer base {
   :root {
+    /* Tokens Canônicos Guitar Academy */
+    --ga-bg: #F8F7F4;
+    --ga-wine: #7B1E2B;
+    --ga-cherry: #B52A3A;
+    --ga-graphite: #25252A;
+    --ga-gold: #F5C542;
+
     /* Paleta Oficial Giannini 101 HSS Branca & Escudo Rajado (Modo Claro) */
     --bg-porcelain: #F8F7F4;
     --surface-white: #FFFFFF;
@@ -14,25 +21,40 @@
     --rose-subtle: #FAF1F2;
 
     /* Superfícies Translúcidas de Cards e Vidro */
-    --card-surface: rgba(255, 255, 255, 0.95);
-    --card-surface-end: rgba(250, 247, 244, 0.92);
+    --card-surface: rgba(255, 255, 255, 0.94);
+    --card-surface-end: rgba(250, 247, 244, 0.90);
     --card-border: rgba(220, 205, 200, 0.70);
     --card-shadow: 0 8px 32px -4px rgba(0, 0, 0, 0.16), 0 2px 6px -1px rgba(0, 0, 0, 0.04);
     --tortoise-border: #E8D3D6;
-    --overlay-color: rgba(14, 7, 9, 0.85);
-    --body-bg: #0E0709;
+    --overlay-color: rgba(248, 247, 244, 0.76);
+    --body-bg: #F8F7F4;
     --body-text: #25252A;
     --header-bg: rgba(255, 255, 255, 0.95);
     --nav-bg: rgba(255, 255, 255, 0.92);
     --gold-badge-bg: linear-gradient(135deg, #FAF4E6 0%, #F3E5C8 100%);
     --gold-badge-text: #8C5F18;
     --gold-badge-border: rgba(197, 160, 89, 0.5);
+
+    /* Papel de Parede Fixo Global - Modo Claro */
+    --ga-wallpaper-overlay: linear-gradient(
+      145deg,
+      rgba(248, 247, 244, 0.76) 0%,
+      rgba(248, 247, 244, 0.68) 45%,
+      rgba(248, 247, 244, 0.82) 100%
+    );
   }
 
   :root[data-theme="dark"],
   html.dark,
   body.dark,
   .dark {
+    /* Tokens Modo Escuro */
+    --ga-bg: #0E0709;
+    --ga-wine: #E05368;
+    --ga-cherry: #FF6B81;
+    --ga-graphite: #F8F7F4;
+    --ga-gold: #F5C542;
+
     /* Paleta Oficial Estudo Noturno Cinematográfico (Modo Escuro) */
     --bg-porcelain: #1A1216;
     --surface-white: #22141A;
@@ -50,25 +72,56 @@
     --card-border: rgba(224, 83, 104, 0.35);
     --card-shadow: 0 8px 32px -4px rgba(0, 0, 0, 0.60), 0 2px 6px -1px rgba(0, 0, 0, 0.35);
     --tortoise-border: rgba(224, 83, 104, 0.40);
-    --overlay-color: rgba(10, 4, 6, 0.92);
-    --body-bg: #0A0406;
+    --overlay-color: rgba(10, 4, 6, 0.84);
+    --body-bg: #0E0709;
     --body-text: #F8F7F4;
     --header-bg: rgba(26, 15, 20, 0.95);
     --nav-bg: rgba(26, 15, 20, 0.94);
     --gold-badge-bg: linear-gradient(135deg, #382810 0%, #4A3515 100%);
     --gold-badge-text: #F5D38A;
     --gold-badge-border: rgba(197, 160, 89, 0.6);
+
+    /* Papel de Parede Fixo Global - Modo Escuro */
+    --ga-wallpaper-overlay: linear-gradient(
+      145deg,
+      rgba(14, 7, 9, 0.78) 0%,
+      rgba(24, 10, 14, 0.70) 45%,
+      rgba(10, 4, 6, 0.84) 100%
+    );
+  }
+
+  html {
+    min-height: 100%;
+    min-height: 100dvh;
+    background: var(--ga-bg, #F8F7F4);
   }
 
   body {
-    background-color: var(--body-bg, #0E0709);
+    background-color: var(--ga-bg, #F8F7F4);
     color: var(--body-text, #25252A);
     font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    min-height: 100vh;
+    min-height: 100%;
+    min-height: 100dvh;
+    margin: 0;
+    width: 100%;
+    max-width: 100vw;
     overflow-x: hidden;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     touch-action: manipulation;
+  }
+
+  #root {
+    min-height: 100%;
+    min-height: 100dvh;
+    isolation: isolate;
+    position: relative;
+    background: transparent;
+  }
+
+  /* Prevent media blowout on narrow viewports */
+  img, picture, svg, video, canvas {
+    max-width: 100%;
   }
 
   /* Custom clean scrollbar */
@@ -327,4 +380,79 @@
 
 .safe-area-top {
   padding-top: max(0.75rem, env(safe-area-inset-top, 0px));
+}
+
+.safe-area-left {
+  padding-left: max(0.5rem, env(safe-area-inset-left, 0px));
+}
+
+.safe-area-right {
+  padding-right: max(0.5rem, env(safe-area-inset-right, 0px));
+}
+
+.safe-area-x {
+  padding-left: max(0.5rem, env(safe-area-inset-left, 0px));
+  padding-right: max(0.5rem, env(safe-area-inset-right, 0px));
+}
+
+/* Ocultação de barra de rolagem preservando touch scroll fluido */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ==========================================================================
+   PAPEL DE PAREDE FIXO GLOBAL — GUITAR ACADEMY
+   - Ocupa 100% da viewport (100vw x 100dvh) de ponta a ponta.
+   - Permanece visualmente parado durante a rolagem de todo o aplicativo.
+   - O conteúdo e cartões rolam por cima sem que o fundo se mova ou desapareça.
+   - Sem recortes quadrados, sem mosaico, sem rolagem horizontal.
+   ========================================================================== */
+.ga-wallpaper {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  z-index: 0;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+  overflow: hidden;
+  background-color: var(--ga-bg, #F8F7F4);
+  background-image:
+    var(--ga-wallpaper-overlay, linear-gradient(rgba(248, 247, 244, 0.76), rgba(248, 247, 244, 0.84))),
+    url("/images/backgrounds/guitar-academy-background.webp");
+  background-size: cover;
+  background-position: center top;
+  background-repeat: no-repeat;
+  will-change: transform;
+  transform: translate3d(0, 0, 0);
+  -webkit-transform: translate3d(0, 0, 0);
+}
+
+/* Enquadramento Responsivo da Guitarra Elétrica e Bateria */
+@media (max-width: 640px) {
+  .ga-wallpaper {
+    background-position: 25% top;
+  }
+}
+
+@media (min-width: 641px) and (max-width: 1024px) {
+  .ga-wallpaper {
+    background-position: center 20%;
+  }
+}
+
+@media (min-width: 1025px) {
+  .ga-wallpaper {
+    background-position: center 25%;
+  }
 }

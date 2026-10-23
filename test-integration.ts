@@ -1669,7 +1669,11 @@ const designSystemComponents = [
   'src/components/common/PrimaryButton.tsx',
   'src/components/common/SecondaryButton.tsx',
   'src/components/common/ProgressBar.tsx',
-  'src/components/common/Badge.tsx'
+  'src/components/common/Badge.tsx',
+  'src/components/common/LessonCard.tsx',
+  'src/components/common/PracticeCard.tsx',
+  'src/components/common/LoadingState.tsx',
+  'src/components/common/EmptyState.tsx'
 ];
 
 designSystemComponents.forEach((compPath) => {
@@ -1681,20 +1685,44 @@ designSystemComponents.forEach((compPath) => {
 
 // 13.4 Verificação do pack de recursos visuais
 const visualPackAssets = [
+  'public/images/branding/logo-horizontal.svg',
+  'public/images/branding/logo-mark.svg',
+  'public/images/branding/app-icon.svg',
+  'public/images/branding/logo-light.svg',
+  'public/images/branding/logo-dark.svg',
   'public/images/branding/guitar-academy-symbol.svg',
   'public/images/branding/guitar-academy-logo.svg',
   'public/images/branding/guitar-academy-logo-dark.svg',
-  'public/icons/guitar-academy-app-icon.svg',
-  'public/images/backgrounds/banner-estudar.svg',
-  'public/images/backgrounds/banner-praticar.svg',
-  'public/images/backgrounds/banner-evoluir.svg',
-  'public/images/instruments/electric-guitar-headstock.svg'
+  'public/images/backgrounds/guitar-academy-background.webp',
+  'public/images/backgrounds/splash-background.webp',
+  'public/images/banners/banner-estudar.webp',
+  'public/images/banners/banner-praticar.webp',
+  'public/images/banners/banner-evoluir.webp',
+  'public/images/instruments/electric-guitar-headstock.svg',
+  'docs/DESIGN-ASSETS.md'
 ];
 
 visualPackAssets.forEach((assetPath) => {
   assert(
     fs.existsSync(assetPath) && fs.statSync(assetPath).size > 100,
     `13.4 Recurso visual do pack presente e válido: ${assetPath}`
+  );
+});
+
+// 13.5 Verificação dos 18 ícones individuais de interface
+const requiredInterfaceIcons = [
+  'estudar.svg', 'praticar.svg', 'evoluir.svg', 'inicio.svg',
+  'busca.svg', 'aulas.svg', 'teoria.svg', 'acordes.svg',
+  'metronomo.svg', 'afinador.svg', 'historico.svg', 'metas.svg',
+  'conquistas.svg', 'perfil.svg', 'configuracoes.svg', 'voltar.svg',
+  'iniciar.svg', 'concluido.svg'
+];
+
+requiredInterfaceIcons.forEach((iconName) => {
+  const iconPath = path.join('public/images/icons', iconName);
+  assert(
+    fs.existsSync(iconPath) && fs.statSync(iconPath).size > 50,
+    `13.5 Ícone SVG individual presente: ${iconName}`
   );
 });
 

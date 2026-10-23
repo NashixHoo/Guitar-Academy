@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
     <!-- Wine-Cherry Gradient from Guitar Academy Brand Spec -->
-    <linearGradient id="gaBrandWine" x1="0%" y1="0%" x2="100%" y2="100%">
+    <linearGradient id="logoMarkWine" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#9B2433" />
       <stop offset="35%" stop-color="#7B1E2B" />
       <stop offset="70%" stop-color="#B52A3A" />
@@ -9,13 +9,13 @@
     </linearGradient>
 
     <!-- Chrome/Silver Highlight -->
-    <linearGradient id="gaHighlight" x1="0%" y1="0%" x2="0%" y2="100%">
+    <linearGradient id="logoMarkHighlight" x1="0%" y1="0%" x2="0%" y2="100%">
       <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.35" />
       <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0.0" />
     </linearGradient>
 
     <!-- Soft Drop Shadow for Pick Body -->
-    <filter id="pickShadow" x="-15%" y="-10%" width="130%" height="130%">
+    <filter id="logoMarkShadow" x="-15%" y="-10%" width="130%" height="130%">
       <feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#120406" flood-opacity="0.45" />
     </filter>
   </defs>
@@ -26,8 +26,8 @@
            C 418 362, 305 450, 256 476 
            C 207 450, 94 362, 80 240 
            C 64 98, 137 36, 256 36 Z" 
-        fill="url(#gaBrandWine)" 
-        filter="url(#pickShadow)" />
+        fill="url(#logoMarkWine)" 
+        filter="url(#logoMarkShadow)" />
 
   <!-- Subtle Inner Border Highlight -->
   <path d="M 256 46 
@@ -36,12 +36,11 @@
            C 211 434, 105 350, 92 236 
            C 78 104, 146 46, 256 46 Z" 
         fill="none" 
-        stroke="url(#gaHighlight)" 
+        stroke="url(#logoMarkHighlight)" 
         stroke-width="3" />
 
-  <!-- The Stylized Guitar Headstock & "G" Emblem in White -->
+  <!-- The Stylized Guitar Headstock & 'G' Emblem in Pure White -->
   <g fill="#FFFFFF">
-    <!-- Guitar Headstock Silhouette inside the upper pick -->
     <!-- Headstock Body -->
     <path d="M 276 90 
              C 285 90, 298 94, 304 106 
@@ -72,7 +71,7 @@
     <rect x="302" y="145" width="14" height="6" rx="2" />
     <rect x="304" y="177" width="14" height="6" rx="2" />
 
-    <!-- Dynamic Flowing "G" Stroke wrapping around the lower pick -->
+    <!-- Dynamic Flowing 'G' Stroke -->
     <path d="M 288 236 
              C 362 236, 404 286, 392 348 
              C 378 410, 316 448, 256 450 

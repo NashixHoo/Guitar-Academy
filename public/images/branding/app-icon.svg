@@ -1,0 +1,106 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Deep Stage Wine Container Gradient -->
+    <linearGradient id="appIconBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4E0E17" />
+      <stop offset="50%" stop-color="#7B1E2B" />
+      <stop offset="100%" stop-color="#2D080E" />
+    </linearGradient>
+
+    <!-- Inner Pick Gradient -->
+    <linearGradient id="appIconPick" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#B52A3A" />
+      <stop offset="60%" stop-color="#7B1E2B" />
+      <stop offset="100%" stop-color="#4A0E17" />
+    </linearGradient>
+
+    <!-- Chrome Rim -->
+    <linearGradient id="appIconRim" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.35" />
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0.05" />
+    </linearGradient>
+  </defs>
+
+  <!-- Squircle Rounded App Icon Base -->
+  <rect x="0" y="0" width="512" height="512" rx="115" fill="url(#appIconBg)" />
+  <rect x="2" y="2" width="508" height="508" rx="113" fill="none" stroke="url(#appIconRim)" stroke-width="4" />
+
+  <!-- Pick Mark Centered -->
+  <g transform="translate(0, 0)">
+    <!-- Pick Body -->
+    <path d="M 256 70 
+             C 360 70, 424 126, 410 250 
+             C 398 356, 300 434, 256 456 
+             C 212 434, 114 356, 102 250 
+             C 88 126, 152 70, 256 70 Z" 
+          fill="url(#appIconPick)" />
+
+    <!-- Pick Border Stroke -->
+    <path d="M 256 78 
+             C 352 78, 412 130, 400 246 
+             C 388 346, 296 420, 256 442 
+             C 216 420, 124 346, 112 246 
+             C 100 130, 160 78, 256 78 Z" 
+          fill="none" 
+          stroke="#FFFFFF" 
+          stroke-opacity="0.25" 
+          stroke-width="2.5" />
+
+    <!-- Emblem in Pure White -->
+    <g fill="#FFFFFF">
+      <!-- Headstock Body -->
+      <path d="M 274 116 
+               C 282 116, 294 120, 300 130 
+               C 303 137, 301 148, 294 156 
+               L 288 163 
+               C 286 170, 290 176, 298 180 
+               C 305 183, 309 192, 305 200 
+               C 300 212, 283 221, 269 221 
+               L 243 221 
+               L 243 130 
+               C 243 121, 254 116, 274 116 Z" />
+
+      <!-- Left Pegs -->
+      <circle cx="232" cy="139" r="7" />
+      <circle cx="230" cy="167" r="7" />
+      <circle cx="228" cy="195" r="7" />
+
+      <!-- Right Pegs -->
+      <circle cx="310" cy="139" r="7" />
+      <circle cx="312" cy="167" r="7" />
+      <circle cx="314" cy="195" r="7" />
+
+      <!-- Peg Connectors -->
+      <rect x="234" y="136" width="10" height="6" rx="2" />
+      <rect x="232" y="164" width="12" height="6" rx="2" />
+      <rect x="230" y="192" width="14" height="6" rx="2" />
+      <rect x="296" y="136" width="10" height="6" rx="2" />
+      <rect x="298" y="164" width="12" height="6" rx="2" />
+      <rect x="300" y="192" width="14" height="6" rx="2" />
+
+      <!-- Dynamic Flowing 'G' Stroke -->
+      <path d="M 284 245 
+               C 350 245, 386 288, 376 342 
+               C 364 396, 310 430, 256 432 
+               C 186 430, 142 382, 148 320 
+               C 156 260, 208 224, 270 224 
+               C 290 224, 310 229, 326 238 
+               L 308 268 
+               C 296 261, 282 257, 266 257 
+               C 228 257, 190 282, 186 322 
+               C 180 358, 204 394, 254 394 
+               C 290 394, 324 372, 334 340 
+               L 284 340 
+               L 284 304 
+               L 364 304 
+               C 370 326, 370 350, 362 368 
+               C 356 384, 340 400, 320 412 
+               C 284 430, 230 430, 194 404 
+               C 218 424, 248 436, 284 430 
+               C 326 424, 356 394, 364 354 
+               C 370 328, 360 296, 336 280 
+               L 352 264 
+               C 332 250, 308 245, 284 245 Z" />
+    </g>
+  </g>
+</svg>

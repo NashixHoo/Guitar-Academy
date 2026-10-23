@@ -86,15 +86,15 @@ export const Header: React.FC<HeaderProps> = ({
           <Menu className="w-5 h-5 text-[#7B1E2B]" aria-hidden="true" />
         </button>
 
-        <div className="flex items-center gap-2 sm:gap-2.5">
+        <div className="flex items-center gap-1.5 sm:gap-2.5">
           {/* Logo icon box using official icon.svg with tortoiseshell gold trim */}
-          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-white border border-[#C5A059]/40 flex items-center justify-center shadow-xs overflow-hidden p-1 tortoiseshell-card shrink-0">
+          <div className="w-7 h-7 xs:w-8 xs:h-8 sm:w-9 sm:h-9 rounded-xl bg-white border border-[#C5A059]/40 flex items-center justify-center shadow-xs overflow-hidden p-1 tortoiseshell-card shrink-0">
             <img src="./icon.svg" alt="Guitar Academy Ícone" className="w-full h-full object-contain" />
           </div>
           <div>
-            <span className="font-display font-bold text-[#1F1F24] dark:text-[#F8F7F4] text-sm sm:text-base tracking-[0.08em] flex items-center gap-1.5 leading-none">
+            <span className="font-display font-bold text-[#1F1F24] dark:text-[#F8F7F4] text-xs xs:text-sm sm:text-base tracking-[0.06em] sm:tracking-[0.08em] flex items-center gap-1 sm:gap-1.5 leading-none">
               GUITAR ACADEMY
-              <span className="hidden xs:inline-block text-[9px] sm:text-[10px] font-mono-code font-bold px-1.5 py-0.5 rounded-md luxury-gold-badge">
+              <span className="hidden sm:inline-block text-[9px] sm:text-[10px] font-mono-code font-bold px-1.5 py-0.5 rounded-md luxury-gold-badge">
                 101 HSS
               </span>
             </span>
@@ -115,7 +115,7 @@ export const Header: React.FC<HeaderProps> = ({
       />
 
       {/* Right Controls: Direct Lesson 1 Button, Audio Volume, PWA Install */}
-      <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+      <div className="flex items-center gap-1 sm:gap-2 shrink-0">
         {/* Direct First Lesson shortcut with luxury gradient */}
         <button
           onClick={onGoToFirstLesson}
@@ -128,10 +128,10 @@ export const Header: React.FC<HeaderProps> = ({
         </button>
 
         {/* Master Audio Volume Control */}
-        <div className="flex items-center gap-1.5 bg-[#F8F7F4] px-2.5 py-1.5 rounded-xl border border-[#D9D9D9]">
+        <div className="flex items-center gap-1 bg-[#F8F7F4] p-1 sm:px-2.5 sm:py-1.5 rounded-xl border border-[#D9D9D9]">
           <button
             onClick={handleToggleMute}
-            className="text-[#666672] hover:text-[#7B1E2B] transition p-0.5 rounded-md focus:outline-hidden focus:ring-1 focus:ring-[#7B1E2B]"
+            className="text-[#666672] hover:text-[#7B1E2B] transition p-1.5 sm:p-0.5 rounded-md min-w-[36px] min-h-[36px] sm:min-w-0 sm:min-h-0 flex items-center justify-center focus:outline-hidden focus:ring-1 focus:ring-[#7B1E2B]"
             title={isMuted ? 'Desmutar áudio' : 'Mutar áudio'}
             aria-label={isMuted ? 'Desmutar áudio do aplicativo' : 'Mutar áudio do aplicativo'}
           >
@@ -148,7 +148,7 @@ export const Header: React.FC<HeaderProps> = ({
             step={0.05}
             value={isMuted ? 0 : volume}
             onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
-            className="w-16 sm:w-20 accent-[#7B1E2B] h-1.5 cursor-pointer bg-[#D9D9D9]"
+            className="hidden sm:block w-16 sm:w-20 accent-[#7B1E2B] h-1.5 cursor-pointer bg-[#D9D9D9]"
             title="Volume Geral"
             aria-label="Volume geral de áudio do aplicativo"
           />

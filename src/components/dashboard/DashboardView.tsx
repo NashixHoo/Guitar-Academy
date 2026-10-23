@@ -137,31 +137,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
       )}
 
-      {/* Hero: Conservatório & Giannini 101 HSS White with Red Tortoiseshell Accent & Palco Cinematográfico */}
-      <div className="relative overflow-hidden rounded-3xl luxury-hero-banner p-6 sm:p-10 shadow-xs">
+      {/* Hero: Conservatório & Giannini 101 HSS White with Red Tortoiseshell Accent */}
+      <div className="relative overflow-hidden rounded-3xl luxury-hero-banner p-4 sm:p-6 lg:p-10 shadow-xs">
         {/* Subtle decorative tortoiseshell top accent line with gold trim */}
         <div className="absolute top-0 left-0 right-0 h-1.5 tortoiseshell-badge" />
 
-        {/* Cenário de Palco Cinematográfico: Guitarra elétrica, bateria e iluminação vinho/âmbar */}
-        <div className="absolute inset-0 pointer-events-none overflow-hidden select-none">
-          <picture className="absolute right-0 top-0 bottom-0 w-full sm:w-3/5 lg:w-1/2">
-            <source srcSet="./stage-hero.webp" type="image/webp" />
-            <img
-              src="./stage-hero.jpg"
-              alt=""
-              aria-hidden="true"
-              className="w-full h-full object-cover object-center filter opacity-30 brightness-[1.05] contrast-[1.10] mix-blend-multiply"
-              loading="lazy"
-              decoding="async"
-            />
-          </picture>
-          {/* Camada de Contraste Protetor para Garantir Leitura Perfeita de Textos e Controles */}
-          <div className="absolute inset-0 bg-gradient-to-r from-[#FFFFFF] via-[#FFFFFF]/90 sm:via-[#FFFFFF]/85 to-[#FFFFFF]/40" />
-          <div className="absolute inset-0 bg-gradient-to-t from-[#FCFAF7] via-transparent to-transparent opacity-80" />
-        </div>
-
         {/* Faint guitar silhouette in the background */}
-        <div className="absolute top-0 right-0 p-8 opacity-[0.04] pointer-events-none hidden md:block">
+        <div className="absolute top-0 right-0 p-8 opacity-[0.05] pointer-events-none hidden md:block">
           <Guitar className="w-64 h-64 text-[#7B1E2B]" />
         </div>
 
@@ -183,10 +165,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3.5 pt-2">
+          <div className="flex flex-wrap items-center gap-2.5 sm:gap-3.5 pt-2">
             <button
               onClick={() => onSelectLesson(currentLesson.id)}
-              className="luxury-btn-primary flex items-center gap-3 px-7 py-3.5 rounded-2xl active:scale-95 font-bold text-sm sm:text-base transition"
+              className="luxury-btn-primary flex items-center justify-center gap-3 px-6 sm:px-7 py-3.5 rounded-2xl active:scale-95 font-bold text-sm sm:text-base transition w-full sm:w-auto shadow-xs"
             >
               <Play className="w-5 h-5 fill-current" />
               <span>Continuar Aula Atual</span>
@@ -194,7 +176,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
             <button
               onClick={() => onNavigateTab('practice-routine')}
-              className="flex items-center gap-2 px-6 py-3.5 rounded-2xl bg-[#FAF1F2] hover:bg-[#F3E2E5] text-[#7B1E2B] font-bold text-xs sm:text-sm border border-[#E8D3D6] transition shadow-2xs"
+              className="flex items-center justify-center gap-2 px-5 sm:px-6 py-3.5 rounded-2xl bg-[#FAF1F2] hover:bg-[#F3E2E5] text-[#7B1E2B] font-bold text-xs sm:text-sm border border-[#E8D3D6] transition shadow-2xs w-full sm:w-auto"
             >
               <Flame className="w-4 h-4 text-[#B52A3A]" />
               <span>Central de Prática (5/10/15/30 min)</span>
@@ -202,7 +184,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
             <button
               onClick={() => onNavigateTab('curriculum')}
-              className="flex items-center gap-2 px-5 py-3.5 rounded-2xl bg-white hover:bg-[#FAF1F2] text-[#25252A] font-bold text-xs sm:text-sm border border-[#D9D9D9] transition shadow-2xs"
+              className="flex items-center justify-center gap-2 px-5 py-3.5 rounded-2xl bg-white hover:bg-[#FAF1F2] text-[#25252A] font-bold text-xs sm:text-sm border border-[#D9D9D9] transition shadow-2xs w-full sm:w-auto"
             >
               <BookOpen className="w-4 h-4 text-[#7B1E2B]" />
               <span>Ver Trilha (6 Níveis)</span>
@@ -303,7 +285,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       </div>
 
       {/* NOVO: PAINEL DE META DIÁRIA DE PRÁTICA (DAILY PRACTICE GOAL & PROGRESS RING/BAR) */}
-      <div className={`relative overflow-hidden rounded-3xl bg-white border p-6 sm:p-8 shadow-xs transition-all ${
+      <div className={`relative overflow-hidden rounded-3xl bg-white border p-4 sm:p-8 shadow-xs transition-all ${
         isGoalReached 
           ? 'border-[#10B981]/40 ring-1 ring-[#10B981]/20' 
           : 'border-[#D9D9D9]'
@@ -316,7 +298,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         <div className="flex flex-col lg:flex-row items-center justify-between gap-6 sm:gap-8">
           
           {/* Lado Esquerdo: Circular Progress Ring (SVG) */}
-          <div className="flex items-center gap-5 sm:gap-6 shrink-0">
+          <div className="flex flex-col xs:flex-row items-center gap-4 sm:gap-6 shrink-0 text-center xs:text-left">
             <div className="relative w-28 h-28 sm:w-32 sm:h-32 flex items-center justify-center">
               <svg className="w-full h-full transform -rotate-90" viewBox="0 0 120 120">
                 <defs>

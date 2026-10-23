@@ -32,13 +32,13 @@ export const LIGHT_THEME: ThemeColors = {
   borderSilver: '#D9D9D9',
   roseSoft: '#F5E8EA',
   roseSubtle: '#FAF1F2',
-  cardSurface: 'rgba(255, 255, 255, 0.95)',
-  cardSurfaceEnd: 'rgba(250, 247, 244, 0.92)',
+  cardSurface: 'rgba(255, 255, 255, 0.94)',
+  cardSurfaceEnd: 'rgba(250, 247, 244, 0.90)',
   cardBorder: 'rgba(220, 205, 200, 0.70)',
   cardShadow: '0 8px 32px -4px rgba(0, 0, 0, 0.16), 0 2px 6px -1px rgba(0, 0, 0, 0.04)',
   tortoiseBorder: '#E8D3D6',
-  overlayColor: 'rgba(14, 7, 9, 0.85)',
-  bodyBg: '#0E0709',
+  overlayColor: 'rgba(248, 247, 244, 0.76)',
+  bodyBg: '#F8F7F4',
   bodyText: '#25252A',
   headerBg: 'rgba(255, 255, 255, 0.95)',
   navBg: 'rgba(255, 255, 255, 0.92)',
@@ -59,8 +59,8 @@ export const DARK_THEME: ThemeColors = {
   cardBorder: 'rgba(224, 83, 104, 0.35)',
   cardShadow: '0 8px 32px -4px rgba(0, 0, 0, 0.60), 0 2px 6px -1px rgba(0, 0, 0, 0.35)',
   tortoiseBorder: 'rgba(224, 83, 104, 0.40)',
-  overlayColor: 'rgba(10, 4, 6, 0.92)',
-  bodyBg: '#0A0406',
+  overlayColor: 'rgba(10, 4, 6, 0.84)',
+  bodyBg: '#0E0709',
   bodyText: '#F8F7F4',
   headerBg: 'rgba(26, 15, 20, 0.95)',
   navBg: 'rgba(26, 15, 20, 0.94)',
@@ -134,6 +134,13 @@ export const themeService = {
     root.style.setProperty('--tortoise-border', colors.tortoiseBorder);
     root.style.setProperty('--overlay-color', colors.overlayColor);
     root.style.setProperty('--body-bg', colors.bodyBg);
+    root.style.setProperty('--ga-bg', colors.bodyBg);
+    root.style.setProperty(
+      '--ga-wallpaper-overlay',
+      effective === 'dark'
+        ? 'linear-gradient(145deg, rgba(14, 7, 9, 0.78) 0%, rgba(24, 10, 14, 0.70) 45%, rgba(10, 4, 6, 0.84) 100%)'
+        : 'linear-gradient(145deg, rgba(248, 247, 244, 0.76) 0%, rgba(248, 247, 244, 0.68) 45%, rgba(248, 247, 244, 0.82) 100%)'
+    );
     root.style.setProperty('--body-text', colors.bodyText);
     root.style.setProperty('--header-bg', colors.headerBg);
     root.style.setProperty('--nav-bg', colors.navBg);

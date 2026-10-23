@@ -72,9 +72,9 @@ export const SubNavBar: React.FC<SubNavBarProps> = ({
     <div
       role="tablist"
       aria-label={`Sub-navegação de ${primaryTab}`}
-      className={`w-full overflow-x-auto no-scrollbar py-2 px-3 sm:px-6 bg-white/70 dark:bg-[#1A1216]/70 backdrop-blur-md border-b border-[#D9D9D9]/80 dark:border-[#422933] flex items-center gap-1.5 sm:gap-2 select-none no-swipe ${className}`}
+      className={`w-full overflow-x-auto no-scrollbar py-2 px-2 sm:px-6 bg-white/70 dark:bg-[#1A1216]/70 backdrop-blur-md border-b border-[#D9D9D9]/80 dark:border-[#422933] flex items-center select-none no-swipe ${className}`}
     >
-      <div className="flex items-center gap-1 sm:gap-1.5 mx-auto max-w-5xl w-full">
+      <div className="flex items-center gap-1 sm:gap-1.5 min-w-max mx-auto sm:justify-center px-1">
         {items.map((item) => {
           const Icon = item.icon;
           const isActive = currentTab === item.id;
