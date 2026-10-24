@@ -302,7 +302,7 @@ export default function App() {
           <main 
             ref={mainScrollRef}
             {...touchHandlers}
-            className="flex-1 min-w-0 w-full p-3 sm:p-6 lg:p-8 overflow-y-auto safe-area-bottom pb-28 sm:pb-32 lg:pb-24"
+            className="flex-1 min-w-0 w-full px-3.5 pt-4 pb-20 sm:px-6 sm:pt-6 sm:pb-24 lg:px-8 lg:pt-6 overflow-y-auto safe-area-bottom"
           >
             <div key={currentTab} className="page-enter">
               {/* TAB 1: Início (Estudar) */}

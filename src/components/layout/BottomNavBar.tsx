@@ -45,7 +45,7 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
       aria-label="Barra de navegação inferior"
       className={`fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-[#1A1216]/95 backdrop-blur-xl border-t border-[#D9D9D9] dark:border-[#422933] px-2 sm:px-6 safe-area-bottom shadow-[0_-4px_20px_rgba(0,0,0,0.08)] select-none transition-colors ${className}`}
     >
-      <div className="max-w-md mx-auto flex items-center justify-around h-16 sm:h-18">
+      <div className="max-w-md mx-auto flex items-center justify-around h-14 sm:h-16">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activePrimaryTab === tab.id;

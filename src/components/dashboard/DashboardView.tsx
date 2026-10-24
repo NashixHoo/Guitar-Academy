@@ -128,7 +128,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   };
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6 pb-12">
+    <div className="max-w-6xl mx-auto space-y-5 sm:space-y-6">
       {/* Toast Notification */}
       {toastFeedback && (
         <div className="fixed top-20 right-6 z-50 bg-[#25252A] text-white text-xs sm:text-sm font-bold px-4 py-2.5 rounded-xl shadow-lg border border-white/10 flex items-center gap-2 animate-in fade-in slide-in-from-top-2">
@@ -138,7 +138,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       )}
 
       {/* Hero: Conservatório & Giannini 101 HSS White with Red Tortoiseshell Accent */}
-      <div className="relative overflow-hidden rounded-3xl luxury-hero-banner p-4 sm:p-6 lg:p-10 shadow-xs">
+      <div className="relative overflow-hidden rounded-3xl luxury-hero-banner p-5 sm:p-7 lg:p-10 shadow-xs">
         {/* Subtle decorative tortoiseshell top accent line with gold trim */}
         <div className="absolute top-0 left-0 right-0 h-1.5 tortoiseshell-badge" />
 

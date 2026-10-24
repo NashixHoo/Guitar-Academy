@@ -135,6 +135,7 @@ docs/
 
 * **Nenhum recurso bloqueante pendente**: Todos os 18 ícones, 5 logotipos/símbolos, 3 banners WebP e SVG, e os 2 fundos globais estão gerados e verificados localmente no projeto.
 * **Compatibilidade**: Todas as referências existentes a `./icon.svg`, `public/images/guitar-academy-background.webp` e `public/stage-hero.webp` foram rigorosamente preservadas para manter 100% de aprovação na suíte automatizada de testes e nos scripts de verificação do CI/CD.
+* **Fotografia de Fundo Limpa**: O arquivo `public/images/backgrounds/guitar-academy-background.webp` é uma fotografia autêntica de palco de concerto em iluminação vinho/âmbar com guitarra elétrica à esquerda e bateria à direita, 100% limpa de textos, símbolos ou barras de carregamento embutidas, eliminando qualquer concorrência visual com o conteúdo rolável.
 
 ---
 
@@ -143,8 +144,8 @@ docs/
 * **Camada Fixa Global (`.ga-wallpaper`)**: Implementada em camada estática independente com `position: fixed; inset: 0; width: 100vw; height: 100vh; height: 100dvh; pointer-events: none; z-index: 0; transform: translate3d(0, 0, 0)`.
 * **Stacking Context (`isolation: isolate`)**: O container `#root` e a árvore React operam em `isolation: isolate; position: relative; z-index: 1`, permitindo que todo o conteúdo rolável deslize suavemente sobre o papel de parede sem que a imagem se mova, corte ou termine.
 * **Ajuste de Enquadramento Responsivo**:
-  * Telas Compactas e Smartphones (< 768px): `background-position: center 25%` ou `top center`, evitando que a guitarra seja cortada por barras do sistema.
+  * Telas Compactas e Smartphones (< 768px): `background-position: 25% top`, evitando que a guitarra seja cortada por barras do sistema.
   * Tablets (768px - 1023px): `background-position: center 20%`, com `background-size: cover`.
-  * Desktop (≥ 1024px): `background-position: center 25%`, com área de leitura centralizada de `max-w-5xl`.
+  * Desktop (≥ 1024px): `background-position: center 25%`, com área de leitura centralizada de `max-w-6xl`.
 * **Compatibilidade Móvel**: Suporte completo a `env(safe-area-inset-top)`, `env(safe-area-inset-bottom)`, `100dvh` para barras dinâmicas do Safari/Chrome e botões com área de toque de no mínimo 44x44 px.
 
