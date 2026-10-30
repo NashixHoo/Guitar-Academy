@@ -35,27 +35,31 @@ public/
     instruments/
       electric-guitar-headstock.svg           # Ilustração detalhada do headstock de 6 cordas
     icons/
-      estudar.svg                             # Ícone do pilar Estudar
-      praticar.svg                            # Ícone do pilar Praticar
-      evoluir.svg                             # Ícone do pilar Evoluir
-      inicio.svg                              # Ícone de Início / Home
-      busca.svg                               # Ícone da Busca Global
-      aulas.svg                               # Ícone de Aulas do Currículo
-      teoria.svg                              # Ícone de Teoria Musical
-      acordes.svg                             # Ícone do Dicionário de Acordes
-      metronomo.svg                           # Ícone do Metrônomo de Precisão
-      afinador.svg                            # Ícone do Afinador Cromático
-      historico.svg                           # Ícone do Histórico de Prática
-      metas.svg                               # Ícone de Metas Diárias
-      conquistas.svg                          # Ícone de Conquistas e Troféus
-      perfil.svg                              # Ícone de Perfil do Aluno
-      configuracoes.svg                       # Ícone de Configurações
-      voltar.svg                              # Ícone de Voltar / Retorno
-      iniciar.svg                             # Ícone de Iniciar Treino / Play
-      concluido.svg                           # Ícone de Concluído / Check
+      estudar.svg                             # Caderno de estudo musical com pautas e detalhes de cordas/trastes
+      praticar.svg                            # Palheta anatômica com pulso rítmico integrado
+      evoluir.svg                             # Degraus da escala com estrela refinada de conquista
+      inicio.svg                              # Símbolo de sede musical com portal e ponte acústica
+      busca.svg                               # Lente de precisão ótica com reflexo de curvatura
+      aulas.svg                               # Folha de método musical com pautas e notação
+      teoria.svg                              # Círculo de harmonia / quintas com feixe de colcheias
+      acordes.svg                             # Diagrama de acorde no braço com pestana e digitações
+      metronomo.svg                           # Metrônomo mecânico com pêndulo e contrapeso de tempo
+      afinador.svg                            # Cabeçote de guitarra 3+3 com 6 tarraxas e ondas de afinação
+      historico.svg                           # Cronômetro de prática com linha do tempo circular
+      metas.svg                               # Alvo concêntrico de treinamento com miras cardeais
+      conquistas.svg                          # Troféu com alças em lira musical e insígnia estrelada
+      perfil.svg                              # Músico com correia de guitarra transpassada
+      configuracoes.svg                       # Engrenagem mecânica calibrada de 6 dentes
+      voltar.svg                              # Seta de retorno com desenho de alta precisão
+      iniciar.svg                             # Triângulo de reprodução / play com vértices suavizados
+      concluido.svg                           # Selo circular de conclusão com visto de confirmação
+      pausar.svg                              # Barras duplas com espaçamento harmônico
+      notificacoes.svg                        # Sino ressonante com cúpula e badalo musical
 docs/
   DESIGN-ASSETS.md                            # Este documento de referência
 ```
+
+> **Sistema de Componentes React**: Todos os ícones estão disponíveis como componentes tipados em `src/components/common/GuitarIcons.tsx` (`EstudarIcon`, `PraticarIcon`, `EvoluirIcon`, `InicioIcon`, `AulasIcon`, etc.) e via despachante genérico `<GuitarIcon name="..." size={24} />`.
 
 ---
 

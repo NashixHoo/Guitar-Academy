@@ -1,16 +1,18 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
-  Search, 
   X, 
-  Clock, 
   Sparkles, 
-  BookOpen, 
-  Guitar, 
-  Compass, 
   ArrowRight, 
   CornerDownLeft, 
   Trash2 
 } from 'lucide-react';
+import {
+  BuscaIcon,
+  HistoricoIcon,
+  AulasIcon,
+  BracoGuitarraIcon,
+  TeoriaIcon,
+} from '../common/GuitarIcons';
 import { 
   searchAll, 
   SearchResultItem, 
@@ -253,7 +255,7 @@ export const GlobalSearchBar: React.FC<GlobalSearchBarProps> = ({
             <div className="space-y-2">
               <div className="flex items-center justify-between text-xs font-bold text-[#666672] px-1">
                 <span className="flex items-center gap-1.5 text-[#25252A]">
-                  <Clock className="w-3.5 h-3.5 text-[#7B1E2B]" aria-hidden="true" />
+                  <HistoricoIcon className="w-3.5 h-3.5 text-[#7B1E2B]" aria-hidden="true" />
                   Últimas buscas
                 </span>
                 <button
@@ -274,7 +276,7 @@ export const GlobalSearchBar: React.FC<GlobalSearchBarProps> = ({
                     className="group flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#F8F7F4] hover:bg-[#F5E8EA] text-[#25252A] text-xs border border-[#D9D9D9] hover:border-[#E8D3D6] cursor-pointer transition select-none"
                     title={`Pesquisar novamente: ${term}`}
                   >
-                    <Search className="w-3 h-3 text-[#7B1E2B] opacity-70 group-hover:opacity-100" aria-hidden="true" />
+                    <BuscaIcon className="w-3 h-3 text-[#7B1E2B] opacity-70 group-hover:opacity-100" aria-hidden="true" />
                     <span className="font-medium">{term}</span>
                     <button
                       onClick={(e) => handleRemoveRecentTerm(e, term)}
@@ -353,7 +355,7 @@ export const GlobalSearchBar: React.FC<GlobalSearchBarProps> = ({
           {searchResults.lessons.length > 0 && (
             <div className="p-2 space-y-1">
               <div className="flex items-center gap-1.5 px-2 py-1 text-[11px] font-bold text-[#7B1E2B] uppercase tracking-wider">
-                <BookOpen className="w-3.5 h-3.5" aria-hidden="true" />
+                <AulasIcon className="w-3.5 h-3.5" aria-hidden="true" />
                 Aulas do Currículo ({searchResults.lessons.length})
               </div>
               {searchResults.lessons.map((item) => {
@@ -401,7 +403,7 @@ export const GlobalSearchBar: React.FC<GlobalSearchBarProps> = ({
           {searchResults.chords.length > 0 && (
             <div className="p-2 space-y-1">
               <div className="flex items-center gap-1.5 px-2 py-1 text-[11px] font-bold text-[#7B1E2B] uppercase tracking-wider">
-                <Guitar className="w-3.5 h-3.5" aria-hidden="true" />
+                <BracoGuitarraIcon className="w-3.5 h-3.5" aria-hidden="true" />
                 Dicionário de Acordes ({searchResults.chords.length})
               </div>
               {searchResults.chords.map((item) => {
@@ -447,7 +449,7 @@ export const GlobalSearchBar: React.FC<GlobalSearchBarProps> = ({
           {searchResults.theory.length > 0 && (
             <div className="p-2 space-y-1">
               <div className="flex items-center gap-1.5 px-2 py-1 text-[11px] font-bold text-[#7B1E2B] uppercase tracking-wider">
-                <Compass className="w-3.5 h-3.5" aria-hidden="true" />
+                <TeoriaIcon className="w-3.5 h-3.5" aria-hidden="true" />
                 Teoria Musical & Harmonia ({searchResults.theory.length})
               </div>
               {searchResults.theory.map((item) => {
@@ -510,7 +512,7 @@ export const GlobalSearchBar: React.FC<GlobalSearchBarProps> = ({
           aria-label="Abrir barra de busca de aulas, acordes e teoria"
           title="Pesquisar (Ctrl+K ou /)"
         >
-          <Search className="w-4 h-4" aria-hidden="true" />
+          <BuscaIcon className="w-4 h-4" aria-hidden="true" />
         </button>
       </div>
 
@@ -527,7 +529,7 @@ export const GlobalSearchBar: React.FC<GlobalSearchBarProps> = ({
               : 'border-[#D9D9D9] hover:border-[#B52A3A]/40'
           }`}
         >
-          <Search className="w-4 h-4 text-[#7B1E2B] shrink-0" aria-hidden="true" />
+          <BuscaIcon className="w-4 h-4 text-[#7B1E2B] shrink-0" aria-hidden="true" />
           <input
             ref={inputRef}
             id="global-search-input"
@@ -595,7 +597,7 @@ export const GlobalSearchBar: React.FC<GlobalSearchBarProps> = ({
                 aria-controls="search-results-listbox"
                 className="flex-1 flex items-center gap-2 px-3 py-2 rounded-xl bg-white border border-[#7B1E2B] ring-2 ring-[#7B1E2B]/15"
               >
-                <Search className="w-4 h-4 text-[#7B1E2B] shrink-0" aria-hidden="true" />
+                <BuscaIcon className="w-4 h-4 text-[#7B1E2B] shrink-0" aria-hidden="true" />
                 <input
                   ref={mobileInputRef}
                   id="global-search-mobile-input"

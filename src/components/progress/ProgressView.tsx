@@ -40,9 +40,13 @@ export const ProgressView: React.FC<ProgressViewProps> = ({
   const minutes = Math.floor((progress.totalStudyTimeSeconds % 3600) / 60);
 
   const handleExportBackup = () => {
-    storageService.exportBackup();
-    setStatusMessage({ type: 'success', text: 'Backup exportado com sucesso!' });
-    setTimeout(() => setStatusMessage(null), 3500);
+    const res = storageService.exportBackup();
+    if (res.success) {
+      setStatusMessage({ type: 'success', text: `Backup exportado com sucesso (${res.filename})! 🎸` });
+    } else {
+      setStatusMessage({ type: 'error', text: res.error || 'Erro ao exportar arquivo de backup.' });
+    }
+    setTimeout(() => setStatusMessage(null), 4000);
   };
 
   const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -53,15 +57,15 @@ export const ProgressView: React.FC<ProgressViewProps> = ({
     reader.onload = (event) => {
       const content = event.target?.result as string;
       if (content) {
-        const success = storageService.importBackup(content);
-        if (success) {
+        const result = storageService.importBackup(content);
+        if (result.success) {
           const reloaded = storageService.loadProgress();
           onUpdateProgress(reloaded);
-          setStatusMessage({ type: 'success', text: 'Dados e progresso importados com sucesso!' });
+          setStatusMessage({ type: 'success', text: result.message || 'Dados e progresso importados com sucesso!' });
         } else {
-          setStatusMessage({ type: 'error', text: 'Erro ao importar arquivo de backup. Formato inválido.' });
+          setStatusMessage({ type: 'error', text: result.error || 'Erro ao importar arquivo de backup. Formato inválido.' });
         }
-        setTimeout(() => setStatusMessage(null), 4000);
+        setTimeout(() => setStatusMessage(null), 5000);
       }
     };
     reader.readAsText(file);

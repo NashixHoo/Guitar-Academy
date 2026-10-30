@@ -87,8 +87,21 @@ export const PracticeRoutineView: React.FC<PracticeRoutineViewProps> = ({
 
   // Modal de conclusão e síntese da sessão
   const [showSummaryModal, setShowSummaryModal] = useState<boolean>(false);
+  const [showExitModal, setShowExitModal] = useState<boolean>(false);
   const [sessionCompletedData, setSessionCompletedData] = useState<PracticeSessionRecord | null>(null);
   const [sessionNotes, setSessionNotes] = useState<string>('');
+
+  // Acessibilidade por teclado (Escape fecha modais)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (showExitModal) setShowExitModal(false);
+        if (showSummaryModal) setShowSummaryModal(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showExitModal, showSummaryModal]);
 
   // Dica pedagógica do Professor IA
   const [isAiLoading, setIsAiLoading] = useState<boolean>(false);
@@ -266,23 +279,39 @@ export const PracticeRoutineView: React.FC<PracticeRoutineViewProps> = ({
     setCurrentStepIndex(targetIdx);
   };
 
-  // Abandonar Sessão (com salvamento do tempo efetivo praticado)
+  // Abandonar / Encerrar Sessão com proteção de dados
   const handleAbandonSession = () => {
     audioEngine.stopMetronome();
     setIsMetronomeActive(false);
     setIsSessionRunning(false);
 
     if (sessionElapsedSeconds >= 10) {
-      if (confirm('Deseja salvar o tempo de prática já realizado antes de sair?')) {
-        handleFinishSession(sessionStepsLog, true);
-        return;
-      }
+      setShowExitModal(true);
+      return;
     }
-    // Reinicia contadores
+
+    // Sessão com menos de 10 segundos pode ser descartada diretamente
     setSessionElapsedSeconds(0);
     setStepElapsedSeconds(0);
     setStepRepsCompleted(0);
     setSessionStepsLog([]);
+  };
+
+  const handleConfirmExitSave = () => {
+    setShowExitModal(false);
+    handleFinishSession(sessionStepsLog, true);
+  };
+
+  const handleConfirmExitDiscard = () => {
+    setShowExitModal(false);
+    setSessionElapsedSeconds(0);
+    setStepElapsedSeconds(0);
+    setStepRepsCompleted(0);
+    setSessionStepsLog([]);
+  };
+
+  const handleCancelExit = () => {
+    setShowExitModal(false);
   };
 
   // Finalizar Sessão e Exibir Síntese
@@ -895,6 +924,65 @@ export const PracticeRoutineView: React.FC<PracticeRoutineViewProps> = ({
               >
                 <Check className="w-4 h-4" />
                 <span>Salvar Sessão e Atualizar Perfil</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Acessível de Confirmação ao Abandonar Sessão */}
+      {showExitModal && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="exit-routine-modal-title"
+          aria-describedby="exit-routine-modal-desc"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in"
+        >
+          <div className="bg-white rounded-3xl p-6 sm:p-7 max-w-md w-full shadow-2xl border border-[#D9D9D9] space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-[#FAF1F2] text-[#7B1E2B] flex items-center justify-center shrink-0">
+                <Clock className="w-5 h-5 text-[#B52A3A]" />
+              </div>
+              <div>
+                <h3 id="exit-routine-modal-title" className="text-lg font-black text-[#25252A]">
+                  Encerrar Sessão de Prática?
+                </h3>
+                <span className="text-xs text-[#666672]">
+                  Tempo praticado: <strong>{sessionMins}m {sessionSecs}s</strong>
+                </span>
+              </div>
+            </div>
+
+            <p id="exit-routine-modal-desc" className="text-xs sm:text-sm text-[#4D4D54] leading-relaxed">
+              Você já acumulou tempo ativo nesta rotina instrumental. O que você deseja fazer com este tempo de estudo?
+            </p>
+
+            <div className="space-y-2 pt-2 border-t border-[#F2F2F2]">
+              <button
+                type="button"
+                onClick={handleConfirmExitSave}
+                className="w-full py-3 px-4 rounded-xl bg-[#7B1E2B] hover:bg-[#B52A3A] text-white font-bold text-xs sm:text-sm transition flex items-center justify-center gap-2 shadow-xs"
+              >
+                <Check className="w-4 h-4" />
+                <span>Salvar tempo praticado e sair</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleConfirmExitDiscard}
+                className="w-full py-2.5 px-4 rounded-xl bg-[#F8F7F4] hover:bg-rose-50 text-rose-700 hover:text-rose-800 border border-[#D9D9D9] hover:border-rose-200 font-bold text-xs transition flex items-center justify-center gap-2"
+              >
+                <X className="w-4 h-4" />
+                <span>Descartar sessão e sair</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleCancelExit}
+                className="w-full py-2 px-4 rounded-xl text-[#666672] hover:text-[#25252A] font-bold text-xs transition"
+              >
+                Continuar treinando
               </button>
             </div>
           </div>

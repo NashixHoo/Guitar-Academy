@@ -1,4 +1,5 @@
 import { CURRICULUM_LEVELS } from '../data/curriculum';
+import { SOLO_LESSONS } from '../data/soloCourse';
 import { CHORD_DATABASE } from '../data/chordDatabase';
 import { SCALES, INTERVALS, CIRCLE_OF_FIFTHS } from '../data/musicTheory';
 
@@ -80,6 +81,43 @@ function buildSearchIndex(): SearchResultItem[] {
         lessonId: lesson.id,
         keywords,
       });
+    });
+  });
+
+  // 1.1 Formação Progressiva em Guitarra Solo (20 Aulas Especializadas)
+  SOLO_LESSONS.forEach((lesson) => {
+    const keywords = [
+      lesson.title,
+      lesson.subtitle,
+      lesson.objective,
+      `Etapa ${lesson.stage}`,
+      lesson.moduleTitle,
+      `aula ${lesson.lessonNumber}`,
+      'guitarra solo',
+      'solo',
+      'palhetada alternada',
+      'pentatonica',
+      'improvisacao',
+      'bends',
+      'vibrato',
+      'legato',
+      'hammer-on',
+      'pull-off',
+      'fraseado',
+      ...lesson.parts.map((p) => p.title),
+      ...lesson.commonErrors.map((e) => e.issue),
+    ];
+
+    items.push({
+      id: `solo-${lesson.id}`,
+      type: 'lesson',
+      title: lesson.title,
+      subtitle: lesson.subtitle,
+      badge: `Solo • Etapa ${lesson.stage}`,
+      category: lesson.moduleTitle,
+      detail: `${lesson.estimatedMinutes} min • Metrônomo: ${lesson.speedGoals.startingBpm} a ${lesson.speedGoals.targetBpm} BPM`,
+      lessonId: lesson.id,
+      keywords,
     });
   });
 
@@ -326,8 +364,9 @@ export function searchAll(query: string, maxResults = 25): SearchResultsGrouped 
 export function getSearchIndexStats() {
   return {
     totalItems: SEARCH_INDEX.length,
-    lessonsCount: SEARCH_INDEX.filter((i) => i.type === 'lesson').length,
+    lessonsCount: SEARCH_INDEX.filter((i) => i.type === 'lesson' && !i.id.startsWith('solo-')).length,
     chordsCount: SEARCH_INDEX.filter((i) => i.type === 'chord').length,
     theoryCount: SEARCH_INDEX.filter((i) => i.type === 'theory').length,
+    soloLessonsCount: SEARCH_INDEX.filter((i) => i.id.startsWith('solo-')).length,
   };
 }

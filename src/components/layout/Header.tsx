@@ -7,10 +7,9 @@ import { GlobalSearchBar } from './GlobalSearchBar';
 import { 
   Menu, 
   Volume2, 
-  VolumeX, 
-  BookOpen,
-  ArrowLeft
+  VolumeX 
 } from 'lucide-react';
+import { VoltarIcon, AulasIcon } from '../common/GuitarIcons';
 
 interface HeaderProps {
   currentTab: NavigationTab;
@@ -73,7 +72,7 @@ export const Header: React.FC<HeaderProps> = ({
             aria-label={backTitle ? `Voltar para ${backTitle}` : 'Voltar para a tela anterior'}
             title={backTitle ? `Voltar para ${backTitle}` : 'Voltar'}
           >
-            <ArrowLeft className="w-4 h-4 text-[#7B1E2B] dark:text-[#FF6B81]" aria-hidden="true" />
+            <VoltarIcon className="w-4 h-4 text-[#7B1E2B] dark:text-[#FF6B81]" aria-hidden="true" />
             <span className="hidden sm:inline">Voltar</span>
           </button>
         )}
@@ -123,7 +122,7 @@ export const Header: React.FC<HeaderProps> = ({
           title="Abrir diretamente a Aula 1"
           aria-label="Abrir diretamente a Aula 1: As Cordas da Guitarra e Afinação Padrão"
         >
-          <BookOpen className="w-3.5 h-3.5" aria-hidden="true" />
+          <AulasIcon className="w-3.5 h-3.5" aria-hidden="true" />
           <span>Aula 1 Pronta</span>
         </button>
 

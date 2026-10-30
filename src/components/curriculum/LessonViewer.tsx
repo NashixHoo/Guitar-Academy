@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Lesson, UserProgress } from '../../types';
+import { Lesson, UserProgress, SoloLesson } from '../../types';
 import { InteractiveFretboard } from '../fretboard/InteractiveFretboard';
 import { audioEngine } from '../../audio/audioEngine';
 import { storageService } from '../../services/storageService';
 import { CURRICULUM_LEVELS } from '../../data/curriculum';
+import { SOLO_LESSONS } from '../../data/soloCourse';
 import { 
   CheckCircle2, 
   HelpCircle, 
@@ -46,10 +47,12 @@ export const LessonViewer: React.FC<LessonViewerProps> = ({
   onOpenMetronomeAtBpm,
   onOpenTuner,
 }) => {
+  const soloLesson = lesson.id.startsWith('solo-lesson-') ? (lesson as unknown as SoloLesson) : null;
   const currentLog = progress.practiceLogs?.[lesson.id];
   const [selectedAnswers, setSelectedAnswers] = useState<Record<string, number>>({});
   const [quizSubmitted, setQuizSubmitted] = useState<boolean>(false);
   const [activeSection, setActiveSection] = useState<string>('part-0');
+  const [isPlayingSoloAudio, setIsPlayingSoloAudio] = useState<boolean>(false);
 
   // Metronome state for practical exercise
   const [isMetronomeRunning, setIsMetronomeRunning] = useState<boolean>(false);
@@ -64,12 +67,26 @@ export const LessonViewer: React.FC<LessonViewerProps> = ({
   const [personalNotes, setPersonalNotes] = useState<string>(currentLog?.notes || '');
   const [needsReview, setNeedsReview] = useState<boolean>(currentLog?.needsReview || false);
   const [practiceSavedMessage, setPracticeSavedMessage] = useState<boolean>(false);
+  const [isResetModalOpen, setIsResetModalOpen] = useState<boolean>(false);
 
   // Practical exercise repetitions tracking
   const exercise = lesson.practicalExercise;
   const currentRepetitions = exercise
     ? progress.exerciseRepetitions?.[exercise.id] ?? currentLog?.exerciseRepetitions ?? 0
     : 0;
+
+  // Acessibilidade por teclado (Escape fecha o modal)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isResetModalOpen) {
+        setIsResetModalOpen(false);
+      }
+    };
+    if (isResetModalOpen) {
+      window.addEventListener('keydown', handleKeyDown);
+    }
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isResetModalOpen]);
 
   // Cleanup metronome on unmount or section change
   useEffect(() => {
@@ -139,6 +156,24 @@ export const LessonViewer: React.FC<LessonViewerProps> = ({
     });
   };
 
+  const playSoloDemonstrationAudio = () => {
+    if (!soloLesson || !soloLesson.demonstrationAudioNotes || soloLesson.demonstrationAudioNotes.length === 0) return;
+    if (isPlayingSoloAudio) return;
+
+    setIsPlayingSoloAudio(true);
+    let cumulativeDelay = 0;
+
+    soloLesson.demonstrationAudioNotes.forEach((note, idx) => {
+      setTimeout(() => {
+        audioEngine.playGuitarNote(note.freq, note.duration, 0.7);
+        if (idx === soloLesson.demonstrationAudioNotes!.length - 1) {
+          setTimeout(() => setIsPlayingSoloAudio(false), note.duration * 1000);
+        }
+      }, cumulativeDelay * 1000);
+      cumulativeDelay += Math.max(0.2, note.duration * 0.85);
+    });
+  };
+
   const handleAddRepetition = () => {
     if (!exercise) return;
     const newCount = currentRepetitions + 1;
@@ -172,16 +207,20 @@ export const LessonViewer: React.FC<LessonViewerProps> = ({
 
   const handleResetRepetitions = () => {
     if (!exercise) return;
-    if (confirm('Deseja reiniciar a contagem de repetições deste exercício prático?')) {
-      const updated = storageService.recordExerciseRepetition(
-        lesson.id,
-        exercise.id,
-        0,
-        exercise.targetRepetitions,
-        exercise.targetBpm
-      );
-      onUpdateProgress(updated);
-    }
+    setIsResetModalOpen(true);
+  };
+
+  const confirmResetRepetitions = () => {
+    if (!exercise) return;
+    const updated = storageService.recordExerciseRepetition(
+      lesson.id,
+      exercise.id,
+      0,
+      exercise.targetRepetitions,
+      exercise.targetBpm
+    );
+    onUpdateProgress(updated);
+    setIsResetModalOpen(false);
   };
 
   const playToneExample = () => {
@@ -254,7 +293,8 @@ export const LessonViewer: React.FC<LessonViewerProps> = ({
     setQuizSubmitted(false);
   };
 
-  const allLessons = CURRICULUM_LEVELS.flatMap((l) => l.lessons);
+  const isSoloLesson = lesson.id.startsWith('solo-lesson-');
+  const allLessons = isSoloLesson ? SOLO_LESSONS : CURRICULUM_LEVELS.flatMap((l) => l.lessons);
   const currentIndex = allLessons.findIndex((l) => l.id === lesson.id);
   const nextLesson = currentIndex >= 0 && currentIndex < allLessons.length - 1 ? allLessons[currentIndex + 1] : null;
 
@@ -447,6 +487,33 @@ export const LessonViewer: React.FC<LessonViewerProps> = ({
                   <span>Ouvir 1 Semitom (Mi para Fá)</span>
                 </button>
               </div>
+            </div>
+          )}
+
+          {/* Interactive Audio Sequence for Solo Lesson */}
+          {soloLesson && soloLesson.demonstrationAudioNotes && soloLesson.demonstrationAudioNotes.length > 0 && currentPartIndex === 0 && (
+            <div className="bg-[#F8F7F4] dark:bg-[#1A1A20] p-4 rounded-2xl border border-[#D9D9D9] dark:border-[#33333E] flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <span className="text-xs font-bold text-[#7B1E2B] dark:text-[#FF6B81] flex items-center gap-1.5">
+                  <Volume2 className="w-4 h-4 text-[#B52A3A] dark:text-[#FF6B81]" />
+                  Demonstração Auditiva: Fraseado e Alturas Musicais
+                </span>
+                <p className="text-xs text-[#666672] dark:text-[#B8B3C0] mt-0.5 font-medium">
+                  Ouça a afinação e os intervalos musicais das notas da aula sintetizados para cordas (E2-A2-D3-G3-B3-E4):
+                </p>
+              </div>
+              <button
+                onClick={playSoloDemonstrationAudio}
+                disabled={isPlayingSoloAudio}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition shadow-xs ${
+                  isPlayingSoloAudio
+                    ? 'bg-amber-100 text-amber-900 border border-amber-300 animate-pulse'
+                    : 'bg-[#7B1E2B] text-white hover:bg-[#B52A3A]'
+                }`}
+              >
+                <Play className="w-3.5 h-3.5" />
+                <span>{isPlayingSoloAudio ? 'Reproduzindo Sequência...' : 'Ouvir Exemplo de Notas'}</span>
+              </button>
             </div>
           )}
 
@@ -814,6 +881,56 @@ export const LessonViewer: React.FC<LessonViewerProps> = ({
             </div>
           </div>
 
+          {/* Aplicação Musical em Lick / Fraseado Real */}
+          {soloLesson && soloLesson.musicalApplication && (
+            <div className="bg-[#F8F7F4] dark:bg-[#1A1A20] p-5 rounded-2xl border border-[#D9D9D9] dark:border-[#33333E] space-y-3">
+              <span className="text-xs font-bold text-[#7B1E2B] dark:text-[#FF6B81] uppercase tracking-wider flex items-center gap-1.5">
+                <Sparkles className="w-4 h-4 text-[#B52A3A]" />
+                {soloLesson.musicalApplication.title}
+              </span>
+              <p className="text-xs text-[#666672] dark:text-[#B8B3C0] leading-relaxed">
+                {soloLesson.musicalApplication.description}
+              </p>
+              <pre className="bg-[#1A1A20] p-4 rounded-xl text-xs sm:text-sm font-mono-code text-[#F8F7F4] overflow-x-auto border border-[#33333E] whitespace-pre">
+                {soloLesson.musicalApplication.tab}
+              </pre>
+            </div>
+          )}
+
+          {/* Erros Frequentes na Guitarra Física & Como Evitar */}
+          {soloLesson && soloLesson.commonErrors && soloLesson.commonErrors.length > 0 && (
+            <div className="bg-rose-50/60 dark:bg-rose-950/20 p-5 rounded-2xl border border-rose-200 dark:border-rose-900/50 space-y-3">
+              <span className="text-xs font-bold text-rose-800 dark:text-rose-300 uppercase tracking-wider flex items-center gap-1.5">
+                <AlertCircle className="w-4 h-4 text-rose-600" />
+                Erros Frequentes na Guitarra Física & Solução Biomecânica
+              </span>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {soloLesson.commonErrors.map((err, eIdx) => (
+                  <div key={eIdx} className="bg-white dark:bg-[#25252A] p-3 rounded-xl border border-rose-100 dark:border-rose-900/40 text-xs space-y-1">
+                    <div className="font-bold text-rose-900 dark:text-rose-200">❌ {err.issue}</div>
+                    <div className="text-[#666672] dark:text-[#B8B3C0]">✅ <strong className="text-[#25252A] dark:text-white">Solução:</strong> {err.solution}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Desafio Prático & Missão de Consolidação */}
+          {soloLesson && soloLesson.challenge && (
+            <div className="bg-amber-50/60 dark:bg-amber-950/20 p-5 rounded-2xl border border-amber-200 dark:border-amber-900/50 space-y-2">
+              <span className="text-xs font-bold text-amber-900 dark:text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
+                <Trophy className="w-4 h-4 text-amber-600" />
+                {soloLesson.challenge.title}
+              </span>
+              <p className="text-xs text-[#25252A] dark:text-[#E0DDE5] font-medium leading-relaxed">
+                {soloLesson.challenge.description}
+              </p>
+              <div className="p-2.5 rounded-lg bg-white dark:bg-[#25252A] border border-amber-200 dark:border-amber-900/40 text-xs font-mono-code text-amber-900 dark:text-amber-200">
+                📌 Instrução: {soloLesson.challenge.instruction}
+              </div>
+            </div>
+          )}
+
           {/* Bottom Navigation */}
           <div className="flex items-center justify-between pt-4 border-t border-[#D9D9D9]">
             <button
@@ -1018,49 +1135,64 @@ export const LessonViewer: React.FC<LessonViewerProps> = ({
               </p>
             </div>
 
-            {/* Confidence Level */}
+            {/* 3 Níveis Pedagógicos de Autoavaliação Guiada */}
             <div className="bg-[#F8F7F4] p-5 rounded-2xl border border-[#D9D9D9] space-y-3">
               <label className="text-xs font-bold text-[#7B1E2B] uppercase tracking-wider block">
-                Nível de Domínio Motor e Sonoridade
+                Nível de Domínio Motor e Sonoridade (3 Estados Pedagógicos)
               </label>
               <div className="space-y-2">
                 <button
                   type="button"
                   onClick={() => setConfidence('needs_review')}
-                  className={`w-full text-left p-2.5 rounded-xl text-xs font-bold transition border flex items-center justify-between ${
+                  className={`w-full text-left p-3 rounded-xl text-xs font-bold transition border flex flex-col gap-1 ${
                     confidence === 'needs_review'
                       ? 'bg-rose-50 border-rose-300 text-rose-900 ring-2 ring-rose-300'
                       : 'bg-white border-[#D9D9D9] text-[#666672]'
                   }`}
                 >
-                  <span>⚠️ Trastejando / Trocas lentas (Preciso Revisar)</span>
-                  {confidence === 'needs_review' && <Check className="w-4 h-4 text-rose-700" />}
+                  <div className="flex items-center justify-between w-full">
+                    <span className="font-extrabold">1. Aprendendo (Fase Inicial / Memorização)</span>
+                    {confidence === 'needs_review' && <Check className="w-4 h-4 text-rose-700" />}
+                  </div>
+                  <p className="text-[11px] font-normal opacity-90">
+                    {soloLesson?.masteryCriteria?.learning || 'Compreendendo o desenho, notas no braço e movimentos motores básicos.'}
+                  </p>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setConfidence('playable_slow')}
-                  className={`w-full text-left p-2.5 rounded-xl text-xs font-bold transition border flex items-center justify-between ${
+                  className={`w-full text-left p-3 rounded-xl text-xs font-bold transition border flex flex-col gap-1 ${
                     confidence === 'playable_slow'
                       ? 'bg-amber-50 border-amber-300 text-amber-900 ring-2 ring-amber-300'
                       : 'bg-white border-[#D9D9D9] text-[#666672]'
                   }`}
                 >
-                  <span>🔄 Toco em andamento lento (Em Desenvolvimento)</span>
-                  {confidence === 'playable_slow' && <Check className="w-4 h-4 text-amber-700" />}
+                  <div className="flex items-center justify-between w-full">
+                    <span className="font-extrabold">2. Consolidando (Em Desenvolvimento / Metrônomo Lento)</span>
+                    {confidence === 'playable_slow' && <Check className="w-4 h-4 text-amber-700" />}
+                  </div>
+                  <p className="text-[11px] font-normal opacity-90">
+                    {soloLesson?.masteryCriteria?.consolidating || 'Executando em andamento lento com metrônomo, buscando precisão e eliminando ruídos.'}
+                  </p>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setConfidence('mastered_with_metronome')}
-                  className={`w-full text-left p-2.5 rounded-xl text-xs font-bold transition border flex items-center justify-between ${
+                  className={`w-full text-left p-3 rounded-xl text-xs font-bold transition border flex flex-col gap-1 ${
                     confidence === 'mastered_with_metronome'
                       ? 'bg-emerald-50 border-emerald-300 text-emerald-900 ring-2 ring-emerald-300'
                       : 'bg-white border-[#D9D9D9] text-[#666672]'
                   }`}
                 >
-                  <span>✅ Dominado com som limpo no metrônomo</span>
-                  {confidence === 'mastered_with_metronome' && <Check className="w-4 h-4 text-emerald-700" />}
+                  <div className="flex items-center justify-between w-full">
+                    <span className="font-extrabold">3. Dominado (Execução Limpa no Andamento Alvo)</span>
+                    {confidence === 'mastered_with_metronome' && <Check className="w-4 h-4 text-emerald-700" />}
+                  </div>
+                  <p className="text-[11px] font-normal opacity-90">
+                    {soloLesson?.masteryCriteria?.mastered || 'Execução precisa, relaxada e sem falhas no andamento alvo com metrônomo.'}
+                  </p>
                 </button>
               </div>
             </div>
@@ -1135,6 +1267,49 @@ export const LessonViewer: React.FC<LessonViewerProps> = ({
               </button>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Diálogo de Confirmação para Reiniciar Repetições */}
+      {isResetModalOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="reset-modal-title"
+          aria-describedby="reset-modal-desc"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in"
+        >
+          <div className="bg-white rounded-3xl p-6 sm:p-7 max-w-md w-full shadow-2xl border border-[#D9D9D9] space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-[#F5E8EA] text-[#7B1E2B] flex items-center justify-center shrink-0">
+                <RotateCcw className="w-5 h-5" />
+              </div>
+              <h3 id="reset-modal-title" className="text-lg font-black text-[#25252A]">
+                Reiniciar Repetições?
+              </h3>
+            </div>
+
+            <p id="reset-modal-desc" className="text-xs sm:text-sm text-[#4D4D54] leading-relaxed">
+              Você tem certeza de que deseja zerar a contagem de repetições deste exercício prático? Seu histórico geral de estudos e tempo acumulado serão mantidos.
+            </p>
+
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-[#F2F2F2]">
+              <button
+                type="button"
+                onClick={() => setIsResetModalOpen(false)}
+                className="px-4 py-2.5 rounded-xl bg-[#F8F7F4] hover:bg-[#F2F2F2] text-[#25252A] text-xs sm:text-sm font-bold border border-[#D9D9D9] transition"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmResetRepetitions}
+                className="px-5 py-2.5 rounded-xl bg-[#7B1E2B] hover:bg-[#B52A3A] text-white text-xs sm:text-sm font-bold transition shadow-xs"
+              >
+                Sim, Reiniciar
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

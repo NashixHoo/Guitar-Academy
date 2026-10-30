@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, CheckCircle2, Clock, BookOpen } from 'lucide-react';
+import { IniciarIcon, ConcluidoIcon, HistoricoIcon, AulasIcon } from './GuitarIcons';
 import { Badge } from './Badge';
 
 interface LessonCardProps {
@@ -78,12 +78,12 @@ export const LessonCard: React.FC<LessonCardProps> = ({
           <div className="flex items-center gap-4 pt-1 text-xs text-[#666672] dark:text-[#B8B3C0] font-medium">
             {estimatedMinutes && (
               <span className="flex items-center gap-1">
-                <Clock className="w-3.5 h-3.5 text-[#7B1E2B] dark:text-[#FF6B81]" />
+                <HistoricoIcon className="w-3.5 h-3.5 text-[#7B1E2B] dark:text-[#FF6B81]" />
                 <span>{estimatedMinutes} min</span>
               </span>
             )}
             <span className="flex items-center gap-1">
-              <BookOpen className="w-3.5 h-3.5 text-[#666672]" />
+              <AulasIcon className="w-3.5 h-3.5 text-[#666672]" />
               <span>Teoria + Prática</span>
             </span>
           </div>
@@ -102,9 +102,9 @@ export const LessonCard: React.FC<LessonCardProps> = ({
           }`}
         >
           {isCompleted ? (
-            <CheckCircle2 className="w-5 h-5 stroke-[2.5]" />
+            <ConcluidoIcon className="w-5 h-5 stroke-[2.2]" />
           ) : (
-            <Play className="w-4 h-4 fill-current ml-0.5" />
+            <IniciarIcon className="w-4 h-4 ml-0.5" />
           )}
         </button>
       </div>

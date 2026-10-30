@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { UserProgress, NavigationTab } from '../../types';
 import { storageService } from '../../services/storageService';
 import { PWAInstallButton } from '../common/PWAInstallButton';
-import { Settings, Music, Clock, Sliders, Smartphone, Check, Target, ShieldCheck, Sun, Moon, Monitor } from 'lucide-react';
+import { Settings, Music, Clock, Sliders, Smartphone, Check, Target, ShieldCheck, Sun, Moon, Monitor, Download, Upload } from 'lucide-react';
 import { DailyGoalSettings } from '../dashboard/DailyGoalSettings';
 import { themeService, ThemeMode } from '../../services/themeService';
 
@@ -14,6 +14,9 @@ interface SettingsViewProps {
 
 export const SettingsView: React.FC<SettingsViewProps> = ({ progress, onUpdateProgress, onNavigateTab }) => {
   const [showGoalModal, setShowGoalModal] = useState<boolean>(false);
+  const [backupMessage, setBackupMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
   const updateSetting = <K extends keyof UserProgress>(key: K, value: UserProgress[K]) => {
     const updated = { ...progress, [key]: value };
     onUpdateProgress(updated);
@@ -23,6 +26,39 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ progress, onUpdatePr
   const handleSelectTheme = (mode: ThemeMode) => {
     updateSetting('themePreference', mode);
     themeService.applyTheme(mode);
+  };
+
+  const handleExportBackup = () => {
+    const res = storageService.exportBackup();
+    if (res.success) {
+      setBackupMessage({ type: 'success', text: `Backup exportado com sucesso (${res.filename})! 🎸` });
+    } else {
+      setBackupMessage({ type: 'error', text: res.error || 'Erro ao exportar arquivo de backup.' });
+    }
+    setTimeout(() => setBackupMessage(null), 4000);
+  };
+
+  const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const content = event.target?.result as string;
+      if (content) {
+        const result = storageService.importBackup(content);
+        if (result.success) {
+          const reloaded = storageService.loadProgress();
+          onUpdateProgress(reloaded);
+          setBackupMessage({ type: 'success', text: result.message || 'Dados e progresso importados com sucesso!' });
+        } else {
+          setBackupMessage({ type: 'error', text: result.error || 'Erro ao importar arquivo de backup.' });
+        }
+        setTimeout(() => setBackupMessage(null), 5000);
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
   };
 
   return (
@@ -39,6 +75,26 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ progress, onUpdatePr
           </p>
         </div>
       </div>
+
+      {/* Toast / Mensagem de Status */}
+      {backupMessage && (
+        <div
+          role="status"
+          className={`p-4 rounded-2xl border text-sm font-bold flex items-center justify-between transition-all ${
+            backupMessage.type === 'success'
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+              : 'bg-rose-50 border-rose-200 text-rose-800'
+          }`}
+        >
+          <span>{backupMessage.text}</span>
+          <button
+            onClick={() => setBackupMessage(null)}
+            className="text-xs opacity-75 hover:opacity-100 font-mono-code px-2 py-0.5"
+          >
+            Fechar
+          </button>
+        </div>
+      )}
 
       {/* Settings Grid */}
       <div className="space-y-4">
@@ -256,6 +312,47 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ progress, onUpdatePr
           </p>
           <div className="pt-2 max-w-xs">
             <PWAInstallButton variant="settings" />
+          </div>
+        </div>
+
+        {/* Backup & Restauração de Dados */}
+        <div className="bg-white border border-[#D9D9D9] rounded-2xl p-6 shadow-xs space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-[#25252A] font-bold text-sm">
+              <Download className="w-4 h-4 text-[#7B1E2B]" />
+              <span>Backup & Proteção de Dados do Aluno</span>
+            </div>
+            <span className="text-[10px] font-mono-code font-bold px-2 py-0.5 rounded-full bg-[#FAF1F2] text-[#7B1E2B] border border-[#E8D3D6]">
+              100% Local & Seguro
+            </span>
+          </div>
+          <p className="text-xs text-[#666672]">
+            Exporte todo o seu progresso, aulas concluídas, repetições de exercícios e configurações para um arquivo JSON seguro. Você pode restaurar esse arquivo a qualquer momento ou transferir para outro aparelho.
+          </p>
+          <div className="flex flex-wrap items-center gap-3 pt-1">
+            <button
+              onClick={handleExportBackup}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#7B1E2B] hover:bg-[#B52A3A] text-white text-xs font-bold transition shadow-xs"
+            >
+              <Download className="w-4 h-4" />
+              <span>Exportar Backup (JSON)</span>
+            </button>
+
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#F8F7F4] hover:bg-[#F5E8EA] text-[#25252A] text-xs font-bold border border-[#D9D9D9] transition"
+            >
+              <Upload className="w-4 h-4 text-[#7B1E2B]" />
+              <span>Restaurar Backup</span>
+            </button>
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".json,application/json"
+              onChange={handleImportFile}
+              className="hidden"
+            />
           </div>
         </div>
 

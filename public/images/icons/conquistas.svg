@@ -1,1 +1,13 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.45 1-1 1H8c-.55 0-1 .45-1 1v1h10v-1c0-.55-.45-1-1-1h-1c-.55 0-1-.45-1-1v-2.34"/><path d="M6 4h12a2 2 0 0 1 2 2v3c0 3.31-2.69 6-6 6s-6-2.69-6-6V6a2 2 0 0 1 2-2Z"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+  <!-- Taça do troféu com silhueta clássica proporcional -->
+  <path d="M7 4H17V10C17 13 14.8 15.5 12 15.5C9.2 15.5 7 13 7 10V4Z"/>
+  <!-- Alças laterais com curvatura inspirada em lira musical -->
+  <path d="M7 6C4.8 6 4 8.5 5.5 11C6.2 12 7 12.5 7 12.5"/>
+  <path d="M17 6C19.2 6 20 8.5 18.5 11C17.8 12 17 12.5 17 12.5"/>
+  <!-- Haste e base solene -->
+  <line x1="12" y1="15.5" x2="12" y2="18.5"/>
+  <path d="M8.5 21H15.5"/>
+  <path d="M9.5 18.5H14.5"/>
+  <!-- Estrela de honra no cálice -->
+  <path d="M12 6.5L12.5 7.8L13.8 8L12.8 9L13.1 10.3L12 9.6L10.9 10.3L11.2 9L10.2 8L11.5 7.8Z" fill="currentColor"/>
+</svg>

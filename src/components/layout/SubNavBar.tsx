@@ -1,25 +1,25 @@
 import React from 'react';
 import { NavigationTab } from '../../types';
 import { PrimaryTab } from '../../services/navigationService';
-import { 
-  Home, 
-  GraduationCap, 
-  Target, 
-  Clock, 
-  Radio, 
-  Guitar, 
-  BookOpen, 
-  Zap, 
-  Activity, 
-  Headphones, 
-  Trophy, 
-  Sparkles, 
-  ShieldCheck, 
-  Settings, 
-  Compass, 
-  Music, 
-  BookMarked 
-} from 'lucide-react';
+import {
+  InicioIcon,
+  AulasIcon,
+  TeoriaIcon,
+  BibliotecaIcon,
+  LeituraIcon,
+  MetasIcon,
+  MetronomoIcon,
+  AfinadorIcon,
+  BracoGuitarraIcon,
+  AcordesIcon,
+  CoachIcon,
+  TecnicaIcon,
+  OuvidoIcon,
+  ConquistasIcon,
+  ProfessorAIIcon,
+  DiagnosticoIcon,
+  ConfiguracoesIcon,
+} from '../common/GuitarIcons';
 
 interface SubNavBarProps {
   primaryTab: PrimaryTab;
@@ -36,27 +36,27 @@ interface SubTabItem {
 
 const SUB_TABS_BY_PRIMARY: Record<PrimaryTab, SubTabItem[]> = {
   estudar: [
-    { id: 'home', label: 'Início', icon: Home },
-    { id: 'curriculum', label: 'Formação & Aulas', icon: GraduationCap },
-    { id: 'theory', label: 'Teoria Musical', icon: Compass },
-    { id: 'library', label: 'Biblioteca', icon: BookMarked },
-    { id: 'reading', label: 'Leitura', icon: Music },
+    { id: 'home', label: 'Início', icon: InicioIcon },
+    { id: 'curriculum', label: 'Formação & Aulas', icon: AulasIcon },
+    { id: 'theory', label: 'Teoria Musical', icon: TeoriaIcon },
+    { id: 'library', label: 'Biblioteca', icon: BibliotecaIcon },
+    { id: 'reading', label: 'Leitura', icon: LeituraIcon },
   ],
   praticar: [
-    { id: 'practice-routine', label: 'Central de Prática', icon: Target },
-    { id: 'metronome', label: 'Metrônomo', icon: Clock },
-    { id: 'tuner', label: 'Afinador', icon: Radio },
-    { id: 'fretboard', label: 'Braço', icon: Guitar },
-    { id: 'chords', label: 'Acordes', icon: BookOpen },
-    { id: 'guitar-coach', label: 'Coach', icon: Zap },
-    { id: 'technique', label: 'Técnica', icon: Activity },
-    { id: 'ear-training', label: 'Ouvido', icon: Headphones },
+    { id: 'practice-routine', label: 'Central de Prática', icon: MetasIcon },
+    { id: 'metronome', label: 'Metrônomo', icon: MetronomoIcon },
+    { id: 'tuner', label: 'Afinador', icon: AfinadorIcon },
+    { id: 'fretboard', label: 'Braço', icon: BracoGuitarraIcon },
+    { id: 'chords', label: 'Acordes', icon: AcordesIcon },
+    { id: 'guitar-coach', label: 'Coach', icon: CoachIcon },
+    { id: 'technique', label: 'Técnica', icon: TecnicaIcon },
+    { id: 'ear-training', label: 'Ouvido', icon: OuvidoIcon },
   ],
   evoluir: [
-    { id: 'progress', label: 'Meu Progresso', icon: Trophy },
-    { id: 'professor-ai', label: 'Professor IA', icon: Sparkles },
-    { id: 'diagnostics', label: 'Diagnóstico', icon: ShieldCheck },
-    { id: 'settings', label: 'Configurações', icon: Settings },
+    { id: 'progress', label: 'Meu Progresso', icon: ConquistasIcon },
+    { id: 'professor-ai', label: 'Professor IA', icon: ProfessorAIIcon },
+    { id: 'diagnostics', label: 'Diagnóstico', icon: DiagnosticoIcon },
+    { id: 'settings', label: 'Configurações', icon: ConfiguracoesIcon },
   ],
 };
 

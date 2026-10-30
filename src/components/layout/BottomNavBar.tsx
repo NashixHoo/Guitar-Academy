@@ -1,6 +1,6 @@
 import React from 'react';
 import { PrimaryTab } from '../../services/navigationService';
-import { GraduationCap, Target, Trophy } from 'lucide-react';
+import { EstudarIcon, PraticarIcon, EvoluirIcon } from '../common/GuitarIcons';
 
 interface BottomNavBarProps {
   activePrimaryTab: PrimaryTab;
@@ -23,19 +23,19 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
       id: 'estudar',
       label: 'Estudar',
       subtitle: 'Aulas & Teoria',
-      icon: GraduationCap,
+      icon: EstudarIcon,
     },
     {
       id: 'praticar',
       label: 'Praticar',
       subtitle: 'Rotinas & Treino',
-      icon: Target,
+      icon: PraticarIcon,
     },
     {
       id: 'evoluir',
       label: 'Evoluir',
       subtitle: 'Progresso & IA',
-      icon: Trophy,
+      icon: EvoluirIcon,
     },
   ];
 

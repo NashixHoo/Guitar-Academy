@@ -102,6 +102,44 @@ export interface LevelInfo {
   lessons: Lesson[];
 }
 
+export interface SoloLesson extends Lesson {
+  stage: number; // 1 to 5
+  prerequisites: string[];
+  demonstrationAudioNotes?: { freq: number; duration: number }[];
+  commonErrors: { issue: string; solution: string }[];
+  musicalApplication: {
+    title: string;
+    tab: string;
+    description: string;
+  };
+  challenge: {
+    title: string;
+    description: string;
+    instruction: string;
+  };
+  masteryCriteria: {
+    learning: string;
+    consolidating: string;
+    mastered: string;
+  };
+  speedGoals: {
+    startingBpm: number;
+    intermediateBpm: number;
+    targetBpm: number;
+  };
+  reviewNotes: string;
+}
+
+export interface SoloCourseStage {
+  id: string;
+  stageNumber: number; // 1 to 5
+  title: string;
+  subtitle: string;
+  badge: string;
+  description: string;
+  lessons: SoloLesson[];
+}
+
 export interface LessonPracticeLog {
   lessonId: string;
   status: 'viewed' | 'practicing' | 'mastered';

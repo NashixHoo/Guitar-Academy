@@ -206,16 +206,26 @@ export const LESSON_TO_SKILL_MAP: Record<string, string> = {
 };
 
 /**
- * Helper de manipulação de datas ISO
+ * Helper de manipulação de datas no calendário local (formato YYYY-MM-DD)
  */
 export function addDays(dateStr: string, days: number): string {
-  const d = new Date(dateStr);
-  d.setDate(d.getDate() + days);
-  return d.toISOString().split('T')[0];
+  const parts = dateStr.split('-').map(Number);
+  const year = parts[0] || 2026;
+  const month = (parts[1] || 1) - 1;
+  const day = parts[2] || 1;
+  const d = new Date(year, month, day + days);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const dayStr = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${dayStr}`;
 }
 
 export function getTodayIso(): string {
-  return new Date().toISOString().split('T')[0];
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
 }
 
 /**

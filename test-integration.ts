@@ -42,7 +42,7 @@ import {
   ExecutablePracticeExercise,
   GeneratedRoutine,
 } from './src/pedagogy/practiceRoutineEngine';
-import { storageService, INITIAL_PROGRESS } from './src/services/storageService';
+import { storageService, INITIAL_PROGRESS, getLocalDateString, validateBackupData } from './src/services/storageService';
 import {
   searchAll,
   getSearchIndexStats,
@@ -1725,6 +1725,249 @@ requiredInterfaceIcons.forEach((iconName) => {
     `13.5 Ícone SVG individual presente: ${iconName}`
   );
 });
+
+// =============================================================
+// GRUPO 14: Validação da Fase 1 de Estabilização — Data Local, Fusos Horários, Backup e Diálogos
+// =============================================================
+console.log('\n--- GRUPO 14: Validação da Fase 1 de Estabilização (Data Local, Fusos, Backup e Diálogos) ---');
+
+// 14.1 Formato de data local YYYY-MM-DD
+const todayLocalDate = getLocalDateString();
+assert(
+  /^\d{4}-\d{2}-\d{2}$/.test(todayLocalDate),
+  '14.1 getLocalDateString retorna string no formato estrito YYYY-MM-DD'
+);
+
+// 14.2 Conversão determinística de data específica
+const testDateObj = new Date(2026, 9, 15, 14, 30, 0); // 15 de Outubro de 2026
+assert(
+  getLocalDateString(testDateObj) === '2026-10-15',
+  '14.2 getLocalDateString formata corretamente datas históricas'
+);
+
+// 14.3 Simulação de horário próximo à meia-noite (23:45)
+// Em fusos com horário atrasado em relação a UTC (ex.: Brasil UTC-3), 23:45 do dia 30/10 já é 02:45 do dia 31/10 em UTC.
+// A função getLocalDateString deve preservar a data local física do aluno (2026-10-30).
+const nearMidnightLocal = new Date(2026, 9, 30, 23, 45, 0);
+assert(
+  getLocalDateString(nearMidnightLocal) === '2026-10-30',
+  '14.3 getLocalDateString preserva o dia do aluno às 23:45, sem avançar prematuramente'
+);
+
+// 14.4 addDays com virada de mês no calendário local
+const monthTransitionDate = addDays('2026-10-30', 3);
+assert(
+  monthTransitionDate === '2026-11-02',
+  '14.4 addDays calcula corretamente transição de mês sem deriva de fuso (2026-10-30 + 3 = 2026-11-02)'
+);
+
+// 14.5 Preservação de totalStudyTimeSeconds e reset controlado de todayStudyTimeSeconds na virada do dia
+localStorage.setItem('guitar_academy_user_progress_v1', JSON.stringify({
+  ...INITIAL_PROGRESS,
+  lastStudyDate: '2026-01-01',
+  todayStudyTimeSeconds: 1800,
+  totalStudyTimeSeconds: 5400,
+}));
+const rolledProgress = storageService.loadProgress();
+assert(
+  rolledProgress.todayStudyTimeSeconds === 0,
+  '14.5 todayStudyTimeSeconds é reiniciado em 0 quando a data de estudo difere do dia local'
+);
+assert(
+  rolledProgress.totalStudyTimeSeconds === 5400,
+  '14.5 totalStudyTimeSeconds permanece estritamente preservado e acumulado na virada do dia'
+);
+assert(
+  rolledProgress.lastStudyDate === todayLocalDate,
+  '14.5 lastStudyDate é atualizado para o dia local corrente'
+);
+
+// 14.6 Mesma data local não deve zerar todayStudyTimeSeconds
+localStorage.setItem('guitar_academy_user_progress_v1', JSON.stringify({
+  ...INITIAL_PROGRESS,
+  lastStudyDate: todayLocalDate,
+  todayStudyTimeSeconds: 1200,
+  totalStudyTimeSeconds: 4800,
+}));
+const sameDayProgress = storageService.loadProgress();
+assert(
+  sameDayProgress.todayStudyTimeSeconds === 1200,
+  '14.6 todayStudyTimeSeconds NÃO é zerado ao recarregar dentro do mesmo dia local'
+);
+
+// 14.7 Validação de envelope completo de backup
+const validEnvelopeData = {
+  app: 'Guitar Academy V1.0',
+  exportDate: new Date().toISOString(),
+  progress: {
+    ...INITIAL_PROGRESS,
+    completedLessons: ['lesson-1', 'lesson-2', 'lesson-3'],
+    totalStudyTimeSeconds: 3600,
+  },
+  metronome: {
+    bpm: 110,
+    volume: 0.8,
+  },
+};
+const valResultValid = validateBackupData(validEnvelopeData);
+assert(
+  valResultValid.isValid === true,
+  '14.7 validateBackupData aprova envelope de backup estruturado'
+);
+assert(
+  valResultValid.progress?.completedLessons.length === 3,
+  '14.7 validateBackupData recupera lista completa de aulas concluídas'
+);
+
+// 14.8 Validação de backup direto do objeto UserProgress
+const validDirectProgress = {
+  ...INITIAL_PROGRESS,
+  currentLessonId: 'lesson-4',
+  completedLessons: ['lesson-1', 'lesson-2'],
+};
+const valResultDirect = validateBackupData(validDirectProgress);
+assert(
+  valResultDirect.isValid === true,
+  '14.8 validateBackupData aprova objeto UserProgress direto'
+);
+
+// 14.9 Rejeição de formatos de backup corrompidos e inválidos
+const corrupted1 = validateBackupData(null);
+assert(corrupted1.isValid === false, '14.9 validateBackupData rejeita valor nulo');
+
+const corrupted2 = validateBackupData({ progress: { completedLessons: 'não-é-um-array' } });
+assert(corrupted2.isValid === false, '14.9 validateBackupData rejeita completedLessons que não seja array');
+
+const corrupted3 = validateBackupData({ progress: { practiceLogs: 12345 } });
+assert(corrupted3.isValid === false, '14.9 validateBackupData rejeita practiceLogs corrompido');
+
+const corrupted4 = validateBackupData({ payloadAleatorio: 'sem-estrutura' });
+assert(corrupted4.isValid === false, '14.9 validateBackupData rejeita JSON desconhecido');
+
+// 14.10 Atomicidade de importBackup (não corrompe localStorage se a importação falhar)
+const goldenState = {
+  ...INITIAL_PROGRESS,
+  completedLessons: ['lesson-1', 'lesson-2', 'lesson-3', 'lesson-4'],
+  totalStudyTimeSeconds: 9000,
+};
+storageService.saveProgress(goldenState);
+
+const failedImport = storageService.importBackup('{"invalid json text}');
+assert(failedImport.success === false, '14.10 importBackup retorna erro em JSON com erro de sintaxe');
+
+const failedImportCorrupted = storageService.importBackup('{"progress": {"completedLessons": "invalido"}}');
+assert(failedImportCorrupted.success === false, '14.10 importBackup retorna erro em estrutura de progresso inválida');
+assert(
+  failedImportCorrupted.error !== undefined && failedImportCorrupted.error.length > 5,
+  '14.10 importBackup fornece mensagem descritiva do erro encontrado'
+);
+
+// Verifica integridade dos dados no armazenamento
+const preservedState = storageService.loadProgress();
+assert(
+  preservedState.completedLessons.length === 4,
+  '14.10 Dados anteriores permanecem 100% íntegros após rejeição de arquivo inválido'
+);
+assert(
+  preservedState.totalStudyTimeSeconds === 9000,
+  '14.10 Tempo acumulado no storage não é afetado por tentativa de importação falha'
+);
+
+// 14.11 Sucesso de importação e sanitização
+const validImportJson = JSON.stringify({
+  app: 'Guitar Academy V1.0',
+  exportDate: '2026-10-30T10:00:00.000Z',
+  progress: {
+    completedLessons: ['lesson-1', 'lesson-2'],
+    totalStudyTimeSeconds: 2400,
+  },
+  metronome: {
+    bpm: 95,
+  },
+});
+const successfulImport = storageService.importBackup(validImportJson);
+assert(
+  successfulImport.success === true,
+  '14.11 importBackup importa com sucesso backup válido e sanitiza campos'
+);
+assert(
+  Boolean(successfulImport.message?.includes('recuperadas') || successfulImport.message?.includes('sucesso')),
+  '14.11 importBackup retorna mensagem de confirmação amigável'
+);
+
+const reloadedAfterImport = storageService.loadProgress();
+assert(
+  reloadedAfterImport.completedLessons.length === 2,
+  '14.11 Progresso importado foi persistido corretamente no localStorage'
+);
+
+// 14.12 Exportação de backup com timestamp UTC e data local
+const exportedBackup = storageService.exportBackup();
+assert(
+  exportedBackup.success === true,
+  '14.12 exportBackup gera arquivo com sucesso'
+);
+assert(
+  exportedBackup.filename.startsWith('guitar-academy-backup-'),
+  '14.12 Nome do arquivo de backup possui prefixo e data local'
+);
+const payloadCheck = exportedBackup.payload as any;
+assert(
+  Boolean(payloadCheck && typeof payloadCheck.exportDate === 'string' && payloadCheck.exportDate.includes('T')),
+  '14.12 Payload do backup possui timestamp UTC ISO (exportDate) para rastreabilidade'
+);
+assert(
+  payloadCheck && payloadCheck.localDate === todayLocalDate,
+  '14.12 Payload do backup possui data de calendário local'
+);
+
+// 14.13 Tratamento de QuotaExceededError em saveProgress
+const storageMemory = (globalThis as any).localStorage;
+const originalSetItem = storageMemory.setItem;
+storageMemory.setItem = () => {
+  const err: any = new Error('QuotaExceededError');
+  err.name = 'QuotaExceededError';
+  err.code = 22;
+  throw err;
+};
+
+const quotaResult = storageService.saveProgress(goldenState);
+assert(
+  quotaResult.success === false,
+  '14.13 saveProgress captura e reporta falha de armazenamento'
+);
+assert(
+  quotaResult.isQuotaExceeded === true,
+  '14.13 saveProgress identifica flag isQuotaExceeded'
+);
+assert(
+  Boolean(quotaResult.error?.includes('quota') || quotaResult.error?.includes('armazenamento')),
+  '14.13 Mensagem de erro orienta o usuário sobre o limite de armazenamento'
+);
+
+// Restaura setItem normal
+storageMemory.setItem = originalSetItem;
+
+// 14.14 Auditoria de código: ausência de confirm() e alert() nativos
+const lessonViewerCode = fs.readFileSync('src/components/curriculum/LessonViewer.tsx', 'utf-8');
+assert(
+  !lessonViewerCode.includes('confirm('),
+  '14.14 LessonViewer.tsx não utiliza confirm() nativo do navegador'
+);
+assert(
+  !lessonViewerCode.includes('alert('),
+  '14.14 LessonViewer.tsx não utiliza alert() nativo do navegador'
+);
+
+const routineViewCode = fs.readFileSync('src/components/routine/PracticeRoutineView.tsx', 'utf-8');
+assert(
+  !routineViewCode.includes('confirm('),
+  '14.14 PracticeRoutineView.tsx não utiliza confirm() nativo do navegador'
+);
+assert(
+  !routineViewCode.includes('alert('),
+  '14.14 PracticeRoutineView.tsx não utiliza alert() nativo do navegador'
+);
 
 console.log('\n===========================================================');
 console.log(`TOTAL DE TESTES: ${totalTests}`);

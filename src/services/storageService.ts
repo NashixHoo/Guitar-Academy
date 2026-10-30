@@ -10,6 +10,48 @@ const PROGRESS_KEY = 'guitar_academy_user_progress_v1';
 const METRONOME_KEY = 'guitar_academy_metronome_v1';
 const SEARCH_HISTORY_KEY = 'guitar_academy_search_history_v1';
 
+/**
+ * Retorna a data local (calendário do dispositivo do usuário) no formato YYYY-MM-DD.
+ * 
+ * MOTIVAÇÃO & PROBLEMA RESOLVIDO:
+ * O uso de `new Date().toISOString().split('T')[0]` obtém a data no fuso UTC (00:00Z).
+ * Em fusos com horário atrasado em relação a Greenwich (ex: Brasil UTC-3), a partir das
+ * 21:00 o UTC já virou o dia seguinte. Isso provocava reset prematuro de todayStudyTimeSeconds
+ * e gravava registros em datas futuras incorretas.
+ * 
+ * Esta função extrai ano, mês e dia no fuso horário local do estudante,
+ * garantindo alinhamento perfeito com o relógio físico e a vivência do aluno.
+ * 
+ * @param date Data opcional para conversão (padrão: new Date())
+ */
+export function getLocalDateString(date: Date = new Date()): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+export interface StorageSaveResult {
+  success: boolean;
+  error?: string;
+  isQuotaExceeded?: boolean;
+}
+
+export interface BackupValidationResult {
+  isValid: boolean;
+  error?: string;
+  progress?: UserProgress;
+  metronome?: MetronomeConfig;
+  exportDate?: string;
+  app?: string;
+}
+
+export interface ImportBackupResult {
+  success: boolean;
+  error?: string;
+  message?: string;
+}
+
 export const INITIAL_PROGRESS: UserProgress = {
   currentLessonId: 'lesson-1',
   completedLessons: [],
@@ -19,13 +61,13 @@ export const INITIAL_PROGRESS: UserProgress = {
     selectedLevel: 0,
     primaryGoal: 'fundamentals',
     dailyRoutineMinutes: 20,
-    startDate: new Date().toISOString().split('T')[0],
+    startDate: getLocalDateString(),
   },
   quizScores: {},
   frequentErrors: {},
   totalStudyTimeSeconds: 0,
   todayStudyTimeSeconds: 0,
-  lastStudyDate: new Date().toISOString().split('T')[0],
+  lastStudyDate: getLocalDateString(),
   practicedBpm: 80,
   favoriteChords: ['c-major-open', 'g-major-open', 'e-minor-open', 'a-minor-open', 'd-major-open'],
   notationPreference: 'cipher',
@@ -51,18 +93,168 @@ export const INITIAL_METRONOME: MetronomeConfig = {
   },
 };
 
+export function validateBackupData(data: unknown): BackupValidationResult {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    return {
+      isValid: false,
+      error: 'O arquivo fornecido não é um objeto JSON válido.',
+    };
+  }
+
+  const rawObj = data as Record<string, any>;
+
+  // Detecta se é o envelope completo { app, exportDate, progress, metronome } ou exportação direta de progress
+  let progressCandidate: any;
+  let metronomeCandidate: any;
+  let exportDate: string | undefined;
+  let app: string | undefined;
+
+  if ('progress' in rawObj && typeof rawObj.progress === 'object' && rawObj.progress !== null) {
+    // Envelope completo
+    progressCandidate = rawObj.progress;
+    metronomeCandidate = rawObj.metronome;
+    exportDate = typeof rawObj.exportDate === 'string' ? rawObj.exportDate : undefined;
+    app = typeof rawObj.app === 'string' ? rawObj.app : undefined;
+  } else if ('completedLessons' in rawObj || 'currentLessonId' in rawObj) {
+    // Objeto UserProgress direto
+    progressCandidate = rawObj;
+  } else {
+    return {
+      isValid: false,
+      error: 'Estrutura de dados não reconhecida. Nem envelope de backup nem dados de progresso encontrados.',
+    };
+  }
+
+  // Validação estrita de campos do progresso
+  if (typeof progressCandidate !== 'object' || progressCandidate === null || Array.isArray(progressCandidate)) {
+    return {
+      isValid: false,
+      error: 'Objeto de progresso corrompido ou ausente.',
+    };
+  }
+
+  if (progressCandidate.completedLessons !== undefined && !Array.isArray(progressCandidate.completedLessons)) {
+    return {
+      isValid: false,
+      error: 'O campo "completedLessons" deve ser uma lista de identificadores de aulas.',
+    };
+  }
+
+  if (progressCandidate.practiceLogs !== undefined && (typeof progressCandidate.practiceLogs !== 'object' || progressCandidate.practiceLogs === null || Array.isArray(progressCandidate.practiceLogs))) {
+    return {
+      isValid: false,
+      error: 'O campo "practiceLogs" deve ser um mapa de registros por aula.',
+    };
+  }
+
+  if (progressCandidate.exerciseRepetitions !== undefined && (typeof progressCandidate.exerciseRepetitions !== 'object' || progressCandidate.exerciseRepetitions === null || Array.isArray(progressCandidate.exerciseRepetitions))) {
+    return {
+      isValid: false,
+      error: 'O campo "exerciseRepetitions" deve ser um mapa de contagens por exercício.',
+    };
+  }
+
+  // Sanitização e migração segura preservando a integridade pedagógica
+  const sanitizedProgress: UserProgress = {
+    ...INITIAL_PROGRESS,
+    ...progressCandidate,
+    currentLessonId: typeof progressCandidate.currentLessonId === 'string' && progressCandidate.currentLessonId
+      ? progressCandidate.currentLessonId
+      : INITIAL_PROGRESS.currentLessonId,
+    completedLessons: Array.isArray(progressCandidate.completedLessons)
+      ? progressCandidate.completedLessons.filter((id: any): id is string => typeof id === 'string')
+      : [],
+    practiceLogs: typeof progressCandidate.practiceLogs === 'object' && progressCandidate.practiceLogs !== null && !Array.isArray(progressCandidate.practiceLogs)
+      ? progressCandidate.practiceLogs
+      : {},
+    exerciseRepetitions: typeof progressCandidate.exerciseRepetitions === 'object' && progressCandidate.exerciseRepetitions !== null && !Array.isArray(progressCandidate.exerciseRepetitions)
+      ? progressCandidate.exerciseRepetitions
+      : {},
+    studyPlan: {
+      ...INITIAL_PROGRESS.studyPlan,
+      ...(typeof progressCandidate.studyPlan === 'object' && progressCandidate.studyPlan !== null ? progressCandidate.studyPlan : {}),
+      startDate: progressCandidate.studyPlan?.startDate || getLocalDateString(),
+    },
+    quizScores: typeof progressCandidate.quizScores === 'object' && progressCandidate.quizScores !== null && !Array.isArray(progressCandidate.quizScores)
+      ? progressCandidate.quizScores
+      : {},
+    frequentErrors: typeof progressCandidate.frequentErrors === 'object' && progressCandidate.frequentErrors !== null && !Array.isArray(progressCandidate.frequentErrors)
+      ? progressCandidate.frequentErrors
+      : {},
+    totalStudyTimeSeconds: typeof progressCandidate.totalStudyTimeSeconds === 'number' && !isNaN(progressCandidate.totalStudyTimeSeconds)
+      ? Math.max(0, progressCandidate.totalStudyTimeSeconds)
+      : 0,
+    todayStudyTimeSeconds: typeof progressCandidate.todayStudyTimeSeconds === 'number' && !isNaN(progressCandidate.todayStudyTimeSeconds)
+      ? Math.max(0, progressCandidate.todayStudyTimeSeconds)
+      : 0,
+    lastStudyDate: typeof progressCandidate.lastStudyDate === 'string' && progressCandidate.lastStudyDate
+      ? progressCandidate.lastStudyDate
+      : getLocalDateString(),
+    practicedBpm: typeof progressCandidate.practicedBpm === 'number' && !isNaN(progressCandidate.practicedBpm)
+      ? Math.max(30, Math.min(260, progressCandidate.practicedBpm))
+      : 80,
+    favoriteChords: Array.isArray(progressCandidate.favoriteChords)
+      ? progressCandidate.favoriteChords.filter((c: any): c is string => typeof c === 'string')
+      : INITIAL_PROGRESS.favoriteChords,
+    notationPreference: progressCandidate.notationPreference === 'solfege' ? 'solfege' : 'cipher',
+    preferredTuning: progressCandidate.preferredTuning || 'standard',
+    dailyGoalMinutes: typeof progressCandidate.dailyGoalMinutes === 'number' && !isNaN(progressCandidate.dailyGoalMinutes)
+      ? Math.max(5, Math.min(240, progressCandidate.dailyGoalMinutes))
+      : 20,
+    themePreference: progressCandidate.themePreference === 'dark' ? 'dark' : progressCandidate.themePreference === 'system' ? 'system' : 'light',
+    achievements: Array.isArray(progressCandidate.achievements)
+      ? progressCandidate.achievements.filter((a: any): a is string => typeof a === 'string')
+      : INITIAL_PROGRESS.achievements,
+    practiceSessions: Array.isArray(progressCandidate.practiceSessions)
+      ? progressCandidate.practiceSessions
+      : [],
+  };
+
+  // Garante integridade do Perfil Pedagógico Adaptativo
+  sanitizedProgress.pedagogicalProfile = migrateLegacyProgressToPedagogical(sanitizedProgress);
+
+  // Sanitização do Metrônomo se fornecido
+  let sanitizedMetronome: MetronomeConfig | undefined;
+  if (metronomeCandidate && typeof metronomeCandidate === 'object' && !Array.isArray(metronomeCandidate)) {
+    sanitizedMetronome = {
+      ...INITIAL_METRONOME,
+      ...metronomeCandidate,
+      bpm: typeof metronomeCandidate.bpm === 'number' && !isNaN(metronomeCandidate.bpm)
+        ? Math.max(30, Math.min(300, metronomeCandidate.bpm))
+        : INITIAL_METRONOME.bpm,
+      volume: typeof metronomeCandidate.volume === 'number' && !isNaN(metronomeCandidate.volume)
+        ? Math.max(0, Math.min(1, metronomeCandidate.volume))
+        : INITIAL_METRONOME.volume,
+      timerMinutes: typeof metronomeCandidate.timerMinutes === 'number' && !isNaN(metronomeCandidate.timerMinutes)
+        ? Math.max(1, Math.min(120, metronomeCandidate.timerMinutes))
+        : INITIAL_METRONOME.timerMinutes,
+    };
+  }
+
+  return {
+    isValid: true,
+    progress: sanitizedProgress,
+    metronome: sanitizedMetronome,
+    exportDate,
+    app,
+  };
+}
+
 export const storageService = {
+  getLocalDateString,
+  validateBackupData,
+
   loadProgress(): UserProgress {
     try {
       const data = localStorage.getItem(PROGRESS_KEY);
       if (!data) return INITIAL_PROGRESS;
       const parsed: UserProgress = JSON.parse(data);
 
-      // Check if day changed to reset todayStudyTimeSeconds
-      const today = new Date().toISOString().split('T')[0];
-      if (parsed.lastStudyDate !== today) {
+      // Reset diário sincronizado estritamente com o calendário LOCAL do usuário (YYYY-MM-DD)
+      const todayLocal = getLocalDateString();
+      if (parsed.lastStudyDate !== todayLocal) {
         parsed.todayStudyTimeSeconds = 0;
-        parsed.lastStudyDate = today;
+        parsed.lastStudyDate = todayLocal;
       }
 
       // Safe migration: ensure practiceLogs, exerciseRepetitions and studyPlan exist
@@ -74,6 +266,7 @@ export const storageService = {
         studyPlan: {
           ...INITIAL_PROGRESS.studyPlan,
           ...(parsed.studyPlan || {}),
+          startDate: parsed.studyPlan?.startDate || INITIAL_PROGRESS.studyPlan.startDate,
         },
       };
 
@@ -99,12 +292,13 @@ export const storageService = {
     }
   ): UserProgress {
     const current = this.loadProgress();
+    const todayLocal = getLocalDateString();
     const existingLog = current.practiceLogs[lessonId] || {
       lessonId,
       status: 'viewed',
       practicedBpm: 60,
       confidence: 'playable_slow',
-      lastPracticedDate: new Date().toISOString().split('T')[0],
+      lastPracticedDate: todayLocal,
       timesPracticed: 0,
       needsReview: false,
     };
@@ -112,14 +306,13 @@ export const storageService = {
     const updatedLog = {
       ...existingLog,
       ...practiceData,
-      lastPracticedDate: new Date().toISOString().split('T')[0],
+      lastPracticedDate: todayLocal,
       timesPracticed: existingLog.timesPracticed + 1,
     };
 
     let updatedProfile = current.pedagogicalProfile || createInitialPedagogicalProfile();
 
     // Somente se houver domínio comprovado (ex.: status 'mastered' com metronomo ou repetições)
-    // REGRA 1 DA FASE 3: Abrir uma aula (status 'viewed') NÃO concede domínio à habilidade!
     if (practiceData.status === 'mastered') {
       const skillId = LESSON_TO_SKILL_MAP[lessonId];
       if (skillId) {
@@ -158,12 +351,13 @@ export const storageService = {
     bpm: number
   ): UserProgress {
     const current = this.loadProgress();
+    const todayLocal = getLocalDateString();
     const existingLog = current.practiceLogs[lessonId] || {
       lessonId,
       status: 'practicing',
       practicedBpm: bpm,
       confidence: 'playable_slow',
-      lastPracticedDate: new Date().toISOString().split('T')[0],
+      lastPracticedDate: todayLocal,
       timesPracticed: 0,
       needsReview: false,
     };
@@ -175,7 +369,7 @@ export const storageService = {
       exerciseRepetitions: totalCount,
       targetRepetitionsMet: targetMet || existingLog.targetRepetitionsMet,
       practicedBpm: bpm,
-      lastPracticedDate: new Date().toISOString().split('T')[0],
+      lastPracticedDate: todayLocal,
       confidence: targetMet ? ('mastered_with_metronome' as const) : existingLog.confidence,
     };
 
@@ -307,11 +501,6 @@ export const storageService = {
 
     session.steps.forEach((step) => {
       if (step.skillId && step.completed) {
-        // Converte autoavaliação honesta em evidência proporcional:
-        // 'needs_work' -> score 60
-        // 'consistent' -> score 85
-        // 'mastered' -> score 95
-        // (Nota: nunca concede domínio automático sozinho)
         const score = step.selfRating === 'mastered' ? 95 : step.selfRating === 'consistent' ? 85 : 60;
         
         updatedProfile = recordSkillEvidence(updatedProfile, step.skillId, {
@@ -339,7 +528,7 @@ export const storageService = {
       todayStudyTimeSeconds: todaySeconds,
       totalStudyTimeSeconds: totalSeconds,
       practicedBpm: updatedBpm,
-      lastStudyDate: new Date().toISOString().split('T')[0],
+      lastStudyDate: getLocalDateString(),
       practiceSessions: updatedSessions,
       achievements: updatedAchievements,
       pedagogicalProfile: updatedProfile,
@@ -349,12 +538,24 @@ export const storageService = {
     return updated;
   },
 
-
-  saveProgress(progress: UserProgress): void {
+  saveProgress(progress: UserProgress): StorageSaveResult {
     try {
       localStorage.setItem(PROGRESS_KEY, JSON.stringify(progress));
-    } catch (err) {
+      return { success: true };
+    } catch (err: any) {
       console.warn('Failed to save progress to localStorage', err);
+      const isQuota =
+        err?.name === 'QuotaExceededError' ||
+        err?.name === 'NS_ERROR_DOM_QUOTA_REACHED' ||
+        err?.code === 22 ||
+        err?.code === 1014;
+      return {
+        success: false,
+        isQuotaExceeded: isQuota,
+        error: isQuota
+          ? 'O limite de armazenamento local (quota) do navegador foi atingido. Libere espaço ou faça um backup.'
+          : (err?.message || 'Erro ao gravar dados no armazenamento local.'),
+      };
     }
   },
 
@@ -368,46 +569,122 @@ export const storageService = {
     }
   },
 
-  saveMetronome(config: MetronomeConfig): void {
+  saveMetronome(config: MetronomeConfig): StorageSaveResult {
     try {
       localStorage.setItem(METRONOME_KEY, JSON.stringify(config));
-    } catch (err) {
+      return { success: true };
+    } catch (err: any) {
       console.warn('Failed to save metronome config to localStorage', err);
+      const isQuota =
+        err?.name === 'QuotaExceededError' ||
+        err?.name === 'NS_ERROR_DOM_QUOTA_REACHED' ||
+        err?.code === 22;
+      return {
+        success: false,
+        isQuotaExceeded: isQuota,
+        error: isQuota
+          ? 'Limite de armazenamento atingido ao salvar configurações do metrônomo.'
+          : (err?.message || 'Erro ao gravar configurações do metrônomo.'),
+      };
     }
   },
 
-  exportBackup(): void {
-    const progress = this.loadProgress();
-    const metronome = this.loadMetronome();
-    const payload = {
-      exportDate: new Date().toISOString(),
-      app: 'Guitar Academy V1.0',
-      progress,
-      metronome,
-    };
+  exportBackup(): { success: boolean; filename: string; payload: unknown; error?: string } {
+    try {
+      const progress = this.loadProgress();
+      const metronome = this.loadMetronome();
+      const localDate = getLocalDateString();
+      const filename = `guitar-academy-backup-${localDate}.json`;
+      const payload = {
+        exportDate: new Date().toISOString(), // Timestamp real exato em UTC
+        localDate, // Data de calendário local
+        app: 'Guitar Academy V1.0',
+        progress,
+        metronome,
+      };
 
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `guitar-academy-backup-${new Date().toISOString().split('T')[0]}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+      if (typeof window !== 'undefined' && typeof document !== 'undefined' && typeof Blob !== 'undefined') {
+        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+
+      return {
+        success: true,
+        filename,
+        payload,
+      };
+    } catch (err: any) {
+      console.error('Falha ao exportar backup', err);
+      return {
+        success: false,
+        filename: '',
+        payload: null,
+        error: err?.message || 'Falha ao gerar arquivo de backup.',
+      };
+    }
   },
 
-  importBackup(jsonString: string): boolean {
+  importBackup(jsonString: string): ImportBackupResult {
     try {
-      const parsed = JSON.parse(jsonString);
-      if (parsed.progress) {
-        this.saveProgress(parsed.progress);
+      if (!jsonString || typeof jsonString !== 'string' || !jsonString.trim()) {
+        return {
+          success: false,
+          error: 'O arquivo de backup está vazio ou é inválido.',
+        };
       }
-      if (parsed.metronome) {
-        this.saveMetronome(parsed.metronome);
+
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(jsonString);
+      } catch (jsonErr: any) {
+        return {
+          success: false,
+          error: `Formato JSON inválido: ${jsonErr?.message || 'erro de sintaxe no arquivo'}.`,
+        };
       }
-      return true;
-    } catch (err) {
-      console.error('Failed to parse backup JSON', err);
-      return false;
+
+      const validation = validateBackupData(parsed);
+      if (!validation.isValid || !validation.progress) {
+        return {
+          success: false,
+          error: validation.error || 'A estrutura do arquivo não é compatível com o Guitar Academy.',
+        };
+      }
+
+      // Salva apenas após validação 100% aprovada
+      const saveResult = this.saveProgress(validation.progress);
+      if (!saveResult.success) {
+        return {
+          success: false,
+          error: saveResult.error || 'Falha ao gravar o progresso importado no armazenamento local.',
+        };
+      }
+
+      if (validation.metronome) {
+        const metronomeResult = this.saveMetronome(validation.metronome);
+        if (!metronomeResult.success) {
+          console.warn('Configuração de metrônomo não pôde ser salva:', metronomeResult.error);
+        }
+      }
+
+      const lessonCount = validation.progress.completedLessons?.length || 0;
+      return {
+        success: true,
+        message: `Backup restaurado com sucesso! (${lessonCount} aulas concluídas recuperadas).`,
+      };
+    } catch (err: any) {
+      console.error('Failed to import backup', err);
+      return {
+        success: false,
+        error: `Falha crítica na importação: ${err?.message || 'erro desconhecido'}.`,
+      };
     }
   },
 

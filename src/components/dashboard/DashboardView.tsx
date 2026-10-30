@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { UserProgress, NavigationTab } from '../../types';
 import { CURRICULUM_LEVELS } from '../../data/curriculum';
+import { SOLO_LESSONS } from '../../data/soloCourse';
 import { storageService } from '../../services/storageService';
 import { 
   Play, 
@@ -26,6 +27,7 @@ import {
   RotateCcw,
   AlertCircle
 } from 'lucide-react';
+import { IniciarIcon, PraticarIcon, AulasIcon } from '../common/GuitarIcons';
 import { DailyGoalSettings } from './DailyGoalSettings';
 import {
   getAdaptiveRecommendation,
@@ -49,15 +51,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [isGoalSettingsModalOpen, setIsGoalSettingsModalOpen] = useState<boolean>(false);
   const [toastFeedback, setToastFeedback] = useState<string | null>(null);
 
-  // Find current lesson
-  const allLessons = CURRICULUM_LEVELS.flatMap((l) => l.lessons);
+  // Find current lesson (supporting canonical curriculum & solo guitar course)
+  const allCurriculumLessons = CURRICULUM_LEVELS.flatMap((l) => l.lessons);
+  const allLessons = [...allCurriculumLessons, ...SOLO_LESSONS];
   const currentLesson =
     allLessons.find((l) => l.id === progress.currentLessonId) ||
     allLessons.find((l) => !progress.completedLessons.includes(l.id)) ||
     allLessons[0];
 
   const completedCount = progress.completedLessons.length;
-  const progressPercent = Math.round((completedCount / allLessons.length) * 100);
+  const progressPercent = Math.round((completedCount / allCurriculumLessons.length) * 100);
 
   const hours = Math.floor(progress.totalStudyTimeSeconds / 3600);
   const minutes = Math.floor((progress.totalStudyTimeSeconds % 3600) / 60);
@@ -117,7 +120,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       ...progress,
       todayStudyTimeSeconds: (progress.todayStudyTimeSeconds || 0) + addSeconds,
       totalStudyTimeSeconds: (progress.totalStudyTimeSeconds || 0) + addSeconds,
-      lastStudyDate: new Date().toISOString().split('T')[0]
+      lastStudyDate: storageService.getLocalDateString()
     };
     if (onUpdateProgress) {
       onUpdateProgress(updated);
@@ -170,7 +173,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               onClick={() => onSelectLesson(currentLesson.id)}
               className="luxury-btn-primary flex items-center justify-center gap-3 px-6 sm:px-7 py-3.5 rounded-2xl active:scale-95 font-bold text-sm sm:text-base transition w-full sm:w-auto shadow-xs"
             >
-              <Play className="w-5 h-5 fill-current" />
+              <IniciarIcon className="w-5 h-5 ml-0.5" />
               <span>Continuar Aula Atual</span>
             </button>
 
@@ -178,7 +181,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               onClick={() => onNavigateTab('practice-routine')}
               className="flex items-center justify-center gap-2 px-5 sm:px-6 py-3.5 rounded-2xl bg-[#FAF1F2] hover:bg-[#F3E2E5] text-[#7B1E2B] font-bold text-xs sm:text-sm border border-[#E8D3D6] transition shadow-2xs w-full sm:w-auto"
             >
-              <Flame className="w-4 h-4 text-[#B52A3A]" />
+              <PraticarIcon className="w-4 h-4 text-[#B52A3A]" />
               <span>Central de Prática (5/10/15/30 min)</span>
             </button>
 
@@ -186,7 +189,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               onClick={() => onNavigateTab('curriculum')}
               className="flex items-center justify-center gap-2 px-5 py-3.5 rounded-2xl bg-white hover:bg-[#FAF1F2] text-[#25252A] font-bold text-xs sm:text-sm border border-[#D9D9D9] transition shadow-2xs w-full sm:w-auto"
             >
-              <BookOpen className="w-4 h-4 text-[#7B1E2B]" />
+              <AulasIcon className="w-4 h-4 text-[#7B1E2B]" />
               <span>Ver Trilha (6 Níveis)</span>
             </button>
           </div>
@@ -568,6 +571,37 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </span>
           </div>
         </div>
+      </div>
+
+      {/* DESTAQUE: FORMAÇÃO EM GUITARRA SOLO (20 AULAS) */}
+      <div className="bg-gradient-to-r from-[#25252A] to-[#3B151E] text-white p-5 sm:p-6 rounded-3xl border border-[#7B1E2B]/50 shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="space-y-1 max-w-xl">
+          <div className="flex items-center gap-2">
+            <span className="px-2.5 py-0.5 rounded-full bg-[#B52A3A] text-white text-[10px] font-extrabold uppercase tracking-wider">
+              Curso Mestre
+            </span>
+            <span className="text-xs text-amber-300 font-bold flex items-center gap-1">
+              <Sparkles className="w-3.5 h-3.5" />
+              20 Aulas • 5 Etapas Pedagógicas
+            </span>
+          </div>
+          <h2 className="text-lg sm:text-xl font-black text-white">
+            Formação Progressiva em Guitarra Solo
+          </h2>
+          <p className="text-xs text-stone-300 leading-relaxed">
+            Palhetada alternada, 5 padrões da pentatônica menor, bends com biomecânica de 3 dedos, legato, vibrato, notas-alvo e o projeto final de 16 compassos.
+          </p>
+        </div>
+        <button
+          onClick={() => {
+            onNavigateTab('curriculum');
+          }}
+          className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-[#B52A3A] hover:bg-[#D9384B] text-white font-bold text-xs sm:text-sm shadow-xs transition self-start md:self-auto shrink-0"
+        >
+          <Guitar className="w-4 h-4" />
+          <span>Acessar Formação de Solo</span>
+          <ArrowRight className="w-4 h-4" />
+        </button>
       </div>
 
       {/* Quick Launch Tools Grid */}

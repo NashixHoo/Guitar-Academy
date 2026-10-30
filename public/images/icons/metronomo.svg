@@ -1,1 +1,12 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 22h14l-4-19H9z"/><line x1="12" y1="18" x2="17" y2="7"/><circle cx="15.5" cy="10" r="1.5"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+  <!-- Corpo piramidal do metrônomo analógico -->
+  <path d="M7 21L10 3.5H14L17 21Z"/>
+  <!-- Base de apoio horizontal -->
+  <line x1="5" y1="21" x2="19" y2="21"/>
+  <!-- Haste do pêndulo em batida rítmica -->
+  <line x1="12" y1="18.5" x2="16.5" y2="5.5"/>
+  <!-- Peso deslizante de tempo com acabamento preciso -->
+  <circle cx="15.2" cy="9.2" r="1.8" fill="currentColor"/>
+  <!-- Marcação de escala de BPM -->
+  <line x1="10" y1="13" x2="14" y2="13"/>
+</svg>

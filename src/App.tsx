@@ -10,6 +10,7 @@ import {
 } from './services/navigationService';
 import { useSwipeNavigation } from './hooks/useSwipeNavigation';
 import { CURRICULUM_LEVELS } from './data/curriculum';
+import { SOLO_LESSONS } from './data/soloCourse';
 import { Header } from './components/layout/Header';
 import { Navigation } from './components/layout/Navigation';
 import { BottomNavigation } from './components/layout/BottomNavigation';
@@ -249,8 +250,8 @@ export default function App() {
       ? previousEntry.title 
       : SCREEN_TITLES[currentTab] || 'Anterior';
 
-  // Localiza a aula ativa se selecionada
-  const allLessons = CURRICULUM_LEVELS.flatMap((l) => l.lessons);
+  // Localiza a aula ativa se selecionada (suporta currículo canônico e formação solo)
+  const allLessons: Lesson[] = [...CURRICULUM_LEVELS.flatMap((l) => l.lessons), ...SOLO_LESSONS];
   const activeLesson: Lesson | undefined = selectedLessonId
     ? allLessons.find((l) => l.id === selectedLessonId)
     : undefined;
@@ -260,7 +261,7 @@ export default function App() {
       {/* 1. PAPEL DE PAREDE FIXO GLOBAL (Estúdio Cinematográfico com Guitarra Elétrica e Bateria) */}
       <div 
         aria-hidden="true" 
-        className="ga-wallpaper"
+        className="ga-wallpaper fixed inset-0 pointer-events-none -z-10"
         style={{
           backgroundImage: `var(--ga-wallpaper-overlay), url("${import.meta.env.BASE_URL}images/backgrounds/guitar-academy-background.webp"), url("./images/backgrounds/guitar-academy-background.webp"), url("/images/backgrounds/guitar-academy-background.webp")`
         }}

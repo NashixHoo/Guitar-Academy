@@ -1,25 +1,25 @@
 import React from 'react';
 import { NavigationTab } from '../../types';
-import { 
-  Home, 
-  GraduationCap, 
-  Guitar, 
-  BookOpen, 
-  Clock, 
-  Compass, 
-  Music, 
-  Headphones, 
-  Activity, 
-  BookMarked, 
-  Trophy, 
-  Settings, 
-  Target,
-  Radio,
-  Zap,
-  Sparkles,
-  ShieldCheck,
-  X
-} from 'lucide-react';
+import { X } from 'lucide-react';
+import {
+  InicioIcon,
+  AulasIcon,
+  TeoriaIcon,
+  BibliotecaIcon,
+  LeituraIcon,
+  MetasIcon,
+  MetronomoIcon,
+  AfinadorIcon,
+  BracoGuitarraIcon,
+  AcordesIcon,
+  CoachIcon,
+  TecnicaIcon,
+  OuvidoIcon,
+  ConquistasIcon,
+  ProfessorAIIcon,
+  DiagnosticoIcon,
+  ConfiguracoesIcon,
+} from '../common/GuitarIcons';
 import { PWAInstallButton } from '../common/PWAInstallButton';
 
 interface NavigationProps {
@@ -42,33 +42,33 @@ export const Navigation: React.FC<NavigationProps> = ({
     {
       title: '1. Estudar',
       items: [
-        { id: 'home', label: 'Início', icon: Home },
-        { id: 'curriculum', label: 'Formação & Aulas', icon: GraduationCap, badge: '6 Níveis' },
-        { id: 'theory', label: 'Teoria Musical', icon: Compass },
-        { id: 'library', label: 'Biblioteca de Estudos', icon: BookMarked },
-        { id: 'reading', label: 'Leitura Musical', icon: Music },
+        { id: 'home', label: 'Início', icon: InicioIcon },
+        { id: 'curriculum', label: 'Formação & Aulas', icon: AulasIcon, badge: '6 Níveis' },
+        { id: 'theory', label: 'Teoria Musical', icon: TeoriaIcon },
+        { id: 'library', label: 'Biblioteca de Estudos', icon: BibliotecaIcon },
+        { id: 'reading', label: 'Leitura Musical', icon: LeituraIcon },
       ],
     },
     {
       title: '2. Praticar',
       items: [
-        { id: 'practice-routine', label: 'Central de Prática', icon: Target, badge: '5/10/15/30m' },
-        { id: 'metronome', label: 'Metrônomo Pro', icon: Clock, badge: 'Áudio Real' },
-        { id: 'tuner', label: 'Afinador Pro', icon: Radio, badge: 'Microfone Real' },
-        { id: 'fretboard', label: 'Braço da Guitarra', icon: Guitar },
-        { id: 'chords', label: 'Dicionário de Acordes', icon: BookOpen },
-        { id: 'guitar-coach', label: 'Guitar Coach', icon: Zap, badge: 'Treino c/ Áudio' },
-        { id: 'technique', label: 'Técnica & Exercícios', icon: Activity },
-        { id: 'ear-training', label: 'Treino Auditivo', icon: Headphones },
+        { id: 'practice-routine', label: 'Central de Prática', icon: MetasIcon, badge: '5/10/15/30m' },
+        { id: 'metronome', label: 'Metrônomo Pro', icon: MetronomoIcon, badge: 'Áudio Real' },
+        { id: 'tuner', label: 'Afinador Pro', icon: AfinadorIcon, badge: 'Microfone Real' },
+        { id: 'fretboard', label: 'Braço da Guitarra', icon: BracoGuitarraIcon },
+        { id: 'chords', label: 'Dicionário de Acordes', icon: AcordesIcon },
+        { id: 'guitar-coach', label: 'Guitar Coach', icon: CoachIcon, badge: 'Treino c/ Áudio' },
+        { id: 'technique', label: 'Técnica & Exercícios', icon: TecnicaIcon },
+        { id: 'ear-training', label: 'Treino Auditivo', icon: OuvidoIcon },
       ],
     },
     {
       title: '3. Evoluir',
       items: [
-        { id: 'progress', label: 'Meu Progresso', icon: Trophy },
-        { id: 'professor-ai', label: 'Professor IA', icon: Sparkles, badge: 'Gemini' },
-        { id: 'diagnostics', label: 'Diagnóstico do Sistema', icon: ShieldCheck, badge: 'Auditoria' },
-        { id: 'settings', label: 'Configurações', icon: Settings },
+        { id: 'progress', label: 'Meu Progresso', icon: ConquistasIcon },
+        { id: 'professor-ai', label: 'Professor IA', icon: ProfessorAIIcon, badge: 'Gemini' },
+        { id: 'diagnostics', label: 'Diagnóstico do Sistema', icon: DiagnosticoIcon, badge: 'Auditoria' },
+        { id: 'settings', label: 'Configurações', icon: ConfiguracoesIcon },
       ],
     },
   ];
