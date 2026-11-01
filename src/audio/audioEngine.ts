@@ -36,28 +36,117 @@ class AudioEngine {
   };
   private onBpmChangeCallback: ((newBpm: number) => void) | null = null;
 
+  private hasSetupLifecycleListeners: boolean = false;
+
   constructor() {
     // AudioContext will be initialized on first user gesture
+    if (typeof window !== 'undefined') {
+      this.setupLifecycleListeners();
+    }
   }
 
   public async initAudio(): Promise<AudioContext> {
     if (!this.ctx) {
-      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      this.ctx = new AudioCtx();
-      this.masterGain = this.ctx.createGain();
-      this.masterGain.gain.setValueAtTime(0.8, this.ctx.currentTime);
-      this.masterGain.connect(this.ctx.destination);
+      if (typeof window !== 'undefined') {
+        const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+        if (AudioCtx) {
+          this.ctx = new AudioCtx();
+          this.masterGain = this.ctx.createGain();
+          this.masterGain.gain.setValueAtTime(0.8, this.ctx.currentTime);
+          this.masterGain.connect(this.ctx.destination);
+        }
+      }
     }
 
-    if (this.ctx.state === 'suspended') {
-      await this.ctx.resume();
+    if (this.ctx && this.ctx.state === 'suspended') {
+      try {
+        await this.ctx.resume();
+      } catch (err) {
+        console.warn('AudioContext resume pendente de interação do usuário:', err);
+      }
     }
-    this.isUnlocked = true;
-    return this.ctx;
+    this.isUnlocked = this.ctx?.state === 'running';
+    return this.ctx as AudioContext;
   }
 
   public getContext(): AudioContext | null {
     return this.ctx;
+  }
+
+  public getContextState(): AudioContextState | 'uninitialized' {
+    return this.ctx ? this.ctx.state : 'uninitialized';
+  }
+
+  public isContextSuspended(): boolean {
+    return this.ctx?.state === 'suspended';
+  }
+
+  public isMetronomeActive(): boolean {
+    return this.isMetronomeRunning;
+  }
+
+  /**
+   * Tenta recuperar com segurança o contexto de áudio após suspensão pelo navegador/SO
+   */
+  public async resumeAudio(): Promise<boolean> {
+    if (!this.ctx) {
+      await this.initAudio();
+      const currentCtx = this.ctx as AudioContext | null;
+      return currentCtx !== null && currentCtx.state === 'running';
+    }
+
+    if (this.ctx.state === 'suspended') {
+      try {
+        await this.ctx.resume();
+      } catch (err) {
+        console.warn('Falha ao retomar AudioContext:', err);
+        return false;
+      }
+    }
+
+    this.isUnlocked = this.ctx.state === 'running';
+    return this.isUnlocked;
+  }
+
+  /**
+   * Liberação completa de recursos e encerramento do AudioContext
+   */
+  public async closeAudio(): Promise<void> {
+    this.stopMetronome();
+    if (this.masterGain) {
+      try {
+        this.masterGain.disconnect();
+      } catch {}
+      this.masterGain = null;
+    }
+    if (this.ctx && this.ctx.state !== 'closed') {
+      try {
+        await this.ctx.close();
+      } catch {}
+      this.ctx = null;
+    }
+    this.isUnlocked = false;
+  }
+
+  private setupLifecycleListeners() {
+    if (this.hasSetupLifecycleListeners) return;
+    this.hasSetupLifecycleListeners = true;
+
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden && this.ctx && this.ctx.state === 'suspended' && this.isMetronomeRunning) {
+          this.resumeAudio();
+        }
+      });
+    }
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('pageshow', () => {
+        if (this.ctx && this.ctx.state === 'suspended' && this.isMetronomeRunning) {
+          this.resumeAudio();
+        }
+      });
+    }
   }
 
   public setMasterVolume(val: number) {
@@ -230,6 +319,11 @@ class AudioEngine {
     const subMultiplier = this.getSubdivisionMultiplier();
     const secondsPerQuarter = 60.0 / this.bpm;
     const secondsPerSubBeat = secondsPerQuarter / subMultiplier;
+
+    // Prevenção de acúmulo de agendamentos ("metronome burst") ao retornar de suspensão no mobile
+    if (this.nextBeatTime < this.ctx.currentTime) {
+      this.nextBeatTime = this.ctx.currentTime + 0.05;
+    }
 
     while (this.nextBeatTime < this.ctx.currentTime + scheduleAheadTime) {
       const isQuarterBeat = (this.currentBeat % subMultiplier) === 0;

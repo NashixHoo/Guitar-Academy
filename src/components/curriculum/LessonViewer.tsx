@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Lesson, UserProgress, SoloLesson } from '../../types';
+import { Lesson, UserProgress, SoloLesson, ViolaoLesson } from '../../types';
 import { InteractiveFretboard } from '../fretboard/InteractiveFretboard';
 import { audioEngine } from '../../audio/audioEngine';
 import { storageService } from '../../services/storageService';
 import { CURRICULUM_LEVELS } from '../../data/curriculum';
 import { SOLO_LESSONS } from '../../data/soloCourse';
+import { VIOLAO_LESSONS } from '../../data/violaoCourse';
 import { 
   CheckCircle2, 
   HelpCircle, 
@@ -47,7 +48,11 @@ export const LessonViewer: React.FC<LessonViewerProps> = ({
   onOpenMetronomeAtBpm,
   onOpenTuner,
 }) => {
-  const soloLesson = lesson.id.startsWith('solo-lesson-') ? (lesson as unknown as SoloLesson) : null;
+  const isSoloLesson = lesson.id.startsWith('solo-lesson-');
+  const isViolaoLesson = lesson.id.startsWith('violao-lesson-');
+  const soloLesson = isSoloLesson ? (lesson as unknown as SoloLesson) : null;
+  const violaoLesson = isViolaoLesson ? (lesson as unknown as ViolaoLesson) : null;
+  const extendedLesson = soloLesson || violaoLesson;
   const currentLog = progress.practiceLogs?.[lesson.id];
   const [selectedAnswers, setSelectedAnswers] = useState<Record<string, number>>({});
   const [quizSubmitted, setQuizSubmitted] = useState<boolean>(false);
@@ -71,8 +76,9 @@ export const LessonViewer: React.FC<LessonViewerProps> = ({
 
   // Practical exercise repetitions tracking
   const exercise = lesson.practicalExercise;
+  const exerciseId = exercise?.id || `${lesson.id}-ex`;
   const currentRepetitions = exercise
-    ? progress.exerciseRepetitions?.[exercise.id] ?? currentLog?.exerciseRepetitions ?? 0
+    ? progress.exerciseRepetitions?.[exerciseId] ?? currentLog?.exerciseRepetitions ?? 0
     : 0;
 
   // Acessibilidade por teclado (Escape fecha o modal)
@@ -157,16 +163,17 @@ export const LessonViewer: React.FC<LessonViewerProps> = ({
   };
 
   const playSoloDemonstrationAudio = () => {
-    if (!soloLesson || !soloLesson.demonstrationAudioNotes || soloLesson.demonstrationAudioNotes.length === 0) return;
+    const audioNotes = extendedLesson?.demonstrationAudioNotes;
+    if (!audioNotes || audioNotes.length === 0) return;
     if (isPlayingSoloAudio) return;
 
     setIsPlayingSoloAudio(true);
     let cumulativeDelay = 0;
 
-    soloLesson.demonstrationAudioNotes.forEach((note, idx) => {
+    audioNotes.forEach((note, idx) => {
       setTimeout(() => {
         audioEngine.playGuitarNote(note.freq, note.duration, 0.7);
-        if (idx === soloLesson.demonstrationAudioNotes!.length - 1) {
+        if (idx === audioNotes.length - 1) {
           setTimeout(() => setIsPlayingSoloAudio(false), note.duration * 1000);
         }
       }, cumulativeDelay * 1000);
@@ -179,7 +186,7 @@ export const LessonViewer: React.FC<LessonViewerProps> = ({
     const newCount = currentRepetitions + 1;
     const updated = storageService.recordExerciseRepetition(
       lesson.id,
-      exercise.id,
+      exerciseId,
       newCount,
       exercise.targetRepetitions,
       exercise.targetBpm
@@ -197,7 +204,7 @@ export const LessonViewer: React.FC<LessonViewerProps> = ({
     const newCount = Math.max(0, currentRepetitions - 1);
     const updated = storageService.recordExerciseRepetition(
       lesson.id,
-      exercise.id,
+      exerciseId,
       newCount,
       exercise.targetRepetitions,
       exercise.targetBpm
@@ -214,7 +221,7 @@ export const LessonViewer: React.FC<LessonViewerProps> = ({
     if (!exercise) return;
     const updated = storageService.recordExerciseRepetition(
       lesson.id,
-      exercise.id,
+      exerciseId,
       0,
       exercise.targetRepetitions,
       exercise.targetBpm
@@ -293,8 +300,11 @@ export const LessonViewer: React.FC<LessonViewerProps> = ({
     setQuizSubmitted(false);
   };
 
-  const isSoloLesson = lesson.id.startsWith('solo-lesson-');
-  const allLessons = isSoloLesson ? SOLO_LESSONS : CURRICULUM_LEVELS.flatMap((l) => l.lessons);
+  const allLessons = isViolaoLesson
+    ? VIOLAO_LESSONS
+    : isSoloLesson
+    ? SOLO_LESSONS
+    : CURRICULUM_LEVELS.flatMap((l) => l.lessons);
   const currentIndex = allLessons.findIndex((l) => l.id === lesson.id);
   const nextLesson = currentIndex >= 0 && currentIndex < allLessons.length - 1 ? allLessons[currentIndex + 1] : null;
 
@@ -490,8 +500,8 @@ export const LessonViewer: React.FC<LessonViewerProps> = ({
             </div>
           )}
 
-          {/* Interactive Audio Sequence for Solo Lesson */}
-          {soloLesson && soloLesson.demonstrationAudioNotes && soloLesson.demonstrationAudioNotes.length > 0 && currentPartIndex === 0 && (
+          {/* Interactive Audio Sequence for Solo / Violao Lesson */}
+          {extendedLesson && extendedLesson.demonstrationAudioNotes && extendedLesson.demonstrationAudioNotes.length > 0 && currentPartIndex === 0 && (
             <div className="bg-[#F8F7F4] dark:bg-[#1A1A20] p-4 rounded-2xl border border-[#D9D9D9] dark:border-[#33333E] flex flex-wrap items-center justify-between gap-3">
               <div>
                 <span className="text-xs font-bold text-[#7B1E2B] dark:text-[#FF6B81] flex items-center gap-1.5">
@@ -881,31 +891,94 @@ export const LessonViewer: React.FC<LessonViewerProps> = ({
             </div>
           </div>
 
+          {/* Diagramas de Acordes Específicos para Violão Físico */}
+          {violaoLesson && violaoLesson.chordDiagrams && violaoLesson.chordDiagrams.length > 0 && (
+            <div className="bg-[#FAF1F2] dark:bg-[#2D1B22] p-5 rounded-2xl border border-[#E8D3D6] dark:border-[#4D2830] space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-xs font-bold text-[#7B1E2B] dark:text-[#FF6B81] uppercase tracking-wider flex items-center gap-1.5 font-mono-code">
+                  <Guitar className="w-4 h-4 text-[#B52A3A]" />
+                  Acordes da Aula no Violão Físico ({violaoLesson.chordDiagrams.length})
+                </span>
+                <span className="text-[10px] text-[#666672] dark:text-[#B8B3C0]">
+                  Afinação Padrão: 6ª(E2) • 5ª(A2) • 4ª(D3) • 3ª(G3) • 2ª(B3) • 1ª(E4)
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {violaoLesson.chordDiagrams.map((chord, cIdx) => (
+                  <div key={cIdx} className="bg-white dark:bg-[#25252A] p-4 rounded-xl border border-[#E8D3D6] dark:border-[#4D2830] space-y-2">
+                    <div className="flex items-center justify-between border-b pb-1.5 border-stone-200 dark:border-stone-700">
+                      <div className="flex items-baseline gap-1.5">
+                        <span className="text-base font-black text-[#7B1E2B] dark:text-[#FF6B81]">
+                          {chord.symbol || chord.name}
+                        </span>
+                        {chord.namePt && (
+                          <span className="text-xs font-semibold text-[#666672] dark:text-[#B8B3C0]">
+                            ({chord.namePt})
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[10px] font-mono-code bg-[#F5E8EA] dark:bg-[#381A25] text-[#7B1E2B] dark:text-[#FF6B81] px-2 py-0.5 rounded font-bold">
+                        {chord.baseFret ? `Casa base ${chord.baseFret}` : chord.category || 'Acorde Aberto'}
+                      </span>
+                    </div>
+
+                    <div className="font-mono-code text-xs text-[#25252A] dark:text-[#F8F7F4] space-y-1">
+                      <div className="text-[10px] text-[#666672] dark:text-[#B8B3C0]">
+                        Cordas: 6ª(E) 5ª(A) 4ª(D) 3ª(G) 2ª(B) 1ª(E)
+                      </div>
+                      <div className="bg-stone-50 dark:bg-stone-900/60 p-2 rounded border border-stone-200 dark:border-stone-800 space-y-0.5">
+                        <div>Casas: <strong className="text-[#7B1E2B] dark:text-[#FF6B81]">{chord.frets.map(f => f === -1 ? 'X' : f).join(' ')}</strong></div>
+                        <div>Dedos: <strong className="text-[#25252A] dark:text-white">{chord.fingers.join(' ')}</strong></div>
+                      </div>
+                    </div>
+
+                    {chord.barre && (
+                      <div className="text-[10px] font-bold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 p-1.5 rounded border border-amber-200 dark:border-amber-900/50">
+                        Pestana na casa {chord.barre.fret} (cordas {chord.barre.fromString}ª a {chord.barre.toString}ª)
+                      </div>
+                    )}
+
+                    {chord.notes && (
+                      <div className="text-[10px] text-[#666672] dark:text-[#B8B3C0]">
+                        Notas: {chord.notes.join(' - ')}
+                      </div>
+                    )}
+
+                    <p className="text-[11px] text-[#4D4D54] dark:text-[#B8B3C0] italic leading-tight">
+                      💡 {chord.tips}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Aplicação Musical em Lick / Fraseado Real */}
-          {soloLesson && soloLesson.musicalApplication && (
+          {extendedLesson && extendedLesson.musicalApplication && (
             <div className="bg-[#F8F7F4] dark:bg-[#1A1A20] p-5 rounded-2xl border border-[#D9D9D9] dark:border-[#33333E] space-y-3">
               <span className="text-xs font-bold text-[#7B1E2B] dark:text-[#FF6B81] uppercase tracking-wider flex items-center gap-1.5">
                 <Sparkles className="w-4 h-4 text-[#B52A3A]" />
-                {soloLesson.musicalApplication.title}
+                {extendedLesson.musicalApplication.title}
               </span>
               <p className="text-xs text-[#666672] dark:text-[#B8B3C0] leading-relaxed">
-                {soloLesson.musicalApplication.description}
+                {extendedLesson.musicalApplication.description}
               </p>
               <pre className="bg-[#1A1A20] p-4 rounded-xl text-xs sm:text-sm font-mono-code text-[#F8F7F4] overflow-x-auto border border-[#33333E] whitespace-pre">
-                {soloLesson.musicalApplication.tab}
+                {extendedLesson.musicalApplication.tab}
               </pre>
             </div>
           )}
 
-          {/* Erros Frequentes na Guitarra Física & Como Evitar */}
-          {soloLesson && soloLesson.commonErrors && soloLesson.commonErrors.length > 0 && (
+          {/* Erros Frequentes no Instrumento Físico & Como Evitar */}
+          {extendedLesson && extendedLesson.commonErrors && extendedLesson.commonErrors.length > 0 && (
             <div className="bg-rose-50/60 dark:bg-rose-950/20 p-5 rounded-2xl border border-rose-200 dark:border-rose-900/50 space-y-3">
               <span className="text-xs font-bold text-rose-800 dark:text-rose-300 uppercase tracking-wider flex items-center gap-1.5">
                 <AlertCircle className="w-4 h-4 text-rose-600" />
-                Erros Frequentes na Guitarra Física & Solução Biomecânica
+                Erros Frequentes no Instrumento Físico & Solução Biomecânica
               </span>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {soloLesson.commonErrors.map((err, eIdx) => (
+                {extendedLesson.commonErrors.map((err, eIdx) => (
                   <div key={eIdx} className="bg-white dark:bg-[#25252A] p-3 rounded-xl border border-rose-100 dark:border-rose-900/40 text-xs space-y-1">
                     <div className="font-bold text-rose-900 dark:text-rose-200">❌ {err.issue}</div>
                     <div className="text-[#666672] dark:text-[#B8B3C0]">✅ <strong className="text-[#25252A] dark:text-white">Solução:</strong> {err.solution}</div>
@@ -916,17 +989,17 @@ export const LessonViewer: React.FC<LessonViewerProps> = ({
           )}
 
           {/* Desafio Prático & Missão de Consolidação */}
-          {soloLesson && soloLesson.challenge && (
+          {extendedLesson && extendedLesson.challenge && (
             <div className="bg-amber-50/60 dark:bg-amber-950/20 p-5 rounded-2xl border border-amber-200 dark:border-amber-900/50 space-y-2">
               <span className="text-xs font-bold text-amber-900 dark:text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
                 <Trophy className="w-4 h-4 text-amber-600" />
-                {soloLesson.challenge.title}
+                {extendedLesson.challenge.title}
               </span>
               <p className="text-xs text-[#25252A] dark:text-[#E0DDE5] font-medium leading-relaxed">
-                {soloLesson.challenge.description}
+                {extendedLesson.challenge.description}
               </p>
               <div className="p-2.5 rounded-lg bg-white dark:bg-[#25252A] border border-amber-200 dark:border-amber-900/40 text-xs font-mono-code text-amber-900 dark:text-amber-200">
-                📌 Instrução: {soloLesson.challenge.instruction}
+                📌 Instrução: {extendedLesson.challenge.instruction}
               </div>
             </div>
           )}

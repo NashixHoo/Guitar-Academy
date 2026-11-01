@@ -56,7 +56,7 @@ export interface LessonPart {
 }
 
 export interface PracticalExercise {
-  id: string;
+  id?: string;
   title: string;
   subtitle: string;
   targetBpm: number;
@@ -138,6 +138,64 @@ export interface SoloCourseStage {
   badge: string;
   description: string;
   lessons: SoloLesson[];
+}
+
+export interface ViolaoChordDiagram {
+  name?: string;
+  symbol: string;
+  namePt: string;
+  formula: string;
+  notes: string[];
+  notesPt: string[];
+  frets: (number | -1)[]; // 6 strings from 6th (low E) to 1st (high E). -1 = abafada (X), 0 = solta (O)
+  fingers: (number | 0)[]; // 0 = solta, 1 = indicador, 2 = médio, 3 = anelar, 4 = mínimo
+  openStrings?: (string | number)[];
+  avoidStrings?: (string | number)[];
+  tips: string;
+  category: string;
+  baseFret?: number;
+  barre?: { fret: number; fromString: number; toString: number };
+}
+
+export interface ViolaoLesson extends Lesson {
+  moduleNumber: number; // 1 to 6
+  prerequisites: string[];
+  chordDiagrams?: ViolaoChordDiagram[];
+  chordsTaught?: string[];
+  demonstrationAudioNotes?: { freq: number; duration: number }[];
+  commonErrors: { issue: string; solution: string }[];
+  musicalApplication: {
+    title: string;
+    tab: string;
+    description: string;
+    progression?: string;
+  };
+  challenge: {
+    title: string;
+    description: string;
+    instruction: string;
+  };
+  masteryCriteria: {
+    learning: string;
+    consolidating: string;
+    mastered: string;
+  };
+  speedGoals: {
+    startingBpm: number;
+    intermediateBpm: number;
+    targetBpm: number;
+  };
+  reviewNotes: string;
+}
+
+export interface ViolaoCourseModule {
+  id: string;
+  moduleNumber: number; // 1 to 6
+  title: string;
+  subtitle: string;
+  badge: string;
+  description: string;
+  lessons: ViolaoLesson[];
 }
 
 export interface LessonPracticeLog {

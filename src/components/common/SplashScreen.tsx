@@ -1,52 +1,94 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 
 interface SplashScreenProps {
   onFinish: () => void;
-  durationMs?: number; // Padrão: 850 ms (dentro da faixa exigida de 700–1000 ms)
+  // Duração padrão da abertura premium: 3500 ms (3,5 segundos visíveis após carregamento da logo)
+  durationMs?: number;
 }
 
 export const SplashScreen: React.FC<SplashScreenProps> = ({
   onFinish,
-  durationMs = 850,
+  durationMs = 3500,
 }) => {
+  const [logoLoaded, setLogoLoaded] = useState(false);
   const [isFadingOut, setIsFadingOut] = useState(false);
+  const [hasStartedTimer, setHasStartedTimer] = useState(false);
+  const imgRef = useRef<HTMLImageElement>(null);
+  const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   const handleDismiss = useCallback(() => {
     setIsFadingOut(true);
-    setTimeout(() => {
+    const dismissTimer = setTimeout(() => {
       onFinish();
-    }, 180);
+    }, 400); // Transição de saída refinada de 400 ms (faixa de 350–500 ms)
+    timersRef.current.push(dismissTimer);
   }, [onFinish]);
 
+  // Se a imagem da logo já estiver em cache na montagem inicial, marca como carregada
   useEffect(() => {
-    // Respeita prefers-reduced-motion do sistema operacional
+    if (imgRef.current?.complete && imgRef.current?.naturalWidth > 0) {
+      setLogoLoaded(true);
+    }
+  }, []);
+
+  // Trava de segurança máxima (5000 ms) para nunca deixar o usuário preso
+  useEffect(() => {
+    const safetyTimer = setTimeout(() => {
+      if (!logoLoaded) {
+        setLogoLoaded(true);
+      }
+    }, 1200); // Dispara timer visual se rede demorar
+
+    const absoluteSafetyTimer = setTimeout(() => {
+      onFinish();
+    }, 5000);
+
+    timersRef.current.push(safetyTimer, absoluteSafetyTimer);
+
+    return () => {
+      clearTimeout(safetyTimer);
+      clearTimeout(absoluteSafetyTimer);
+    };
+  }, [logoLoaded, onFinish]);
+
+  // Contagem de permanência de 3.500 ms a partir do momento em que a logo e nome estão visíveis
+  useEffect(() => {
+    if (!logoLoaded || hasStartedTimer) return;
+    setHasStartedTimer(true);
+
     const prefersReducedMotion =
       typeof window !== 'undefined' &&
       window.matchMedia &&
       window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-    const effectiveDuration = prefersReducedMotion ? Math.min(350, durationMs) : durationMs;
-    const fadeOutStart = Math.max(100, effectiveDuration - 200);
+    // Respeita prefers-reduced-motion reduzindo para transição breve
+    const effectiveDuration = prefersReducedMotion ? Math.min(850, durationMs) : durationMs;
+    const fadeOutDurationMs = 450; // Duração da saída (350–500 ms)
+    const fadeStartMs = Math.max(200, effectiveDuration - fadeOutDurationMs);
 
     const fadeTimer = setTimeout(() => {
       setIsFadingOut(true);
-    }, fadeOutStart);
+    }, fadeStartMs);
 
     const finishTimer = setTimeout(() => {
       onFinish();
     }, effectiveDuration);
 
-    // Trava de segurança absoluta: nunca deixa o usuário preso na abertura
-    const safetyTimer = setTimeout(() => {
-      onFinish();
-    }, 1200);
+    timersRef.current.push(fadeTimer, finishTimer);
 
     return () => {
       clearTimeout(fadeTimer);
       clearTimeout(finishTimer);
-      clearTimeout(safetyTimer);
     };
-  }, [durationMs, onFinish]);
+  }, [logoLoaded, hasStartedTimer, durationMs, onFinish]);
+
+  // Limpeza de todos os timers na desmontagem do componente
+  useEffect(() => {
+    return () => {
+      timersRef.current.forEach((t) => clearTimeout(t));
+      timersRef.current = [];
+    };
+  }, []);
 
   return (
     <div
@@ -54,77 +96,90 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
       aria-live="polite"
       aria-label="Carregando Guitar Academy"
       onClick={handleDismiss}
-      className={`fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#F8F7F4] select-none cursor-pointer overflow-hidden transition-all duration-200 ease-out ${
-        isFadingOut ? 'opacity-0 scale-[0.99] pointer-events-none' : 'opacity-100 scale-100'
+      className={`fixed inset-0 z-50 flex flex-col items-center justify-between select-none cursor-pointer overflow-hidden transition-all duration-450 ease-in-out ${
+        isFadingOut
+          ? 'opacity-0 scale-[1.01] pointer-events-none'
+          : 'opacity-100 scale-100'
       }`}
       style={{
-        paddingTop: 'env(safe-area-inset-top, 0px)',
-        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+        backgroundColor: '#F8F7F4',
+        paddingTop: 'max(2rem, env(safe-area-inset-top, 0px))',
+        paddingBottom: 'max(2rem, env(safe-area-inset-bottom, 0px))',
       }}
     >
-      {/* Cenário Cinematográfico: Palco com guitarra elétrica, bateria ao fundo e iluminação vinho/âmbar */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        <picture>
-          <source srcSet="./stage-hero.webp" type="image/webp" />
-          <img
-            src="./stage-hero.jpg"
-            alt=""
-            aria-hidden="true"
-            className="w-full h-full object-cover object-center filter brightness-[0.40] contrast-[1.15] scale-105 transition-transform duration-1000 ease-out"
-            loading="eager"
-            decoding="async"
-          />
-        </picture>
-        {/* Camada de Contraste e Vinheta Cinematográfica em Tons de Vinho (#7B1E2B), Cereja (#B52A3A) e Grafite Escuro */}
-        <div className="absolute inset-0 bg-gradient-to-b from-[#140608]/90 via-[#220B10]/80 to-[#0F0507]/95" />
-        <div className="absolute inset-0 bg-radial from-transparent via-[#100507]/45 to-[#050203]/90" />
+      {/* Fundo Premium: Textura Limpa e Sofisticada com Iluminação Radial e Vinho Nobre */}
+      <div 
+        aria-hidden="true" 
+        className="absolute inset-0 pointer-events-none overflow-hidden"
+      >
+        {/* Glow Radial Sutil de Fundo (#7B1E2B e #B52A3A com opacidade refinada) */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[520px] h-[520px] rounded-full bg-gradient-to-tr from-[#7B1E2B]/8 via-[#B52A3A]/5 to-transparent blur-3xl pointer-events-none" />
+        
+        {/* Linha Fina Superior com Acabamento Vinho e Dourado Nobre */}
+        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-[#7B1E2B] via-[#B52A3A] to-[#7B1E2B] opacity-90" />
       </div>
 
-      {/* Friso sutil de acabamento superior */}
-      <div className="absolute top-0 left-0 right-0 h-1.5 tortoiseshell-badge opacity-90 z-10" />
+      {/* Espaçador Superior para Perfeito Equilíbrio Visual e Espaço Negativo */}
+      <div className="w-full flex justify-center pt-2">
+        <span className="text-[10px] sm:text-[11px] font-mono-code font-bold tracking-[0.24em] uppercase text-[#8C5F18] px-3 py-1 rounded-full bg-[#FAF4E6] border border-[#C5A059]/40 shadow-xs">
+          Conservatório de Guitarra & Violão
+        </span>
+      </div>
 
-      {/* Conteúdo Central da Apresentação */}
-      <div className="relative z-10 flex flex-col items-center text-center px-6 max-w-md w-full animate-splash-content">
-        {/* Ícone Oficial Existente do Guitar Academy (Palheta de Instrumento com Detalhes Luthier) */}
-        <div className="relative mb-5 group">
-          <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-3xl bg-white/95 backdrop-blur-md border border-[#C5A059]/60 shadow-2xl flex items-center justify-center p-3.5 tortoiseshell-card glow-wine ring-4 ring-[#7B1E2B]/30">
+      {/* Núcleo Central: Logo Oficial Centralizada com Dimensão Proporcional e Tipografia Legível */}
+      <div className="relative z-10 flex flex-col items-center text-center px-6 max-w-sm w-full transition-all duration-700 ease-out">
+        {/* Logo Oficial Centralizada com Palheta e Detalhes de Luthier */}
+        <div className="relative mb-6 transform transition-transform duration-500 hover:scale-105">
+          <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-3xl bg-white border border-[#D9D9D9] shadow-[0_16px_40px_-8px_rgba(123,30,43,0.18)] flex items-center justify-center p-3.5 ring-4 ring-[#7B1E2B]/10">
             <img
+              ref={imgRef}
               src="./icon.svg"
-              alt="Ícone Oficial Guitar Academy"
-              className="w-full h-full object-contain filter drop-shadow-md"
+              alt="Guitar Academy Logo Oficial"
+              className={`w-full h-full object-contain transition-all duration-700 ease-out ${
+                logoLoaded ? 'opacity-100 scale-100' : 'opacity-0 scale-95'
+              }`}
               loading="eager"
+              decoding="async"
+              onLoad={() => setLogoLoaded(true)}
+              onError={() => setLogoLoaded(true)}
             />
           </div>
-          {/* Selo Dourado Conservatório */}
-          <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full tortoiseshell-badge border-2 border-white flex items-center justify-center shadow-md">
+
+          {/* Emblema Estrela Dourada do Conservatório */}
+          <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-[#7B1E2B] border-2 border-white flex items-center justify-center shadow-md">
             <span className="text-[11px] font-black text-[#FAF4E6] leading-none">★</span>
           </div>
         </div>
 
-        {/* Tipografia Oficial Guitar Academy com Hierarquia Cinematográfica Luxuosa */}
-        <div className="space-y-2">
-          <div className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-[#FAF4E6]/95 border border-[#C5A059]/60 text-[10px] font-bold uppercase tracking-widest mb-0.5 text-[#8C5F18] shadow-sm font-mono-code">
-            <span>Conservatório Pro • 101 HSS</span>
-          </div>
-
-          <h1 className="text-3xl sm:text-4xl font-display font-extrabold text-white tracking-[0.14em] leading-tight drop-shadow-md">
+        {/* Nome GUITAR ACADEMY Claramente Legível */}
+        <div className="space-y-2.5">
+          <h1 className="text-2xl sm:text-3xl font-display font-black text-[#25252A] tracking-[0.16em] sm:tracking-[0.2em] leading-tight">
             GUITAR ACADEMY
           </h1>
 
-          {/* Frase Oficial Requisitada */}
-          <p className="text-sm sm:text-base font-semibold text-[#F2DFE3] max-w-xs sm:max-w-sm mx-auto leading-relaxed drop-shadow-sm">
-            “Do zero ao seu melhor com a guitarra”
+          {/* Divisor Minimalista na Paleta Vinho e Cereja */}
+          <div className="flex items-center justify-center gap-1.5 py-0.5">
+            <div className="w-6 h-0.5 bg-[#7B1E2B] rounded-full" />
+            <div className="w-1.5 h-1.5 bg-[#B52A3A] rounded-full" />
+            <div className="w-6 h-0.5 bg-[#7B1E2B] rounded-full" />
+          </div>
+
+          {/* Subtítulo Sofisticado com Espaço Negativo Equilibrado */}
+          <p className="text-xs sm:text-sm font-medium text-[#666672] tracking-wide leading-relaxed max-w-xs mx-auto">
+            Plataforma Pessoal de Formação Musical
           </p>
         </div>
 
-        {/* Barra de Progresso Elegante com Gradiente Vinho (#7B1E2B) & Cereja (#B52A3A) */}
-        <div className="w-40 sm:w-48 h-1.5 rounded-full overflow-hidden bg-white/20 mt-6 relative backdrop-blur-xs">
-          <div className="h-full w-full bg-gradient-to-r from-[#7B1E2B] via-[#B52A3A] to-[#C5A059] rounded-full animate-splash-bar shadow-sm" />
+        {/* Indicador de Carregamento Discreto e Elegante */}
+        <div className="w-36 sm:w-44 h-1 rounded-full overflow-hidden bg-[#E8D3D6]/60 mt-8 relative">
+          <div className="h-full w-full bg-gradient-to-r from-[#7B1E2B] via-[#B52A3A] to-[#7B1E2B] rounded-full animate-splash-bar" />
         </div>
+      </div>
 
-        {/* Legenda de Acesso Rápido e Área Segura */}
-        <span className="text-[11px] font-mono-code text-[#D9C4C7] mt-4 tracking-wide">
-          Toque para entrar • Inicialização rápida
+      {/* Rodapé Minimalista: Legenda de Acesso Rápido */}
+      <div className="w-full text-center pb-2 z-10">
+        <span className="text-[10px] sm:text-[11px] font-mono-code text-[#8C8C9A] tracking-wider transition-opacity hover:opacity-100">
+          Toque em qualquer lugar para avançar
         </span>
       </div>
     </div>

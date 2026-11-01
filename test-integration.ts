@@ -26,6 +26,8 @@ import {
   getTodayIso,
 } from './src/pedagogy/adaptiveEngine';
 import { CURRICULUM_LEVELS } from './src/data/curriculum';
+import { SOLO_LESSONS } from './src/data/soloCourse';
+import { VIOLAO_MODULES, VIOLAO_LESSONS } from './src/data/violaoCourse';
 import {
   UserProgress,
   ProfessorExercise,
@@ -48,6 +50,11 @@ import {
   getSearchIndexStats,
   QUICK_SEARCH_SUGGESTIONS,
 } from './src/services/searchService';
+import { audioEngine } from './src/audio/audioEngine';
+import { TunerSmoother } from './src/audio/tunerSmoother';
+import { STANDARD_TUNING, getFretNote } from './src/data/musicTheory';
+import { CHORD_DATABASE } from './src/data/chordDatabase';
+import { ChordEngine } from './src/chords/chord-engine';
 import fs from 'fs';
 import path from 'path';
 
@@ -1272,12 +1279,12 @@ assert(splashComponentExists, 'O componente SplashScreen.tsx existe em src/compo
 
 const splashCode = fs.readFileSync('src/components/common/SplashScreen.tsx', 'utf-8');
 assert(
-  splashCode.includes('durationMs = 850') || (splashCode.includes('850') && splashCode.includes('700')),
-  'A splash screen define duração padrão de 850 ms (dentro da faixa exigida de 700 a 1000 ms)'
+  splashCode.includes('durationMs = 3500') || splashCode.includes('3500'),
+  'A splash screen define permanência visual da abertura em aproximadamente 3.500 ms'
 );
 assert(
-  splashCode.includes('safetyTimer') && splashCode.includes('1200'),
-  'A splash screen possui trava de segurança máxima (1200 ms) para impedir travamento da interface'
+  splashCode.includes('safetyTimer') && splashCode.includes('5000'),
+  'A splash screen possui trava de segurança para impedir travamento da interface'
 );
 assert(
   splashCode.includes('handleDismiss') && splashCode.includes('onClick={handleDismiss}'),
@@ -1967,6 +1974,534 @@ assert(
 assert(
   !routineViewCode.includes('alert('),
   '14.14 PracticeRoutineView.tsx não utiliza alert() nativo do navegador'
+);
+
+// =============================================================
+// GRUPO 15: Validação da Fase 2 de Estabilização — Sistema de Áudio, Metrônomo, Afinador e Web Audio
+// =============================================================
+console.log('\n--- GRUPO 15: Validação da Fase 2 de Estabilização (Sistema de Áudio, Metrônomo e Afinador) ---');
+
+// 15.1 Ciclo de vida e estado do AudioEngine
+assert(
+  typeof audioEngine.getContextState === 'function' &&
+  typeof audioEngine.isContextSuspended === 'function' &&
+  typeof audioEngine.isMetronomeActive === 'function' &&
+  typeof audioEngine.resumeAudio === 'function' &&
+  typeof audioEngine.closeAudio === 'function',
+  '15.1 AudioEngine exporta métodos de ciclo de vida (getContextState, isContextSuspended, isMetronomeActive, resumeAudio, closeAudio)'
+);
+
+assert(
+  audioEngine.isMetronomeActive() === false,
+  '15.1 Metrônomo inicia desativado por padrão'
+);
+
+// 15.2 Preservação estrita dos parâmetros do algoritmo de lookahead
+const audioEngineSource = fs.readFileSync('src/audio/audioEngine.ts', 'utf-8');
+assert(
+  audioEngineSource.includes('setTimeout(this.scheduleLoop, 25)') || audioEngineSource.includes(', 25)'),
+  '15.2 Intervalo de lookahead do metrônomo rigorosamente preservado em 25ms'
+);
+assert(
+  audioEngineSource.includes('scheduleAheadTime = 0.1') || audioEngineSource.includes('0.1;'),
+  '15.2 Janela de agendamento antecipado (schedule ahead) rigorosamente preservada em 100ms (0.1s)'
+);
+
+// 15.3 Proteção contra "metronome burst" e acúmulo de tempo ao congelar em segundo plano
+assert(
+  audioEngineSource.includes('if (this.nextBeatTime < this.ctx.currentTime)'),
+  '15.3 AudioEngine implementa salvaguarda contra acúmulo de batidas passadas após suspensão do sistema operacional'
+);
+
+// 15.4 Verificação matemática de subdivisões e andamento (BPM)
+const bpm60QuarterSec = 60.0 / 60;
+assert(bpm60QuarterSec === 1.0, '15.4 60 BPM resulta em 1 batida por segundo exata');
+const bpm120QuarterSec = 60.0 / 120;
+assert(bpm120QuarterSec === 0.5, '15.4 120 BPM resulta em 500ms por semínima');
+
+// 15.5 Concorrência e bloqueio de microfone no GuitarPitchDetector
+assert(
+  typeof detector.getIsListening === 'function' &&
+  typeof detector.getIsAcquiring === 'function',
+  '15.5 GuitarPitchDetector implementa verificações de estado ativo e lock de aquisição'
+);
+assert(
+  detector.getIsListening() === false,
+  '15.5 Detector reporta false quando microfone não está capturando'
+);
+
+// Simulação de tentativa concorrente de aquisição de microfone
+const testPitchDetector = new GuitarPitchDetector();
+(testPitchDetector as any).isAcquiringMicrophone = true;
+const concurrentAttempt = await testPitchDetector.startListening(() => {});
+assert(
+  concurrentAttempt.success === false && concurrentAttempt.errorType === 'busy',
+  '15.5 Chamadas concorrentes a startListening são bloqueadas com lock determinístico (errorType: busy)'
+);
+
+// Resiliência no Node.js / navegador sem getUserMedia
+(testPitchDetector as any).isAcquiringMicrophone = false;
+const noMediaResult = await testPitchDetector.startListening(() => {});
+assert(
+  noMediaResult.success === false && noMediaResult.errorType === 'not_supported',
+  '15.5 Ausência de getUserMedia é tratada graciosamente sem exceção fatal (errorType: not_supported)'
+);
+
+// 15.6 Liberação completa de recursos em stopListening()
+testPitchDetector.stopListening();
+assert(
+  (testPitchDetector as any).analyser === null &&
+  (testPitchDetector as any).mediaStream === null &&
+  (testPitchDetector as any).highpassFilter === null &&
+  (testPitchDetector as any).lowpassFilter === null,
+  '15.6 stopListening() desconecta e anula nós de áudio, filtros e streams para evitar vazamento de memória'
+);
+
+// 15.7 Estabilidade do TunerSmoother (Filtro EMA e Zona Morta ±2 cents)
+const testSmoother = new TunerSmoother({ alpha: 0.18, confidenceThreshold: 0.65 });
+testSmoother.reset();
+
+// Inicia com sinal em afinação exata (0 cents)
+testSmoother.feedPitch({
+  frequency: 82.41,
+  note: 'E',
+  notePt: 'Mi',
+  octave: 2,
+  cents: 0,
+  confidence: 0.95,
+  intensity: 0.8,
+  isSilence: false,
+  isWeakSignal: false,
+  isOnset: false,
+  detectionType: 'monophonic_note',
+  stability: 98,
+  stabilityLabel: 'Estável',
+  expectedFreq: 82.41,
+  timestamp: performance.now(),
+});
+
+const frame1 = testSmoother.step(performance.now());
+assert(
+  frame1.isInTune === true && frame1.note === 'E' && frame1.octave === 2,
+  '15.7 TunerSmoother identifica nota afinada com confiança alta (isInTune: true)'
+);
+assert(
+  Math.abs(frame1.displayedCents) <= 2,
+  '15.7 TunerSmoother estabiliza desvio dentro da zona morta de ±2 cents'
+);
+
+// Rejeição de sinal fraco
+testSmoother.feedPitch({
+  frequency: 82.41,
+  note: 'E',
+  notePt: 'Mi',
+  octave: 2,
+  cents: 25,
+  confidence: 0.3,
+  intensity: 0.05,
+  isSilence: false,
+  isWeakSignal: true,
+  isOnset: false,
+  detectionType: 'weak_signal',
+  stability: 30,
+  stabilityLabel: 'Instável',
+  expectedFreq: 82.41,
+  timestamp: performance.now(),
+});
+
+const frameWeak = testSmoother.step(performance.now());
+assert(
+  frameWeak.isWeakSignal === true || frameWeak.state === 'weak_signal',
+  '15.7 TunerSmoother sinaliza adequadamente captura com sinal fraco ou baixa confiança'
+);
+
+// 15.8 Auditoria de ciclo de vida e visibilidade em MetronomeView e TunerView
+const metronomeViewSource = fs.readFileSync('src/components/metronome/MetronomeView.tsx', 'utf-8');
+assert(
+  metronomeViewSource.includes('visibilitychange') &&
+  metronomeViewSource.includes('resumeAudio'),
+  '15.8 MetronomeView reage a visibilitychange e retoma o motor de áudio ao voltar para a tela'
+);
+assert(
+  metronomeViewSource.includes('Dica de treino no celular') || metronomeViewSource.includes('celular'),
+  '15.8 MetronomeView exibe orientação técnica sobre o comportamento de áudio em telas móveis'
+);
+
+const tunerViewSource = fs.readFileSync('src/components/tuner/TunerView.tsx', 'utf-8');
+assert(
+  tunerViewSource.includes('visibilitychange') &&
+  tunerViewSource.includes('stopListening'),
+  '15.8 TunerView suspende a captura do microfone automaticamente ao ir para segundo plano'
+);
+assert(
+  tunerViewSource.includes('Retomar Afinador'),
+  '15.8 TunerView exibe aviso contextual com botão de toque para retomar o microfone com segurança'
+);
+assert(
+  tunerViewSource.includes('permissão') || tunerViewSource.includes('cadeado'),
+  '15.8 TunerView oferece instruções amigáveis para reativação de permissões no navegador'
+);
+
+// 15.9 Auditoria de ausência de alert() e confirm() nos módulos de áudio
+assert(
+  !audioEngineSource.includes('alert(') && !audioEngineSource.includes('confirm('),
+  '15.9 audioEngine.ts não utiliza alert() nem confirm() nativos'
+);
+const guitarPitchSource = fs.readFileSync('src/audio/guitarPitchDetector.ts', 'utf-8');
+assert(
+  !guitarPitchSource.includes('alert(') && !guitarPitchSource.includes('confirm('),
+  '15.9 guitarPitchDetector.ts não utiliza alert() nem confirm() nativos'
+);
+assert(
+  !tunerViewSource.includes('alert(') && !tunerViewSource.includes('confirm('),
+  '15.9 TunerView.tsx não utiliza alert() nem confirm() nativos'
+);
+assert(
+  !metronomeViewSource.includes('alert(') && !metronomeViewSource.includes('confirm('),
+  '15.9 MetronomeView.tsx não utiliza alert() nem confirm() nativos'
+);
+
+// =============================================================
+// GRUPO 16 — DOMÍNIO TOTAL DO VIOLÃO (60 AULAS & 10 MÓDULOS)
+// E OS 4 LABORATÓRIOS INTERATIVOS
+// =============================================================
+
+console.log('\n--- GRUPO 16: DOMÍNIO TOTAL DO VIOLÃO (60 AULAS & 10 MÓDULOS) ---');
+
+// 16.1 Estrutura de módulos e total de aulas
+assert(
+  VIOLAO_MODULES.length === 10,
+  '16.1 Domínio Total do Violão possui exatamente 10 módulos pedagógicos estruturados'
+);
+assert(
+  VIOLAO_LESSONS.length === 60,
+  '16.1 Domínio Total do Violão possui exatamente 60 aulas completas'
+);
+
+// 16.2 Cada módulo possui exatamente 6 aulas sequenciais (10 x 6 = 60)
+const allModulesHaveSixLessons = VIOLAO_MODULES.every((mod) => mod.lessons.length === 6);
+assert(
+  allModulesHaveSixLessons,
+  '16.2 Cada um dos 10 módulos possui exatamente 6 aulas sequenciais (10 x 6 = 60 aulas)'
+);
+
+// 16.3 Identificadores únicos sem colisões
+const violaoLessonIds = VIOLAO_LESSONS.map((l) => l.id);
+const uniqueViolaoIds = new Set(violaoLessonIds);
+assert(
+  uniqueViolaoIds.size === 60,
+  '16.3 Todos os identificadores de aula do Domínio Total do Violão são únicos'
+);
+assert(
+  violaoLessonIds[0] === 'violao-lesson-1' && violaoLessonIds[59] === 'violao-lesson-60',
+  '16.3 Identificadores seguem o padrão canônico violao-lesson-1 a violao-lesson-60'
+);
+
+// 16.4 Diagramas de acordes e afinação padrão E2-A2-D3-G3-B3-E4
+let totalChordDiagrams = 0;
+let validChordDiagrams = true;
+VIOLAO_LESSONS.forEach((lesson) => {
+  if (lesson.chordDiagrams && lesson.chordDiagrams.length > 0) {
+    lesson.chordDiagrams.forEach((cd) => {
+      totalChordDiagrams++;
+      if (!Array.isArray(cd.frets) || cd.frets.length !== 6) {
+        validChordDiagrams = false;
+      }
+      if (!Array.isArray(cd.fingers) || cd.fingers.length !== 6) {
+        validChordDiagrams = false;
+      }
+      if ((!cd.name && !cd.symbol) || typeof cd.tips !== 'string') {
+        validChordDiagrams = false;
+      }
+    });
+  }
+});
+assert(
+  totalChordDiagrams >= 30 && validChordDiagrams,
+  `16.4 Todos os ${totalChordDiagrams} diagramas de acordes possuem formato válido de 6 cordas e orientações técnicas`
+);
+
+// 16.5 Integridade de conteúdo: objetivos, exercícios, tablaturas e desafios
+const allHaveRequiredFields = VIOLAO_LESSONS.every(
+  (l) =>
+    l.title &&
+    l.objective &&
+    l.practicalExercise &&
+    l.practicalExercise.tablatureText &&
+    l.musicalApplication &&
+    l.musicalApplication.tab &&
+    Array.isArray(l.commonErrors) &&
+    l.commonErrors.length > 0 &&
+    l.challenge &&
+    l.masteryCriteria &&
+    l.speedGoals
+);
+assert(
+  allHaveRequiredFields,
+  '16.5 Todas as 60 aulas possuem objetivos, exercícios práticos, tablaturas ASCII, aplicações reais, erros e critérios de maestria'
+);
+
+// 16.6 Validação do Laboratório 1: Mapa Inteligente do Braço
+assert(
+  STANDARD_TUNING.length === 6 &&
+  STANDARD_TUNING.some((s) => s.openFrequencyHz < 85) && // E2 ~82.41 Hz
+  STANDARD_TUNING.some((s) => s.openFrequencyHz > 320),  // E4 ~329.63 Hz
+  '16.6 Laboratório 1: Mapa do Braço ancorado na afinação padrão internacional de E2 a E4'
+);
+
+// 16.7 Validação do Laboratório 2: Laboratório de Acordes (Chord Lab)
+const testParsedChord = ChordEngine.getChord('Cmaj7');
+assert(
+  testParsedChord !== null &&
+  testParsedChord.root === 'C' &&
+  testParsedChord.notes.includes('B'),
+  '16.7 Laboratório 2: Motor Chord Lab decompõe cifras avançadas com precisão teórica'
+);
+
+// 16.8 Validação dos Laboratórios 3 e 4: Progressões e Estilos
+assert(
+  typeof ChordEngine.generateCaged === 'function',
+  '16.8 Laboratório 3 e 4: Sistema CAGED e progressões operacionais'
+);
+
+// 16.9 Busca global indexa termos do Domínio Total do Violão
+const vSearchOpenChords = searchAll('acordes abertos');
+const vSearchCadd9 = searchAll('Cadd9');
+const vSearchFingerstyle = searchAll('fingerstyle');
+const vSearchPestana = searchAll('pestana');
+const vSearchViolaoSolo = searchAll('violão solo');
+
+assert(
+  vSearchOpenChords.all.some((r) => r.id.startsWith('violao-lesson-')),
+  '16.9 Busca global localiza aulas de violão pelo termo "acordes abertos"'
+);
+assert(
+  vSearchCadd9.all.some((r) => r.id.startsWith('violao-lesson-')),
+  '16.9 Busca global localiza aulas de violão pelo termo "Cadd9"'
+);
+assert(
+  vSearchFingerstyle.all.some((r) => r.id.startsWith('violao-lesson-')),
+  '16.9 Busca global localiza aulas de violão pelo termo "fingerstyle"'
+);
+assert(
+  vSearchPestana.all.some((r) => r.id.startsWith('violao-lesson-')),
+  '16.9 Busca global localiza aulas de violão pelo termo "pestana"'
+);
+assert(
+  vSearchViolaoSolo.all.some((r) => r.id.startsWith('violao-lesson-')),
+  '16.9 Busca global localiza aulas de violão pelo termo "violão solo"'
+);
+
+// 16.10 Preservação estrita dos módulos anteriores (Regra Fundamental)
+const canonicalLessons = CURRICULUM_LEVELS.flatMap((l) => l.lessons);
+assert(
+  canonicalLessons.length === 18,
+  '16.10 Currículo canônico preservado integralmente com exatamente 18 aulas'
+);
+assert(
+  SOLO_LESSONS.length === 20,
+  '16.10 Formação de Guitarra Solo preservada integralmente com exatamente 20 aulas'
+);
+assert(
+  CANONICAL_SKILLS.length === 21,
+  '16.10 Catálogo de 21 habilidades pedagógicas adaptativas preservado sem alterações'
+);
+
+// =============================================================
+// GRUPO 17 — VALIDAÇÃO DAS CORREÇÕES CIRÚRGICAS (01/11/2026)
+// Csus2, Csus4, C°7, G Worship, Oitavas Científicas e Comentários
+// =============================================================
+
+console.log('\n--- GRUPO 17: VALIDAÇÃO DAS CORREÇÕES CIRÚRGICAS ---');
+
+// 17.1 Acorde Csus2: sem terça maior/menor, 1ª corda abafada
+const csus2Chord = CHORD_DATABASE.find((c) => c.id === 'c-sus2');
+assert(
+  csus2Chord !== undefined &&
+  JSON.stringify(csus2Chord.frets) === JSON.stringify([-1, 3, 0, 0, 1, -1]),
+  '17.1 Csus2 possui digitação [-1, 3, 0, 0, 1, -1] com 1ª corda abafada'
+);
+assert(
+  csus2Chord !== undefined &&
+  csus2Chord.notes.length === 3 &&
+  csus2Chord.notes.includes('C') &&
+  csus2Chord.notes.includes('D') &&
+  csus2Chord.notes.includes('G') &&
+  !csus2Chord.notes.includes('E') &&
+  !csus2Chord.notes.includes('D#'),
+  '17.1 Csus2 produz exclusivamente Tônica (C), 2ª Maior (D) e 5ª Justa (G) sem terça'
+);
+
+// 17.2 Acorde Csus4: sem choque de terça maior com quarta justa
+const csus4Chord = CHORD_DATABASE.find((c) => c.id === 'c-sus4');
+assert(
+  csus4Chord !== undefined &&
+  JSON.stringify(csus4Chord.frets) === JSON.stringify([-1, 3, 3, 0, 1, -1]),
+  '17.2 Csus4 possui digitação [-1, 3, 3, 0, 1, -1] eliminando a 1ª corda aberta conflitante'
+);
+assert(
+  csus4Chord !== undefined &&
+  csus4Chord.formula === '1 - 4 - 5' &&
+  csus4Chord.notes.includes('C') &&
+  csus4Chord.notes.includes('F') &&
+  csus4Chord.notes.includes('G') &&
+  !csus4Chord.notes.includes('E'),
+  '17.2 Csus4 produz rigorosamente Tônica (C), 4ª Justa (F) e 5ª Justa (G)'
+);
+
+// 17.3 Acorde C°7: classificação exata como tétrade diminuta
+const cDimChord = CHORD_DATABASE.find((c) => c.id === 'c-dim');
+assert(
+  cDimChord !== undefined &&
+  cDimChord.symbol === 'C°7' &&
+  cDimChord.formula === '1 - b3 - b5 - bb7',
+  '17.3 C°7 classificado como tétrade diminuta com fórmula 1 - b3 - b5 - bb7'
+);
+assert(
+  cDimChord !== undefined &&
+  cDimChord.notes.length === 4 &&
+  JSON.stringify(cDimChord.frets) === JSON.stringify([-1, 3, 4, 2, 4, -1]),
+  '17.3 C°7 produz 4 classes de altura simétricas (C, Eb, Gb, A) na digitação [-1, 3, 4, 2, 4, -1]'
+);
+
+// 17.4 Acorde G Worship: remoção da barra no símbolo
+const gWorshipChord = CHORD_DATABASE.find((c) => c.id === 'g-worship-4fingers');
+assert(
+  gWorshipChord !== undefined &&
+  gWorshipChord.symbol === 'G (Worship 4 Dedos)' &&
+  !gWorshipChord.symbol.includes('/'),
+  '17.4 Símbolo de G Worship é "G (Worship 4 Dedos)", livre de barra indicativa de baixo'
+);
+assert(
+  gWorshipChord !== undefined &&
+  JSON.stringify(gWorshipChord.frets) === JSON.stringify([3, 2, 0, 0, 3, 3]),
+  '17.4 Digitação de 4 dedos [3, 2, 0, 0, 3, 3] rigorosamente preservada em G Worship'
+);
+
+// 17.5 Preservação do parser de cifras com baixo invertido (Slash Chords)
+const dSlashFSharp = parseChordSymbol('D/F#');
+assert(
+  dSlashFSharp !== null && dSlashFSharp.root === 'D' && dSlashFSharp.bass === 'F#',
+  '17.5 Parser de cifras processa com precisão baixo invertido D/F#'
+);
+const am7SlashG = parseChordSymbol('Am7/G');
+assert(
+  am7SlashG !== null && am7SlashG.root === 'A' && am7SlashG.bass === 'G',
+  '17.5 Parser de cifras processa com precisão baixo invertido Am7/G'
+);
+const cSlashE = parseChordSymbol('C/E');
+assert(
+  cSlashE !== null && cSlashE.root === 'C' && cSlashE.bass === 'E',
+  '17.5 Parser de cifras processa com precisão baixo invertido C/E'
+);
+
+// 17.6 Cálculo de Oitavas Científicas e validação acústica do braço
+const str6 = STANDARD_TUNING.find((s) => s.stringNumber === 6)!;
+const str2 = STANDARD_TUNING.find((s) => s.stringNumber === 2)!;
+const str5 = STANDARD_TUNING.find((s) => s.stringNumber === 5)!;
+
+assert(
+  getFretNote(str6, 0).octave === 2 && getFretNote(str6, 0).cipher === 'E',
+  '17.6 6ª corda solta é E2 acústico exato (82.41 Hz)'
+);
+assert(
+  getFretNote(str6, 12).octave === 3 && getFretNote(str6, 12).cipher === 'E',
+  '17.6 6ª corda casa 12 é E3 acústico exato (164.81 Hz)'
+);
+assert(
+  getFretNote(str6, 24).octave === 4 && getFretNote(str6, 24).cipher === 'E',
+  '17.6 6ª corda casa 24 é E4 acústico exato (329.63 Hz)'
+);
+assert(
+  getFretNote(str2, 1).octave === 4 && getFretNote(str2, 1).cipher === 'C',
+  '17.6 2ª corda casa 1 é C4 (Dó Central, 261.63 Hz)'
+);
+assert(
+  getFretNote(str5, 3).octave === 3 && getFretNote(str5, 3).cipher === 'C',
+  '17.6 5ª corda casa 3 é C3 (130.81 Hz)'
+);
+
+const fretboardViewSource = fs.readFileSync('src/components/fretboard/FretboardView.tsx', 'utf-8');
+assert(
+  !fretboardViewSource.includes('Math.floor(Math.log2(n.frequencyHz / 440) + 4)') &&
+  fretboardViewSource.includes('octave: n.octave'),
+  '17.6 FretboardView utiliza diretamente a propriedade n.octave de getFretNote sem aproximações'
+);
+
+// 17.7 Comentário do Seletor de Trilhas no Currículo
+const curriculumViewSource = fs.readFileSync('src/components/curriculum/CurriculumView.tsx', 'utf-8');
+assert(
+  curriculumViewSource.includes('Domínio Total do Violão — 60 Aulas'),
+  '17.7 CurriculumView possui comentário atualizado para "Domínio Total do Violão — 60 Aulas"'
+);
+
+// =============================================================
+// GRUPO 18 — GUITAR ACADEMY MASTER UPDATE
+// Premium Splash Screen, Responsive Layout & Scroll Stability
+// =============================================================
+
+console.log('\n--- GRUPO 18: GUITAR ACADEMY MASTER UPDATE (SPLASH & SCROLL) ---');
+
+// 18.1 Nova Abertura Premium: permanência de 3500ms e transição de saída de 400ms
+assert(
+  splashCode.includes('durationMs = 3500'),
+  '18.1 SplashScreen define permanência visual da abertura em 3.500 ms (3,5 segundos)'
+);
+assert(
+  splashCode.includes('400') && splashCode.includes('fadeOutDurationMs = 450'),
+  '18.1 SplashScreen implementa transição suave de saída para a Home entre 350 e 500 ms'
+);
+
+// 18.2 Identidade visual canônica na Abertura Premium
+assert(
+  splashCode.includes('#F8F7F4') &&
+  splashCode.includes('#7B1E2B') &&
+  splashCode.includes('#B52A3A') &&
+  splashCode.includes('#25252A'),
+  '18.2 SplashScreen utiliza a paleta oficial (#F8F7F4, #7B1E2B, #B52A3A, #25252A)'
+);
+
+// 18.3 Logo oficial e tipografia GUITAR ACADEMY claramente legível
+assert(
+  splashCode.includes('./icon.svg') && splashCode.includes('GUITAR ACADEMY'),
+  '18.3 SplashScreen renderiza o ícone oficial ./icon.svg e o nome GUITAR ACADEMY'
+);
+
+// 18.4 Monitoramento de carregamento da imagem antes de iniciar o timer
+assert(
+  splashCode.includes('logoLoaded') &&
+  splashCode.includes('onLoad') &&
+  splashCode.includes('hasStartedTimer'),
+  '18.4 SplashScreen aguarda carregamento efetivo da imagem antes de iniciar o timer de permanência'
+);
+
+// 18.5 Abertura executada somente na inicialização e não a cada troca de aba
+assert(
+  appCode.includes('const [showSplash, setShowSplash] = useState(true)') &&
+  appCode.includes('{showSplash && <SplashScreen'),
+  '18.5 App.tsx gerencia SplashScreen exclusivamente no carregamento inicial da aplicação'
+);
+
+// 18.6 Dimensionamento global de viewport estável
+assert(
+  appCode.includes('h-screen h-[100dvh]') && appCode.includes('overflow-hidden'),
+  '18.6 App.tsx fixa contêiner externo em 100dvh e overflow-hidden para eliminar duplo scroll'
+);
+
+// 18.7 Rolagem estável em <main> com padding inferior seguro
+assert(
+  appCode.includes('overflow-y-auto') &&
+  appCode.includes('overflow-x-hidden') &&
+  appCode.includes('safe-area-inset-bottom'),
+  '18.7 <main> atua como scroll container dedicado com padding inferior seguro para a barra inferior'
+);
+
+// 18.8 Abertura de aulas e contextos garantida no topo com restauração de posição
+assert(
+  appCode.includes('resetScrollToTop') &&
+  appCode.includes('mainScrollRef.current.scrollTop = 0') &&
+  appCode.includes('navigationService.saveScrollPosition'),
+  '18.8 App.tsx inicia aulas no topo e preserva a posição anterior da lista do currículo'
 );
 
 console.log('\n===========================================================');

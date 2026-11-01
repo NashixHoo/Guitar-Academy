@@ -27,6 +27,7 @@ export const InteractiveFretboard: React.FC<InteractiveFretboardProps> = ({
   rootNote,
   showAllNotes = false,
   notation = 'both',
+  onNoteSelected,
 }) => {
   const [playingString, setPlayingString] = useState<number | null>(null);
 
@@ -154,7 +155,14 @@ export const InteractiveFretboard: React.FC<InteractiveFretboardProps> = ({
                       return (
                         <div
                           key={`cell-${stringNumber}-${fret}`}
-                          className={`relative flex-1 h-full flex items-center justify-center ${
+                          onClick={() => {
+                            if (onNoteSelected) {
+                              onNoteSelected({ cipher: note.cipher, pt: note.pt, fret, stringNumber, freq: note.frequencyHz });
+                            }
+                          }}
+                          className={`relative flex-1 h-full flex items-center justify-center transition ${
+                            onNoteSelected ? 'cursor-pointer hover:bg-white/10' : ''
+                          } ${
                             fret === 0 ? 'w-[64px] flex-none' : 'border-r border-[#33333E]'
                           }`}
                         >

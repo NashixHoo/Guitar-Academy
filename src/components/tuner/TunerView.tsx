@@ -39,6 +39,8 @@ export const TunerView: React.FC<TunerViewProps> = ({ onOpenLessonTuning }) => {
   const [playingRefString, setPlayingRefString] = useState<number | null>(null);
 
   const smootherRef = useRef<TunerSmoother>(new TunerSmoother({ alpha: 0.18, confidenceThreshold: 0.65 }));
+  const wasListeningBeforeHiddenRef = useRef(false);
+  const [suspendedInBackground, setSuspendedInBackground] = useState(false);
   const [displayState, setDisplayState] = useState<TunerSmoothedOutput>({
     displayedCents: 0,
     displayedFreq: 0,
@@ -58,6 +60,9 @@ export const TunerView: React.FC<TunerViewProps> = ({ onOpenLessonTuning }) => {
 
   // Inicia ou pausa a escuta
   const handleToggleListening = async () => {
+    setSuspendedInBackground(false);
+    wasListeningBeforeHiddenRef.current = false;
+
     if (isListening) {
       guitarPitchDetector.stopListening();
       smootherRef.current.reset();
@@ -91,9 +96,29 @@ export const TunerView: React.FC<TunerViewProps> = ({ onOpenLessonTuning }) => {
     }
   };
 
-  // Teardown completo no unmount
+  // Gerenciamento de ciclo de vida (visibilidade da aba e unmount seguro)
   useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (typeof document === 'undefined') return;
+
+      if (document.hidden) {
+        if (guitarPitchDetector.getIsListening()) {
+          wasListeningBeforeHiddenRef.current = true;
+          guitarPitchDetector.stopListening();
+          if (animLoopRef.current) {
+            cancelAnimationFrame(animLoopRef.current);
+            animLoopRef.current = null;
+          }
+          setIsListening(false);
+          setSuspendedInBackground(true);
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       guitarPitchDetector.stopListening();
       guitarPitchDetector.stopReferenceTone();
       if (animLoopRef.current) {
@@ -200,13 +225,37 @@ export const TunerView: React.FC<TunerViewProps> = ({ onOpenLessonTuning }) => {
         </button>
       </div>
 
+      {/* Notificação amigável de pausa em segundo plano */}
+      {suspendedInBackground && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-amber-900 text-xs sm:text-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+          <div className="flex items-start gap-3">
+            <RefreshCw className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-bold text-[#25252A]">Afinador pausado em segundo plano</p>
+              <p className="text-xs text-[#666672]">A captura do microfone foi suspensa enquanto o aplicativo esteve fora da tela para economizar bateria e proteger sua privacidade.</p>
+            </div>
+          </div>
+          <button
+            onClick={handleToggleListening}
+            className="px-4 py-2 bg-[#7B1E2B] hover:bg-[#B52A3A] text-white font-bold rounded-xl text-xs transition shadow-xs shrink-0 w-full sm:w-auto"
+          >
+            Retomar Afinador
+          </button>
+        </div>
+      )}
+
       {/* Error alert if any */}
       {errorMessage && (
         <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 text-rose-800 text-xs sm:text-sm flex items-start gap-3">
           <HelpCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
           <div className="space-y-1">
             <p className="font-bold">Permissão ou Dispositivo de Microfone</p>
-            <p className="text-xs text-rose-700">{errorMessage}</p>
+            <p className="text-xs text-rose-700 leading-relaxed">{errorMessage}</p>
+            {errorMessage.toLowerCase().includes('permissão') && (
+              <p className="text-[11px] text-rose-600 mt-1">
+                Dica: no navegador (Chrome, Safari ou Edge), toque no ícone de ajustes/cadeado na barra de endereços, mude "Microfone" para "Permitir" e recarregue a página.
+              </p>
+            )}
           </div>
         </div>
       )}

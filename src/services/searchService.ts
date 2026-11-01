@@ -1,5 +1,6 @@
 import { CURRICULUM_LEVELS } from '../data/curriculum';
 import { SOLO_LESSONS } from '../data/soloCourse';
+import { VIOLAO_LESSONS } from '../data/violaoCourse';
 import { CHORD_DATABASE } from '../data/chordDatabase';
 import { SCALES, INTERVALS, CIRCLE_OF_FIFTHS } from '../data/musicTheory';
 
@@ -114,6 +115,73 @@ function buildSearchIndex(): SearchResultItem[] {
       title: lesson.title,
       subtitle: lesson.subtitle,
       badge: `Solo • Etapa ${lesson.stage}`,
+      category: lesson.moduleTitle,
+      detail: `${lesson.estimatedMinutes} min • Metrônomo: ${lesson.speedGoals.startingBpm} a ${lesson.speedGoals.targetBpm} BPM`,
+      lessonId: lesson.id,
+      keywords,
+    });
+  });
+
+  // 1.2 Academia do Violão — Técnica, Harmonia e Expressão (30 Aulas Especializadas)
+  VIOLAO_LESSONS.forEach((lesson) => {
+    const chordKeywords = (lesson.chordDiagrams || []).flatMap((c) => [
+      c.symbol,
+      c.namePt,
+      c.category,
+      ...(c.notes || []),
+      ...(c.notesPt || []),
+      c.tips,
+    ]);
+
+    const keywords = [
+      lesson.title,
+      lesson.subtitle,
+      lesson.objective,
+      `Módulo ${lesson.moduleNumber}`,
+      lesson.moduleTitle,
+      `aula ${lesson.lessonNumber}`,
+      'violao',
+      'violão',
+      'academia do violao',
+      'violao solo',
+      'acordes abertos',
+      'cordas soltas',
+      'afinação violão',
+      'dedilhado',
+      'fingerstyle',
+      'arpejos',
+      'p-i-m-a',
+      'hammer-on',
+      'pull-off',
+      'slides',
+      'vibrato',
+      'harmônicos naturais',
+      'harmônicos artificiais',
+      'rasgueado',
+      'baixo alternado',
+      'rearmonização',
+      'inversões',
+      'pestana',
+      'caged',
+      'add9',
+      'Cadd9',
+      'Gadd9',
+      'Dadd9',
+      'sus2',
+      'sus4',
+      'maj7',
+      'm7',
+      ...chordKeywords,
+      ...lesson.parts.map((p) => p.title),
+      ...lesson.commonErrors.map((e) => e.issue),
+    ];
+
+    items.push({
+      id: lesson.id,
+      type: 'lesson',
+      title: lesson.title,
+      subtitle: lesson.subtitle,
+      badge: `Violão • Mód ${lesson.moduleNumber}`,
       category: lesson.moduleTitle,
       detail: `${lesson.estimatedMinutes} min • Metrônomo: ${lesson.speedGoals.startingBpm} a ${lesson.speedGoals.targetBpm} BPM`,
       lessonId: lesson.id,
@@ -364,9 +432,10 @@ export function searchAll(query: string, maxResults = 25): SearchResultsGrouped 
 export function getSearchIndexStats() {
   return {
     totalItems: SEARCH_INDEX.length,
-    lessonsCount: SEARCH_INDEX.filter((i) => i.type === 'lesson' && !i.id.startsWith('solo-')).length,
+    lessonsCount: SEARCH_INDEX.filter((i) => i.type === 'lesson' && !i.id.startsWith('solo-') && !i.id.startsWith('violao-')).length,
     chordsCount: SEARCH_INDEX.filter((i) => i.type === 'chord').length,
     theoryCount: SEARCH_INDEX.filter((i) => i.type === 'theory').length,
     soloLessonsCount: SEARCH_INDEX.filter((i) => i.id.startsWith('solo-')).length,
+    violaoLessonsCount: SEARCH_INDEX.filter((i) => i.id.startsWith('violao-')).length,
   };
 }

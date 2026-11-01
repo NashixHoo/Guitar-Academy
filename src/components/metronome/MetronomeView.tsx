@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { audioEngine } from '../../audio/audioEngine';
 import { storageService } from '../../services/storageService';
 import { MetronomeConfig } from '../../types';
-import { Play, Pause, Square, Volume2, Timer, Flame, RefreshCw, Zap, Minus, Plus } from 'lucide-react';
+import { Play, Pause, Square, Volume2, Timer, Flame, RefreshCw, Zap, Minus, Plus, Activity, Sparkles } from 'lucide-react';
 
 export const MetronomeView: React.FC = () => {
   const [config, setConfig] = useState<MetronomeConfig>(() => storageService.loadMetronome());
@@ -14,6 +14,17 @@ export const MetronomeView: React.FC = () => {
 
   const tapTimesRef = useRef<number[]>([]);
   const timerIntervalRef = useRef<number | null>(null);
+
+  // Recuperação segura do AudioContext quando o aluno retorna ao aplicativo
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden && isRunning) {
+        audioEngine.resumeAudio();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [isRunning]);
 
   useEffect(() => {
     storageService.saveMetronome(config);
@@ -510,6 +521,14 @@ export const MetronomeView: React.FC = () => {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Dica técnica de execução mobile */}
+      <div className="bg-[#F8F7F4] border border-[#D9D9D9] rounded-2xl p-4 text-xs text-[#666672] flex items-start gap-3">
+        <Sparkles className="w-4 h-4 text-[#7B1E2B] shrink-0 mt-0.5" />
+        <p className="leading-relaxed">
+          <strong className="text-[#25252A]">Dica de treino no celular:</strong> Para garantir a precisão milimétrica do metrônomo enquanto estuda sua guitarra, mantenha a tela do aparelho ativa. Ao alternar de aplicativo ou retornar à tela, o Guitar Academy sincroniza e recupera automaticamente o motor de áudio.
+        </p>
       </div>
     </div>
   );

@@ -2962,15 +2962,18 @@ export const SOLO_LESSONS: SoloLesson[] = SOLO_COURSE_STAGES.flatMap((stage) => 
 /**
  * Localiza uma aula de guitarra solo por ID (ex: 'solo-lesson-1' a 'solo-lesson-20')
  */
+import { VIOLAO_LESSONS } from './violaoCourse';
+
 export function getSoloLessonById(id: string): SoloLesson | undefined {
   return SOLO_LESSONS.find((lesson) => lesson.id === id);
 }
 
 /**
  * Retorna o acervo unificado de todas as aulas do Guitar Academy:
- * as 18 aulas da Formação Conservatório + as 20 aulas da Formação Guitarra Solo.
+ * as 18 aulas da Formação Conservatório + as 20 aulas da Formação Guitarra Solo
+ * + as 30 aulas da Academia do Violão (total: 68 aulas).
  */
 export function getAllAcademyLessons(): Lesson[] {
   const conservatoryLessons = CURRICULUM_LEVELS.flatMap((lvl) => lvl.lessons);
-  return [...conservatoryLessons, ...SOLO_LESSONS];
+  return [...conservatoryLessons, ...SOLO_LESSONS, ...VIOLAO_LESSONS];
 }

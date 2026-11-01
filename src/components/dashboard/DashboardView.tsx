@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { UserProgress, NavigationTab } from '../../types';
 import { CURRICULUM_LEVELS } from '../../data/curriculum';
 import { SOLO_LESSONS } from '../../data/soloCourse';
+import { VIOLAO_LESSONS } from '../../data/violaoCourse';
 import { storageService } from '../../services/storageService';
 import { 
   Play, 
@@ -51,9 +52,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [isGoalSettingsModalOpen, setIsGoalSettingsModalOpen] = useState<boolean>(false);
   const [toastFeedback, setToastFeedback] = useState<string | null>(null);
 
-  // Find current lesson (supporting canonical curriculum & solo guitar course)
+  // Find current lesson (supporting canonical curriculum, solo course & violao course)
   const allCurriculumLessons = CURRICULUM_LEVELS.flatMap((l) => l.lessons);
-  const allLessons = [...allCurriculumLessons, ...SOLO_LESSONS];
+  const allLessons = [...allCurriculumLessons, ...SOLO_LESSONS, ...VIOLAO_LESSONS];
   const currentLesson =
     allLessons.find((l) => l.id === progress.currentLessonId) ||
     allLessons.find((l) => !progress.completedLessons.includes(l.id)) ||
@@ -571,6 +572,37 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </span>
           </div>
         </div>
+      </div>
+
+      {/* DESTAQUE: ACADEMIA DO VIOLÃO (30 AULAS) */}
+      <div className="bg-gradient-to-r from-[#1F191D] via-[#2E1620] to-[#7B1E2B] text-white p-5 sm:p-6 rounded-3xl border border-[#B52A3A]/40 shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="space-y-1 max-w-xl">
+          <div className="flex items-center gap-2">
+            <span className="px-2.5 py-0.5 rounded-full bg-[#7B1E2B] text-white text-[10px] font-extrabold uppercase tracking-wider border border-[#B52A3A]/50">
+              Formação Completa
+            </span>
+            <span className="text-xs text-amber-300 font-bold flex items-center gap-1">
+              <Sparkles className="w-3.5 h-3.5" />
+              Academia do Violão • 30 Aulas • 6 Módulos
+            </span>
+          </div>
+          <h2 className="text-lg sm:text-xl font-black text-white">
+            Academia do Violão: Técnica, Harmonia e Expressão
+          </h2>
+          <p className="text-xs text-stone-300 leading-relaxed">
+            Do domínio dos acordes abertos e dedilhados à harmonia funcional, pestanas sem dor e criação de arranjos para violão solo.
+          </p>
+        </div>
+        <button
+          onClick={() => {
+            onNavigateTab('curriculum');
+          }}
+          className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-white hover:bg-[#F5E8EA] text-[#7B1E2B] font-bold text-xs sm:text-sm shadow-xs transition self-start md:self-auto shrink-0"
+        >
+          <Guitar className="w-4 h-4 text-[#7B1E2B]" />
+          <span>Acessar Academia do Violão</span>
+          <ArrowRight className="w-4 h-4" />
+        </button>
       </div>
 
       {/* DESTAQUE: FORMAÇÃO EM GUITARRA SOLO (20 AULAS) */}

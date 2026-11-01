@@ -11,6 +11,7 @@ import {
 import { useSwipeNavigation } from './hooks/useSwipeNavigation';
 import { CURRICULUM_LEVELS } from './data/curriculum';
 import { SOLO_LESSONS } from './data/soloCourse';
+import { VIOLAO_LESSONS } from './data/violaoCourse';
 import { Header } from './components/layout/Header';
 import { Navigation } from './components/layout/Navigation';
 import { BottomNavigation } from './components/layout/BottomNavigation';
@@ -109,7 +110,7 @@ export default function App() {
   }, []);
 
   // Navegação unificada com preservação de rolagem e histórico
-  const navigateToTab = (tab: NavigationTab, lessonId: string | null = null) => {
+  const navigateToTab = (tab: NavigationTab, lessonId: string | null = null, resetScrollToTop: boolean = false) => {
     // 1. Salvar rolagem atual
     if (mainScrollRef.current) {
       const currentKey = selectedLessonId ? `lesson_${selectedLessonId}` : currentTab;
@@ -124,12 +125,21 @@ export default function App() {
     setPrimaryTab(navigationService.getPrimaryTab(tab));
     setSelectedLessonId(lessonId);
 
-    // 4. Restaurar rolagem para o destino se houver cache
+    // 4. Restaurar rolagem para o destino ou rolar ao topo em novo contexto
     requestAnimationFrame(() => {
       if (mainScrollRef.current) {
-        const targetKey = lessonId ? `lesson_${lessonId}` : tab;
-        const savedPos = navigationService.getScrollPosition(targetKey);
-        mainScrollRef.current.scrollTop = savedPos;
+        if (lessonId || resetScrollToTop) {
+          mainScrollRef.current.scrollTop = 0;
+        } else {
+          const targetKey = tab;
+          const savedPos = navigationService.getScrollPosition(targetKey);
+          mainScrollRef.current.scrollTop = savedPos;
+        }
+      }
+      try {
+        window.scrollTo(0, 0);
+      } catch {
+        // Fallback para ambientes restritos
       }
     });
   };
@@ -192,7 +202,8 @@ export default function App() {
   };
 
   const handleSelectLesson = (lessonId: string) => {
-    navigateToTab('curriculum', lessonId);
+    // Ao abrir uma aula a partir de qualquer contexto, garante que a aula inicie estritamente no topo (scrollTop = 0)
+    navigateToTab('curriculum', lessonId, true);
     setProgress((prev) => {
       const updated = { ...prev, currentLessonId: lessonId };
       storageService.saveProgress(updated);
@@ -250,14 +261,18 @@ export default function App() {
       ? previousEntry.title 
       : SCREEN_TITLES[currentTab] || 'Anterior';
 
-  // Localiza a aula ativa se selecionada (suporta currículo canônico e formação solo)
-  const allLessons: Lesson[] = [...CURRICULUM_LEVELS.flatMap((l) => l.lessons), ...SOLO_LESSONS];
+  // Localiza a aula ativa se selecionada (suporta currículo canônico, formação solo e academia do violão)
+  const allLessons: Lesson[] = [
+    ...CURRICULUM_LEVELS.flatMap((l) => l.lessons),
+    ...SOLO_LESSONS,
+    ...VIOLAO_LESSONS,
+  ];
   const activeLesson: Lesson | undefined = selectedLessonId
     ? allLessons.find((l) => l.id === selectedLessonId)
     : undefined;
 
   return (
-    <div className="relative min-h-screen min-h-[100dvh] text-[#25252A] flex flex-col font-sans bg-transparent">
+    <div className="relative h-screen h-[100dvh] max-h-screen max-h-[100dvh] text-[#25252A] flex flex-col font-sans bg-transparent overflow-hidden">
       {/* 1. PAPEL DE PAREDE FIXO GLOBAL (Estúdio Cinematográfico com Guitarra Elétrica e Bateria) */}
       <div 
         aria-hidden="true" 
@@ -268,14 +283,14 @@ export default function App() {
       />
 
       {/* 2. Conteúdo do Aplicativo em Camada Superior (z-10) com Rolagem Fluida e Independente */}
-      <div className="relative z-10 flex flex-col min-h-screen min-h-[100dvh] min-w-0 bg-transparent">
+      <div className="relative z-10 flex flex-col h-full min-h-0 min-w-0 bg-transparent overflow-hidden">
         {/* Top Header com Botão Voltar Integrado */}
         <Header
           currentTab={currentTab}
           onToggleMobileNav={() => setMobileNavOpen((prev) => !prev)}
           onGoToFirstLesson={handleGoToFirstLesson}
           onSelectLesson={handleSelectLesson}
-          onNavigateTab={(tab) => navigateToTab(tab, null)}
+          onNavigateTab={(tab) => navigateToTab(tab, null, true)}
           onSelectChord={handleSelectChordFromSearch}
           onSelectTheoryTopic={handleSelectTheoryTopicFromSearch}
           focusSearchTrigger={focusSearchTrigger}
@@ -288,14 +303,14 @@ export default function App() {
         <SubNavBar
           primaryTab={primaryTab}
           currentTab={currentTab}
-          onSelectTab={(tab) => navigateToTab(tab, null)}
+          onSelectTab={(tab) => navigateToTab(tab, null, true)}
         />
 
         {/* Main Workspace: Sidebar + Content */}
-        <div className="flex-1 flex min-w-0">
+        <div className="flex-1 flex min-h-0 min-w-0 overflow-hidden">
           <Navigation
             currentTab={currentTab}
-            onSelectTab={(tab) => navigateToTab(tab, null)}
+            onSelectTab={(tab) => navigateToTab(tab, null, true)}
             isOpenMobile={mobileNavOpen}
             onCloseMobile={() => setMobileNavOpen(false)}
           />
@@ -303,7 +318,7 @@ export default function App() {
           <main 
             ref={mainScrollRef}
             {...touchHandlers}
-            className="flex-1 min-w-0 w-full px-3.5 pt-4 pb-20 sm:px-6 sm:pt-6 sm:pb-24 lg:px-8 lg:pt-6 overflow-y-auto safe-area-bottom"
+            className="flex-1 min-w-0 w-full h-full px-3.5 pt-4 pb-28 sm:pb-32 pb-[calc(6rem+env(safe-area-inset-bottom,16px))] sm:pb-[calc(7rem+env(safe-area-inset-bottom,16px))] lg:px-8 lg:pt-6 overflow-y-auto overflow-x-hidden overscroll-contain"
           >
             <div key={currentTab} className="page-enter">
               {/* TAB 1: Início (Estudar) */}

@@ -50,6 +50,21 @@ export interface PitchDetectionResult {
   timestamp: number;
 }
 
+export type PitchDetectorErrorType =
+  | 'not_supported'
+  | 'permission_denied'
+  | 'not_found'
+  | 'device_busy'
+  | 'busy'
+  | 'aborted'
+  | 'unknown';
+
+export interface StartListeningResult {
+  success: boolean;
+  error?: string;
+  errorType?: PitchDetectorErrorType;
+}
+
 export interface GuitarPitchDetectorOptions {
   lowCutoff?: number; // Hz (padrão 70 Hz para capturar E2=82.4 Hz e Drop D=73.4 Hz)
   highCutoff?: number; // Hz (padrão 1200 Hz para harmônicos e agudos)
@@ -73,6 +88,7 @@ export class GuitarPitchDetector {
   private lowpassFilter: BiquadFilterNode | null = null;
   private analyser: AnalyserNode | null = null;
   private isRunning = false;
+  private isAcquiringMicrophone = false;
   private animFrameId: number | null = null;
 
   // Onset & Debounce State
@@ -101,21 +117,34 @@ export class GuitarPitchDetector {
   }
 
   /**
-   * Inicia a escuta do microfone com tratamento completo de erros.
+   * Inicia a escuta do microfone com tratamento completo de erros e bloqueio contra instâncias duplicadas.
    * Deve ser disparado apenas por ação explícita do usuário (botão/clique).
    */
   async startListening(
     onPitchDetected: (pitch: PitchDetectionResult | null) => void,
     externalAudioCtx?: AudioContext | null
-  ): Promise<{ success: boolean; error?: string }> {
-    if (this.isRunning) {
+  ): Promise<StartListeningResult> {
+    if (this.isAcquiringMicrophone) {
+      return {
+        success: false,
+        error: 'A inicialização do microfone já está em andamento. Aguarde.',
+        errorType: 'busy',
+      };
+    }
+
+    this.isAcquiringMicrophone = true;
+
+    // Se já estiver rodando, encerra a captura anterior de forma limpa para não deixar streams órfãos
+    if (this.isRunning || this.mediaStream) {
       this.stopListening();
     }
 
     if (typeof window === 'undefined' || !navigator?.mediaDevices?.getUserMedia) {
+      this.isAcquiringMicrophone = false;
       return {
         success: false,
-        error: 'Microfone não suportado neste navegador ou ambiente de execução.'
+        error: 'Microfone não suportado neste navegador ou ambiente de execução.',
+        errorType: 'not_supported',
       };
     }
 
@@ -124,8 +153,8 @@ export class GuitarPitchDetector {
         audio: {
           echoCancellation: false,
           noiseSuppression: false,
-          autoGainControl: true
-        }
+          autoGainControl: true,
+        },
       });
 
       if (externalAudioCtx && externalAudioCtx.state !== 'closed') {
@@ -137,7 +166,8 @@ export class GuitarPitchDetector {
           stream.getTracks().forEach((t) => t.stop());
           return {
             success: false,
-            error: 'Web Audio API não está disponível no navegador.'
+            error: 'Web Audio API não está disponível no navegador.',
+            errorType: 'not_supported',
           };
         }
         this.audioCtx = new AudioContextClass();
@@ -145,7 +175,11 @@ export class GuitarPitchDetector {
       }
 
       if (this.audioCtx.state === 'suspended') {
-        await this.audioCtx.resume();
+        try {
+          await this.audioCtx.resume();
+        } catch (resumeErr) {
+          console.warn('AudioContext resume pendente:', resumeErr);
+        }
       }
 
       this.mediaStream = stream;
@@ -197,30 +231,36 @@ export class GuitarPitchDetector {
       if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
         return {
           success: false,
-          error: 'Permissão de microfone negada. Clique no ícone de permissão do navegador para autorizar o microfone.'
+          error: 'Permissão de microfone negada. Autorize o microfone no ícone de cadeado do seu navegador para afinar sua guitarra.',
+          errorType: 'permission_denied',
         };
       }
       if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
         return {
           success: false,
-          error: 'Nenhum microfone encontrado. Conecte um microfone ou headset.'
+          error: 'Nenhum microfone encontrado. Conecte um microfone, fone de ouvido ou interface de áudio.',
+          errorType: 'not_found',
         };
       }
       if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
         return {
           success: false,
-          error: 'O microfone está em uso por outro aplicativo ou aba. Feche outros gravadores e tente novamente.'
+          error: 'O microfone está em uso por outro aplicativo ou aba. Feche outros aplicativos de gravação e tente novamente.',
+          errorType: 'device_busy',
         };
       }
       return {
         success: false,
-        error: `Erro ao iniciar captura de áudio: ${err.message || 'Falha desconhecida'}`
+        error: `Erro ao iniciar captura de áudio: ${err.message || 'Falha desconhecida'}`,
+        errorType: 'unknown',
       };
+    } finally {
+      this.isAcquiringMicrophone = false;
     }
   }
 
   /**
-   * Finaliza e limpa completamente todas as conexões de áudio e streams.
+   * Finaliza e limpa completamente todas as conexões de áudio, nós e streams.
    */
   stopListening(): void {
     this.isRunning = false;
@@ -251,9 +291,18 @@ export class GuitarPitchDetector {
       this.lowpassFilter = null;
     }
 
+    if (this.analyser) {
+      try {
+        this.analyser.disconnect();
+      } catch {}
+      this.analyser = null;
+    }
+
     if (this.mediaStream) {
       try {
-        this.mediaStream.getTracks().forEach((track) => track.stop());
+        this.mediaStream.getTracks().forEach((track) => {
+          track.stop();
+        });
       } catch {}
       this.mediaStream = null;
     }
@@ -266,7 +315,6 @@ export class GuitarPitchDetector {
       this.audioCtx = null;
     }
 
-    this.analyser = null;
     this.recentDetections = [];
     this.prevRms = 0;
   }
@@ -631,6 +679,14 @@ export class GuitarPitchDetector {
       } catch {}
       this.activeGain = null;
     }
+  }
+
+  getIsListening(): boolean {
+    return this.isRunning;
+  }
+
+  getIsAcquiring(): boolean {
+    return this.isAcquiringMicrophone;
   }
 }
 

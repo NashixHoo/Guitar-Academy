@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { CURRICULUM_LEVELS } from '../../data/curriculum';
 import { SOLO_COURSE_STAGES, SOLO_LESSONS } from '../../data/soloCourse';
-import { UserProgress, SoloLesson } from '../../types';
+import { VIOLAO_MODULES, VIOLAO_LESSONS } from '../../data/violaoCourse';
+import { UserProgress, SoloLesson, ViolaoLesson } from '../../types';
 import { 
   GraduationCap, 
   CheckCircle2, 
@@ -15,7 +16,8 @@ import {
   Activity, 
   Target, 
   Sparkles,
-  BookOpen
+  BookOpen,
+  Music
 } from 'lucide-react';
 import { LESSON_TO_SKILL_MAP, createInitialPedagogicalProfile } from '../../pedagogy/adaptiveEngine';
 
@@ -25,13 +27,48 @@ interface CurriculumViewProps {
 }
 
 export const CurriculumView: React.FC<CurriculumViewProps> = ({ progress, onSelectLesson }) => {
-  // Track selector: 'solo' (Formação Guitarra Solo - 20 Aulas) vs 'conservatory' (Conservatório Geral - 18 Aulas)
-  const [activeTrack, setActiveTrack] = useState<'solo' | 'conservatory'>('solo');
+  // Track selector: 'violao' (Domínio Total do Violão — 60 Aulas) vs 'solo' (Guitarra Solo - 20 Aulas) vs 'conservatory' (Conservatório Geral - 18 Aulas)
+  const [activeTrack, setActiveTrack] = useState<'violao' | 'solo' | 'conservatory'>('violao');
+  const [activeViolaoModule, setActiveViolaoModule] = useState<number>(1);
   const [activeSoloStage, setActiveSoloStage] = useState<number>(1);
   const [activeLevelIndex, setActiveLevelIndex] = useState<number>(0);
 
   const activeLevel = CURRICULUM_LEVELS[activeLevelIndex] || CURRICULUM_LEVELS[0];
   const activeStage = SOLO_COURSE_STAGES.find((s) => s.stageNumber === activeSoloStage) || SOLO_COURSE_STAGES[0];
+  const activeViolaoMod = VIOLAO_MODULES.find((m) => m.moduleNumber === activeViolaoModule) || VIOLAO_MODULES[0];
+
+  // Métricas de Violão
+  const violaoLessonsCompleted = VIOLAO_LESSONS.filter((l) => progress.completedLessons.includes(l.id)).length;
+  const violaoProgressPercent = Math.round((violaoLessonsCompleted / VIOLAO_LESSONS.length) * 100);
+
+  // Status pedagógico de uma aula de violão (3 estados: Aprendendo, Consolidando, Dominado)
+  const getViolaoLessonStatus = (lesson: ViolaoLesson) => {
+    const isCompleted = progress.completedLessons.includes(lesson.id);
+    const log = progress.practiceLogs?.[lesson.id];
+    
+    if (isCompleted || log?.confidence === 'mastered_with_metronome' || log?.status === 'mastered') {
+      return {
+        label: 'Dominado',
+        state: 'mastered' as const,
+        badgeClass: 'bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-700/50',
+        desc: 'Acordes e dedilhados limpos no andamento alvo'
+      };
+    }
+    if (log?.status === 'practicing' || log?.confidence === 'playable_slow' || (progress.exerciseRepetitions?.[lesson.id] || 0) > 0) {
+      return {
+        label: 'Consolidando',
+        state: 'consolidating' as const,
+        badgeClass: 'bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-700/50',
+        desc: 'Transições de acordes e ritmo em consolidação'
+      };
+    }
+    return {
+      label: 'Aprendendo',
+      state: 'learning' as const,
+      badgeClass: 'bg-[#F8F7F4] text-[#666672] border-[#D9D9D9] dark:bg-[#1A1A20] dark:text-[#B8B3C0] dark:border-[#33333E]',
+      desc: 'Compreensão de digitação, postura e sonoridade'
+    };
+  };
 
   // Métricas do Curso de Solo
   const soloLessonsCompleted = SOLO_LESSONS.filter((l) => progress.completedLessons.includes(l.id)).length;
@@ -78,15 +115,26 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({ progress, onSele
             </h1>
           </div>
           <p className="text-xs sm:text-sm text-[#666672] dark:text-[#B8B3C0] mt-1 font-medium">
-            Formação musical estruturada para guitarra física com estudo guiado, tablaturas e metrônomo.
+            Formação musical estruturada para violão e guitarra física com estudo guiado, acordes, tablaturas e metrônomo.
           </p>
         </div>
 
         {/* Alternador de Trilhas */}
-        <div className="flex items-center bg-[#F8F7F4] dark:bg-[#1A1A20] p-1 rounded-2xl border border-[#D9D9D9] dark:border-[#33333E] self-start md:self-auto">
+        <div className="flex flex-wrap items-center bg-[#F8F7F4] dark:bg-[#1A1A20] p-1 rounded-2xl border border-[#D9D9D9] dark:border-[#33333E] self-start md:self-auto gap-1">
+          <button
+            onClick={() => setActiveTrack('violao')}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition ${
+              activeTrack === 'violao'
+                ? 'bg-[#7B1E2B] text-white shadow-xs'
+                : 'text-[#666672] dark:text-[#B8B3C0] hover:text-[#25252A] dark:hover:text-white'
+            }`}
+          >
+            <Music className="w-3.5 h-3.5" />
+            <span>Domínio Total do Violão (60 Aulas)</span>
+          </button>
           <button
             onClick={() => setActiveTrack('solo')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition ${
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition ${
               activeTrack === 'solo'
                 ? 'bg-[#7B1E2B] text-white shadow-xs'
                 : 'text-[#666672] dark:text-[#B8B3C0] hover:text-[#25252A] dark:hover:text-white'
@@ -97,7 +145,7 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({ progress, onSele
           </button>
           <button
             onClick={() => setActiveTrack('conservatory')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition ${
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition ${
               activeTrack === 'conservatory'
                 ? 'bg-[#7B1E2B] text-white shadow-xs'
                 : 'text-[#666672] dark:text-[#B8B3C0] hover:text-[#25252A] dark:hover:text-white'
@@ -108,6 +156,180 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({ progress, onSele
           </button>
         </div>
       </div>
+
+      {/* ======================================================== */}
+      {/* TRILHA 0: DOMÍNIO TOTAL DO VIOLÃO (60 AULAS EM 10 MÓDULOS) */}
+      {/* ======================================================== */}
+      {activeTrack === 'violao' && (
+        <>
+          {/* Barra de Progresso do Domínio Total do Violão */}
+          <div className="bg-[#F8F7F4] dark:bg-[#1A1A20] border border-[#D9D9D9] dark:border-[#33333E] rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-[#B52A3A] dark:text-[#FF6B81]" />
+              <span className="text-xs font-extrabold text-[#25252A] dark:text-[#F8F7F4]">
+                Evolução no Domínio Total do Violão:
+              </span>
+              <span className="text-xs font-mono-code font-bold text-[#7B1E2B] dark:text-[#FF6B81]">
+                {violaoLessonsCompleted} de {VIOLAO_LESSONS.length} aulas concluídas ({violaoProgressPercent}%)
+              </span>
+            </div>
+            <div className="w-full sm:w-48 bg-white dark:bg-[#25252A] h-2.5 rounded-full overflow-hidden border border-[#D9D9D9] dark:border-[#33333E]">
+              <div 
+                className="bg-[#7B1E2B] dark:bg-[#FF6B81] h-full transition-all duration-300" 
+                style={{ width: `${violaoProgressPercent}%` }}
+              />
+            </div>
+          </div>
+
+          {/* Seletor de 10 Módulos do Curso de Violão */}
+          <div className="grid grid-cols-2 sm:grid-cols-5 lg:grid-cols-10 gap-1.5">
+            {VIOLAO_MODULES.map((mod) => {
+              const isSelected = activeViolaoModule === mod.moduleNumber;
+              const completedInMod = mod.lessons.filter((l) => progress.completedLessons.includes(l.id)).length;
+              const isAllCompleted = completedInMod === mod.lessons.length;
+
+              return (
+                <button
+                  key={mod.id}
+                  onClick={() => setActiveViolaoModule(mod.moduleNumber)}
+                  className={`p-3 rounded-2xl border text-left transition flex flex-col justify-between ${
+                    isSelected
+                      ? 'bg-[#7B1E2B] text-white border-[#7B1E2B] shadow-xs scale-[1.02]'
+                      : 'bg-white dark:bg-[#25252A] border-[#D9D9D9] dark:border-[#33333E] hover:bg-[#F5E8EA] dark:hover:bg-[#2E2E36]'
+                  }`}
+                >
+                  <div>
+                    <span className={`text-[10px] font-extrabold uppercase tracking-wider block ${
+                      isSelected ? 'text-[#F5E8EA]' : 'text-[#7B1E2B] dark:text-[#FF6B81]'
+                    }`}>
+                      Módulo {mod.moduleNumber}
+                    </span>
+                    <span className={`text-xs font-bold line-clamp-1 mt-0.5 ${isSelected ? 'text-white' : 'text-[#25252A] dark:text-[#F8F7F4]'}`}>
+                      {mod.badge}
+                    </span>
+                  </div>
+
+                  <div className="mt-3 flex items-center justify-between text-[10px]">
+                    <span className={isSelected ? 'text-[#F5E8EA]' : 'text-[#666672] dark:text-[#B8B3C0]'}>
+                      {mod.lessons.length} aulas
+                    </span>
+                    {isAllCompleted ? (
+                      <CheckCircle2 className={`w-3.5 h-3.5 ${isSelected ? 'text-white' : 'text-emerald-600'}`} />
+                    ) : (
+                      <span className={`font-mono-code font-bold ${isSelected ? 'text-white' : 'text-[#25252A] dark:text-[#F8F7F4]'}`}>
+                        {completedInMod}/{mod.lessons.length}
+                      </span>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Visão do Módulo de Violão Selecionado */}
+          <div className="bg-white dark:bg-[#25252A] border border-[#D9D9D9] dark:border-[#33333E] rounded-3xl p-4 sm:p-8 shadow-xs space-y-6">
+            <div className="pb-4 border-b border-[#D9D9D9] dark:border-[#33333E]">
+              <div className="flex items-center gap-2 text-xs font-bold text-[#7B1E2B] dark:text-[#FF6B81] uppercase tracking-wider">
+                <Target className="w-4 h-4 text-[#B52A3A] dark:text-[#FF6B81]" />
+                <span>Academia do Violão • Módulo {activeViolaoMod.moduleNumber}</span>
+              </div>
+              <h2 className="text-2xl font-black text-[#25252A] dark:text-[#F8F7F4] mt-1">
+                {activeViolaoMod.title}
+              </h2>
+              <p className="text-xs sm:text-sm text-[#666672] dark:text-[#B8B3C0] mt-1 font-medium">
+                {activeViolaoMod.subtitle}
+              </p>
+              <p className="text-xs text-[#25252A] dark:text-[#E0DDE5] mt-2 bg-[#F8F7F4] dark:bg-[#1A1A20] p-3 rounded-xl border border-[#D9D9D9] dark:border-[#33333E] leading-relaxed">
+                {activeViolaoMod.description}
+              </p>
+            </div>
+
+            {/* Lista das 5 Aulas do Módulo */}
+            <div className="space-y-3">
+              <label className="text-xs font-bold text-[#7B1E2B] dark:text-[#FF6B81] uppercase tracking-wider block">
+                Aulas deste Módulo (5 Aulas Práticas):
+              </label>
+
+              {activeViolaoMod.lessons.map((lesson) => {
+                const isCompleted = progress.completedLessons.includes(lesson.id);
+                const isCurrent = progress.currentLessonId === lesson.id;
+                const status = getViolaoLessonStatus(lesson);
+
+                return (
+                  <div
+                    key={lesson.id}
+                    onClick={() => onSelectLesson(lesson.id)}
+                    className={`p-4 rounded-2xl border transition-all cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                      isCurrent
+                        ? 'bg-[#F5E8EA] dark:bg-[#3A1E24] border-[#7B1E2B] dark:border-[#FF6B81] shadow-xs'
+                        : isCompleted
+                        ? 'bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/60 hover:border-emerald-400'
+                        : 'bg-[#F8F7F4] dark:bg-[#1F1F24] border-[#D9D9D9] dark:border-[#33333E] hover:bg-[#F5E8EA] dark:hover:bg-[#2A2328]'
+                    }`}
+                  >
+                    <div className="flex items-start sm:items-center gap-3">
+                      <div className="mt-0.5 sm:mt-0 shrink-0">
+                        {isCompleted ? (
+                          <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                        ) : (
+                          <div className="w-6 h-6 rounded-full border-2 border-[#D9D9D9] dark:border-[#4D4D58] flex items-center justify-center font-bold text-[11px] text-[#666672] dark:text-[#B8B3C0] bg-white dark:bg-[#25252A]">
+                            {lesson.lessonNumber}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="space-y-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-[10px] text-[#666672] dark:text-[#B8B3C0] uppercase font-bold block">
+                            Aula {lesson.lessonNumber} • {lesson.moduleTitle}
+                          </span>
+
+                          {/* 3 Estados Pedagógicos: Aprendendo / Consolidando / Dominado */}
+                          <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md border ${status.badgeClass}`}>
+                            <Activity className="w-3 h-3" />
+                            <span>{status.label}</span>
+                          </span>
+
+                          {/* Acordes Abordados */}
+                          {lesson.chordDiagrams && lesson.chordDiagrams.length > 0 && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[#25252A] dark:text-[#F8F7F4] bg-stone-100 dark:bg-stone-800 px-2 py-0.5 rounded-md border border-stone-200 dark:border-stone-700">
+                              🎸 {lesson.chordDiagrams.map((c) => c.symbol || c.name).join(', ')}
+                            </span>
+                          )}
+
+                          {/* Metrônomo Alvo */}
+                          <span className="inline-flex items-center gap-1 text-[10px] font-mono-code font-bold text-[#7B1E2B] dark:text-[#FF6B81] bg-[#F5E8EA] dark:bg-[#3A1E24] px-2 py-0.5 rounded-md border border-[#E8D3D6] dark:border-[#4D2830]">
+                            {lesson.speedGoals.startingBpm} → {lesson.speedGoals.targetBpm} BPM
+                          </span>
+                        </div>
+
+                        <h3 className="font-bold text-[#25252A] dark:text-[#F8F7F4] text-sm sm:text-base">
+                          {lesson.title}
+                        </h3>
+                        <p className="text-xs text-[#666672] dark:text-[#B8B3C0] line-clamp-1">
+                          {lesson.subtitle}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between sm:justify-end gap-3 pt-2 sm:pt-0 border-t sm:border-t-0 border-[#D9D9D9] dark:border-[#33333E]">
+                      <div className="flex items-center gap-1.5 text-xs text-[#666672] dark:text-[#B8B3C0] font-mono-code font-medium">
+                        <Clock className="w-3.5 h-3.5" />
+                        <span>{lesson.estimatedMinutes} min</span>
+                      </div>
+
+                      <button className="flex items-center gap-1 text-xs font-bold text-[#7B1E2B] dark:text-[#FF6B81] hover:text-[#B52A3A] px-3.5 py-1.5 rounded-xl bg-white dark:bg-[#25252A] border border-[#D9D9D9] dark:border-[#33333E] transition shadow-xs">
+                        <span>{isCompleted ? 'Revisar' : 'Estudar'}</span>
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </>
+      )}
 
       {/* ======================================================== */}
       {/* TRILHA 1: FORMAÇÃO PROGRESSIVA EM GUITARRA SOLO (20 AULAS) */}
