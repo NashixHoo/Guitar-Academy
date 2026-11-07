@@ -29,7 +29,7 @@ export interface ExecutablePracticeExercise {
 }
 
 export interface GeneratedRoutine {
-  durationMinutes: 5 | 10 | 15 | 30;
+  durationMinutes: 5 | 10 | 15 | 20 | 30 | 45 | 60;
   level: number;
   priorityRationale: string;
   recommendation: AdaptiveRecommendation;
@@ -431,7 +431,7 @@ E|-3 (Baixo Sol)---|-2 (Baixo Fá#!)--|-0 (Baixo Mi)----|-----------------|
  * do perfil de habilidades, das revisões pendentes e da recomendação adaptativa ativa.
  */
 export function generatePracticeRoutine(
-  durationMinutes: 5 | 10 | 15 | 30,
+  durationMinutes: 5 | 10 | 15 | 20 | 30 | 45 | 60,
   progress: UserProgress
 ): GeneratedRoutine {
   const profile = progress.pedagogicalProfile || createInitialPedagogicalProfile();
@@ -445,7 +445,7 @@ export function generatePracticeRoutine(
 
   // 2. Identifica se há habilidade fraca com erros recorrentes
   const weakSkill = Object.values(profile.skills).find(
-    (s) => Object.values(s.recurringErrors).some((count) => count >= 2)
+    (s) => s.recurringErrors && Object.values(s.recurringErrors).some((count) => count >= 2)
   );
 
   const selectedExercises: ExecutablePracticeExercise[] = [];
@@ -558,30 +558,185 @@ export function generatePracticeRoutine(
         targetRepetitions: 8,
       });
     }
+  } else if (durationMinutes === 20) {
+    // SESSÃO COMPACTA DE APROFUNDAMENTO (20 min): 5 exercícios (4 min cada)
+    selectedExercises.push({
+      ...PRACTICE_EXERCISE_CATALOG['drill-warmup-spider'],
+      durationMinutes: 4,
+      targetRepetitions: 6,
+    });
+    selectedExercises.push({
+      ...PRACTICE_EXERCISE_CATALOG['drill-alt-picking-1234'],
+      durationMinutes: 4,
+      targetRepetitions: 8,
+    });
+    selectedExercises.push({
+      ...PRACTICE_EXERCISE_CATALOG['drill-rhythm-subdivisions'],
+      durationMinutes: 4,
+      targetRepetitions: 8,
+    });
+    if (level >= 3) {
+      selectedExercises.push({
+        ...PRACTICE_EXERCISE_CATALOG['drill-penta-5-positions-system'],
+        durationMinutes: 4,
+        targetRepetitions: 6,
+      });
+    } else {
+      selectedExercises.push({
+        ...PRACTICE_EXERCISE_CATALOG['drill-worship-harmonic-flow-dynamics'],
+        durationMinutes: 4,
+        targetRepetitions: 6,
+      });
+    }
+    if (pendingReviewSkill) {
+      selectedExercises.push({
+        ...PRACTICE_EXERCISE_CATALOG['drill-universal-groove'],
+        durationMinutes: 4,
+        targetRepetitions: 6,
+        title: `Revisão Espaçada: ${pendingReviewSkill.name}`,
+        subtitle: 'Fixação de memória muscular e validação de retenção a longo prazo',
+      });
+    } else {
+      selectedExercises.push({
+        ...PRACTICE_EXERCISE_CATALOG['drill-universal-groove'],
+        durationMinutes: 4,
+        targetRepetitions: 6,
+      });
+    }
+  } else if (durationMinutes === 45) {
+    // SESSÃO AVANÇADA (45 min): 5 exercícios profundos (6 + 9 + 10 + 10 + 10 min)
+    selectedExercises.push({
+      ...PRACTICE_EXERCISE_CATALOG['drill-warmup-spider'],
+      durationMinutes: 6,
+      targetRepetitions: 8,
+    });
+    selectedExercises.push({
+      ...PRACTICE_EXERCISE_CATALOG['drill-alt-picking-1234'],
+      durationMinutes: 9,
+      targetRepetitions: 12,
+    });
+    selectedExercises.push({
+      ...PRACTICE_EXERCISE_CATALOG['drill-rhythm-subdivisions'],
+      durationMinutes: 10,
+      targetRepetitions: 12,
+    });
+    if (level >= 4) {
+      selectedExercises.push({
+        ...PRACTICE_EXERCISE_CATALOG['drill-tetrads-harmonic-field-comping'],
+        durationMinutes: 10,
+        targetRepetitions: 10,
+      });
+    } else if (level >= 3) {
+      selectedExercises.push({
+        ...PRACTICE_EXERCISE_CATALOG['drill-harmony-251-cadence'],
+        durationMinutes: 10,
+        targetRepetitions: 10,
+      });
+    } else {
+      selectedExercises.push({
+        ...PRACTICE_EXERCISE_CATALOG['drill-worship-harmonic-flow-dynamics'],
+        durationMinutes: 10,
+        targetRepetitions: 12,
+      });
+    }
+    if (pendingReviewSkill) {
+      selectedExercises.push({
+        ...PRACTICE_EXERCISE_CATALOG['drill-universal-groove'],
+        durationMinutes: 10,
+        targetRepetitions: 10,
+        title: `Revisão Espaçada: ${pendingReviewSkill.name}`,
+        subtitle: 'Fixação de memória muscular e validação de retenção a longo prazo',
+      });
+    } else if (level >= 3) {
+      selectedExercises.push({
+        ...PRACTICE_EXERCISE_CATALOG['drill-penta-5-positions-system'],
+        durationMinutes: 10,
+        targetRepetitions: 10,
+      });
+    } else {
+      selectedExercises.push({
+        ...PRACTICE_EXERCISE_CATALOG['drill-universal-groove'],
+        durationMinutes: 10,
+        targetRepetitions: 12,
+      });
+    }
+  } else if (durationMinutes === 60) {
+    // SESSÃO MESTRE (60 min): 5 exercícios completos (8 + 12 + 13 + 14 + 13 min)
+    selectedExercises.push({
+      ...PRACTICE_EXERCISE_CATALOG['drill-warmup-spider'],
+      durationMinutes: 8,
+      targetRepetitions: 10,
+    });
+    selectedExercises.push({
+      ...PRACTICE_EXERCISE_CATALOG['drill-alt-picking-1234'],
+      durationMinutes: 12,
+      targetRepetitions: 15,
+    });
+    selectedExercises.push({
+      ...PRACTICE_EXERCISE_CATALOG['drill-rhythm-subdivisions'],
+      durationMinutes: 13,
+      targetRepetitions: 15,
+    });
+    if (level >= 4) {
+      selectedExercises.push({
+        ...PRACTICE_EXERCISE_CATALOG['drill-tetrads-harmonic-field-comping'],
+        durationMinutes: 14,
+        targetRepetitions: 12,
+      });
+    } else if (level >= 3) {
+      selectedExercises.push({
+        ...PRACTICE_EXERCISE_CATALOG['drill-harmony-251-cadence'],
+        durationMinutes: 14,
+        targetRepetitions: 12,
+      });
+    } else {
+      selectedExercises.push({
+        ...PRACTICE_EXERCISE_CATALOG['drill-worship-harmonic-flow-dynamics'],
+        durationMinutes: 14,
+        targetRepetitions: 15,
+      });
+    }
+    if (pendingReviewSkill) {
+      selectedExercises.push({
+        ...PRACTICE_EXERCISE_CATALOG['drill-universal-groove'],
+        durationMinutes: 13,
+        targetRepetitions: 12,
+        title: `Revisão Espaçada: ${pendingReviewSkill.name}`,
+        subtitle: 'Fixação de memória muscular e validação de retenção a longo prazo',
+      });
+    } else if (level >= 3) {
+      selectedExercises.push({
+        ...PRACTICE_EXERCISE_CATALOG['drill-penta-5-positions-system'],
+        durationMinutes: 13,
+        targetRepetitions: 12,
+      });
+    } else {
+      selectedExercises.push({
+        ...PRACTICE_EXERCISE_CATALOG['drill-universal-groove'],
+        durationMinutes: 13,
+        targetRepetitions: 15,
+      });
+    }
   } else {
-    // SESSÃO COMPLETA (30 min): 5 exercícios profundos
-    // Etapa 1: Alongamento e aquecimento biomecânico (4 min)
+    // SESSÃO COMPLETA PADRÃO (30 min): 5 exercícios profundos (4 + 6 + 6 + 7 + 7 min)
     selectedExercises.push({
       ...PRACTICE_EXERCISE_CATALOG['drill-warmup-spider'],
       durationMinutes: 4,
       targetRepetitions: 6,
     });
 
-    // Etapa 2: Palhetada alternada e Speed Trainer (6 min)
     selectedExercises.push({
       ...PRACTICE_EXERCISE_CATALOG['drill-alt-picking-1234'],
       durationMinutes: 6,
       targetRepetitions: 10,
     });
 
-    // Etapa 3: Precisão métrica no metrônomo (6 min)
     selectedExercises.push({
       ...PRACTICE_EXERCISE_CATALOG['drill-rhythm-subdivisions'],
       durationMinutes: 6,
       targetRepetitions: 10,
     });
 
-    // Etapa 4: Foco harmônico ou melódico (7 min)
     if (level >= 4) {
       selectedExercises.push({
         ...PRACTICE_EXERCISE_CATALOG['drill-tetrads-harmonic-field-comping'],
@@ -608,7 +763,6 @@ export function generatePracticeRoutine(
       });
     }
 
-    // Etapa 5: Improvisação, repertório ou revisão pendente (7 min)
     if (pendingReviewSkill) {
       selectedExercises.push({
         ...PRACTICE_EXERCISE_CATALOG['drill-universal-groove'],

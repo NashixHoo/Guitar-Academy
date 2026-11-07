@@ -30,6 +30,11 @@ import {
 } from 'lucide-react';
 import { IniciarIcon, PraticarIcon, AulasIcon } from '../common/GuitarIcons';
 import { DailyGoalSettings } from './DailyGoalSettings';
+import { ContinueFormationCard } from './ContinueFormationCard';
+import { DailyPracticePlanCard } from './DailyPracticePlanCard';
+import { SkillDomainMapCard } from './SkillDomainMapCard';
+import { ContextualRecommendationsCard } from './ContextualRecommendationsCard';
+import { PracticeMetricsAndLogCard } from './PracticeMetricsAndLogCard';
 import {
   getAdaptiveRecommendation,
   createInitialPedagogicalProfile,
@@ -197,313 +202,42 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
       </div>
 
-      {/* PAINEL DE ENSINO ADAPTATIVO & MEMÓRIA PEDAGÓGICA (Fase 3) */}
-      <div className="relative overflow-hidden rounded-3xl bg-white border border-[#D9D9D9] p-6 sm:p-8 shadow-xs">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-[#F2F2F2]">
-          <div className="space-y-1">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#F5E8EA] text-[#7B1E2B] text-xs font-bold uppercase tracking-wider">
-              {adaptiveRec.actionType === 'spaced_review' && <RotateCcw className="w-3.5 h-3.5 text-[#B52A3A]" />}
-              {adaptiveRec.actionType === 'teach_prerequisite' && <AlertCircle className="w-3.5 h-3.5 text-[#B52A3A]" />}
-              {adaptiveRec.actionType === 'instrumental_practice' && <Zap className="w-3.5 h-3.5 text-[#B52A3A]" />}
-              {adaptiveRec.actionType === 'reexplain_concept' && <Sparkles className="w-3.5 h-3.5 text-[#B52A3A]" />}
-              {adaptiveRec.actionType === 'advance_next_level' && <TrendingUp className="w-3.5 h-3.5 text-[#B52A3A]" />}
-              <span>
-                {adaptiveRec.actionType === 'spaced_review' && 'Revisão Espaçada Agendada'}
-                {adaptiveRec.actionType === 'teach_prerequisite' && 'Pré-Requisito Não Dominado'}
-                {adaptiveRec.actionType === 'instrumental_practice' && 'Treino Prático Motor'}
-                {adaptiveRec.actionType === 'reexplain_concept' && 'Reforço de Teoria & Harmonia'}
-                {adaptiveRec.actionType === 'advance_next_level' && 'Próximo Passo Recomendado'}
-              </span>
-            </div>
+      {/* FASE 2: CONTINUE SUA FORMAÇÃO (HERO DE CONTINUIDADE PEDAGÓGICA) */}
+      <ContinueFormationCard
+        progress={progress}
+        onSelectLesson={onSelectLesson}
+        onNavigateTab={onNavigateTab}
+      />
 
-            <h2 className="text-xl sm:text-2xl font-black text-[#25252A] tracking-tight">
-              {adaptiveRec.title}
-            </h2>
-          </div>
+      {/* FASE 3: PLANO INTELIGENTE DE PRÁTICA (5 ETAPAS: 10, 15, 20, 30, 45, 60 MIN) */}
+      <DailyPracticePlanCard
+        progress={progress}
+        onNavigateTab={onNavigateTab}
+      />
 
-          {/* Indicadores de Dificuldade e Duração */}
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-bold px-3 py-1 rounded-full bg-[#F8F7F4] border border-[#E5E5E5] text-[#4D4D54]">
-              ⏱️ {adaptiveRec.suggestedMinutes} min sugeridos
-            </span>
-            <span className="text-xs font-bold px-3 py-1 rounded-full bg-[#F8F7F4] border border-[#E5E5E5] text-[#4D4D54]">
-              🎯 {adaptiveRec.difficultyAdjustment === 'easier' ? 'Passo Simples' : adaptiveRec.difficultyAdjustment === 'challenging' ? 'Desafio Gradual' : 'Passo Regular'}
-            </span>
-            {adaptiveRec.pendingReviewsCount > 0 && (
-              <span className="text-xs font-bold px-3 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-800">
-                ⚠️ {adaptiveRec.pendingReviewsCount} revisão(ões) pendente(s)
-              </span>
-            )}
-          </div>
-        </div>
+      {/* FASE 4: MAPA DE DOMÍNIO MUSICAL (12 DIMENSÕES TÉCNICAS E ESTADO HONESTO) */}
+      <SkillDomainMapCard
+        progress={progress}
+        onNavigateTab={onNavigateTab}
+        onSelectLesson={onSelectLesson}
+      />
 
-        {/* Justificativa Pedagógica */}
-        <div className="py-4 space-y-2">
-          <p className="text-xs sm:text-sm text-[#4D4D54] leading-relaxed">
-            <strong className="text-[#25252A]">Por que esta atividade? </strong>
-            {adaptiveRec.rationale}
-          </p>
-        </div>
+      {/* FASE 5: RECOMENDAÇÕES CONTEXTUAIS DETERMINÍSTICAS (CONTINUIDADE, REVISÃO, TREINO) */}
+      <ContextualRecommendationsCard
+        progress={progress}
+        onNavigateTab={onNavigateTab}
+        onSelectLesson={onSelectLesson}
+      />
 
-        {/* Ações: Seguir Recomendação vs Escolher Livremente */}
-        <div className="flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-[#F2F2F2]">
-          <div className="flex flex-wrap items-center gap-3">
-            <button
-              onClick={() => {
-                if (adaptiveRec.targetLessonId) {
-                  onSelectLesson(adaptiveRec.targetLessonId);
-                } else {
-                  onNavigateTab(adaptiveRec.targetTab);
-                }
-              }}
-              className="flex items-center gap-2.5 px-6 py-3 rounded-2xl bg-[#7B1E2B] text-white hover:bg-[#B52A3A] font-bold text-xs sm:text-sm shadow-xs transition"
-            >
-              <Play className="w-4 h-4 fill-current" />
-              <span>Seguir Recomendação</span>
-            </button>
-
-            <button
-              onClick={() => onNavigateTab('curriculum')}
-              className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-[#F8F7F4] hover:bg-[#F2F2F2] text-[#25252A] font-bold text-xs sm:text-sm border border-[#D9D9D9] transition"
-            >
-              <Compass className="w-4 h-4 text-[#666672]" />
-              <span>Escolher Livremente</span>
-            </button>
-          </div>
-
-          {/* Resumo de Domínio */}
-          <div className="flex flex-wrap items-center gap-4 text-xs font-semibold text-[#666672]">
-            <span>
-              Habilidades Dominadas:{' '}
-              <strong className="text-emerald-600 font-bold">{masteredSkillsCount}</strong>/
-              {skillsList.length}
-            </span>
-            <span>
-              Domínio Geral:{' '}
-              <strong className="text-[#7B1E2B] font-bold">
-                {pedagogicalProfile.overallMasteryPercent}%
-              </strong>
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* NOVO: PAINEL DE META DIÁRIA DE PRÁTICA (DAILY PRACTICE GOAL & PROGRESS RING/BAR) */}
-      <div className={`relative overflow-hidden rounded-3xl bg-white border p-4 sm:p-8 shadow-xs transition-all ${
-        isGoalReached 
-          ? 'border-[#10B981]/40 ring-1 ring-[#10B981]/20' 
-          : 'border-[#D9D9D9]'
-      }`}>
-        {/* Subtle accent header line */}
-        <div className={`absolute top-0 left-0 right-0 h-1.5 ${
-          isGoalReached ? 'bg-[#10B981]' : 'tortoiseshell-badge'
-        }`} />
-
-        <div className="flex flex-col lg:flex-row items-center justify-between gap-6 sm:gap-8">
-          
-          {/* Lado Esquerdo: Circular Progress Ring (SVG) */}
-          <div className="flex flex-col xs:flex-row items-center gap-4 sm:gap-6 shrink-0 text-center xs:text-left">
-            <div className="relative w-28 h-28 sm:w-32 sm:h-32 flex items-center justify-center">
-              <svg className="w-full h-full transform -rotate-90" viewBox="0 0 120 120">
-                <defs>
-                  {/* Giannini Red Burgundy Gradient */}
-                  <linearGradient id="practiceRingGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stopColor="#7B1E2B" />
-                    <stop offset="100%" stopColor="#B52A3A" />
-                  </linearGradient>
-                  {/* Goal Met Emerald Gradient */}
-                  <linearGradient id="goalSuccessRingGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stopColor="#10B981" />
-                    <stop offset="100%" stopColor="#059669" />
-                  </linearGradient>
-                </defs>
-
-                {/* Track Circle */}
-                <circle
-                  cx="60"
-                  cy="60"
-                  r={ringRadius}
-                  fill="none"
-                  stroke={isGoalReached ? 'rgba(16, 185, 129, 0.12)' : '#F2F2F2'}
-                  strokeWidth="10"
-                />
-
-                {/* Animated Progress Stroke */}
-                <circle
-                  cx="60"
-                  cy="60"
-                  r={ringRadius}
-                  fill="none"
-                  stroke={isGoalReached ? 'url(#goalSuccessRingGradient)' : 'url(#practiceRingGradient)'}
-                  strokeWidth="10"
-                  strokeLinecap="round"
-                  strokeDasharray={ringCircumference}
-                  strokeDashoffset={strokeDashoffset}
-                  className="transition-all duration-700 ease-out"
-                />
-              </svg>
-
-              {/* Progress Ring Center Content */}
-              <div className="absolute inset-0 flex flex-col items-center justify-center text-center select-none">
-                {isGoalReached ? (
-                  <>
-                    <div className="w-6 h-6 rounded-full bg-[#10B981]/15 text-[#10B981] flex items-center justify-center mb-0.5">
-                      <Check className="w-4 h-4 stroke-[3]" />
-                    </div>
-                    <span className="text-lg sm:text-xl font-black text-[#10B981] leading-none">
-                      {goalPercentage}%
-                    </span>
-                    <span className="text-[9px] font-bold text-[#059669] uppercase tracking-wide mt-0.5">
-                      Meta Atingida
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <span className="text-xl sm:text-2xl font-black text-[#25252A] leading-none font-mono-code">
-                      {goalPercentage}%
-                    </span>
-                    <span className="text-[10px] font-semibold text-[#666672] mt-0.5">
-                      {todayMinutes}/{dailyGoalMinutes}m
-                    </span>
-                  </>
-                )}
-              </div>
-            </div>
-
-            {/* Informações de Destaque da Meta */}
-            <div className="space-y-1.5">
-              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#F5E8EA] text-[#7B1E2B] text-[10px] font-bold uppercase tracking-wider">
-                <Target className="w-3 h-3 text-[#B52A3A]" />
-                <span>Meta Diária de Prática</span>
-              </div>
-
-              <div className="flex items-baseline gap-2">
-                <strong className="text-2xl sm:text-3xl font-black text-[#25252A] tracking-tight">
-                  {todayMinutes} <span className="text-sm font-semibold text-[#666672]">min hoje</span>
-                </strong>
-                <span className="text-xs font-bold text-[#666672]">
-                  / meta de {dailyGoalMinutes} min
-                </span>
-              </div>
-
-              <p className="text-xs text-[#666672] font-medium max-w-sm">
-                {isGoalReached ? (
-                  <span className="text-[#059669] font-bold flex items-center gap-1">
-                    <Award className="w-3.5 h-3.5" />
-                    Parabéns! Meta diária concluída {extraMinutes > 0 ? `(+${extraMinutes} min extras)` : ''}!
-                  </span>
-                ) : (
-                  <span>
-                    Faltam apenas <strong className="text-[#7B1E2B] font-bold">{minutesRemaining} minutos</strong> para cumprir sua meta hoje.
-                  </span>
-                )}
-              </p>
-            </div>
-          </div>
-
-          {/* Centro / Direita: Barra de Progresso Linear & Seletor de Metas */}
-          <div className="w-full lg:max-w-md space-y-4">
-            
-            {/* Linear Progress Bar com Marcadores de Marcos (0%, 25%, 50%, 75%, 100%) */}
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between text-xs font-bold">
-                <span className="text-[#666672] flex items-center gap-1">
-                  <TrendingUp className="w-3.5 h-3.5 text-[#7B1E2B]" />
-                  <span>Progresso do Dia</span>
-                </span>
-                <span className={isGoalReached ? 'text-[#10B981]' : 'text-[#7B1E2B]'}>
-                  {todayMinutes} de {dailyGoalMinutes} min ({goalPercentage}%)
-                </span>
-              </div>
-
-              {/* Barra */}
-              <div className="w-full bg-[#F2F2F2] rounded-full h-3.5 p-0.5 border border-[#E5E5E5] relative overflow-hidden">
-                <div
-                  className={`h-full rounded-full transition-all duration-700 ease-out ${
-                    isGoalReached
-                      ? 'bg-gradient-to-r from-[#10B981] to-[#059669]'
-                      : 'bg-gradient-to-r from-[#7B1E2B] to-[#B52A3A]'
-                  }`}
-                  style={{ width: `${clampedPercentage}%` }}
-                />
-              </div>
-
-              {/* Marcadores de Etapa */}
-              <div className="flex justify-between text-[9px] text-[#8C8C9A] font-semibold px-0.5">
-                <span>0m</span>
-                <span>{Math.round(dailyGoalMinutes * 0.25)}m</span>
-                <span>{Math.round(dailyGoalMinutes * 0.5)}m</span>
-                <span>{Math.round(dailyGoalMinutes * 0.75)}m</span>
-                <span className={isGoalReached ? 'text-[#10B981] font-bold' : ''}>{dailyGoalMinutes}m (100%)</span>
-              </div>
-            </div>
-
-            {/* Configuração da Meta Diária via DailyGoalSettings */}
-            <div className="pt-1 border-t border-[#F2F2F2] space-y-2">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-[11px] font-bold text-[#4D4D54]">
-                  Ajustar Meta Diária:
-                </span>
-                <button
-                  onClick={() => setIsGoalSettingsModalOpen(true)}
-                  className="text-[11px] font-bold text-[#7B1E2B] hover:text-[#B52A3A] flex items-center gap-1.5 transition px-2.5 py-1 rounded-lg bg-[#F5E8EA] hover:bg-[#ebd3d6]"
-                  title="Abrir configurações completas de meta diária"
-                >
-                  <Sliders className="w-3.5 h-3.5" />
-                  <span>Configurar Meta</span>
-                </button>
-              </div>
-
-              {/* Botões Chips de Predefinição de Metas (10, 15, 20, 30, 45, 60m) */}
-              <div className="flex flex-wrap gap-1.5">
-                {goalPresets.map((mins) => (
-                  <button
-                    key={mins}
-                    onClick={() => handleUpdateDailyGoal(mins)}
-                    className={`py-1.5 px-3 rounded-xl text-xs font-bold transition border ${
-                      dailyGoalMinutes === mins
-                        ? 'bg-[#7B1E2B] text-white border-[#7B1E2B] shadow-xs'
-                        : 'bg-[#F8F7F4] text-[#4D4D54] border-[#D9D9D9] hover:bg-[#F5E8EA] hover:text-[#7B1E2B]'
-                    }`}
-                  >
-                    {mins}m
-                  </button>
-                ))}
-                <button
-                  onClick={() => setIsGoalSettingsModalOpen(true)}
-                  className="py-1.5 px-3 rounded-xl text-xs font-bold transition border border-dashed border-[#7B1E2B] text-[#7B1E2B] hover:bg-[#F5E8EA] flex items-center gap-1"
-                >
-                  <Edit3 className="w-3 h-3" />
-                  <span>Personalizar...</span>
-                </button>
-              </div>
-
-              {/* Registro Rápido de Prática Avulsa (+5 min / +15 min) */}
-              <div className="flex items-center justify-between pt-1 text-[11px] text-[#666672]">
-                <span>Praticou offline na guitarra física?</span>
-                <div className="flex items-center gap-1.5">
-                  <button
-                    onClick={() => handleLogQuickPractice(5)}
-                    className="px-2 py-1 rounded-lg bg-[#F8F7F4] hover:bg-[#F5E8EA] text-[#7B1E2B] border border-[#D9D9D9] font-bold text-[10px] flex items-center gap-1 transition"
-                    title="Adicionar 5 minutos de prática física de hoje"
-                  >
-                    <Plus className="w-3 h-3" />
-                    <span>+5 min</span>
-                  </button>
-                  <button
-                    onClick={() => handleLogQuickPractice(15)}
-                    className="px-2 py-1 rounded-lg bg-[#F8F7F4] hover:bg-[#F5E8EA] text-[#7B1E2B] border border-[#D9D9D9] font-bold text-[10px] flex items-center gap-1 transition"
-                    title="Adicionar 15 minutos de prática física de hoje"
-                  >
-                    <Plus className="w-3 h-3" />
-                    <span>+15 min</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+      {/* FASE 6: REGISTRO DE PRÁTICA REAL & METAS (FÍSICA OFFLINE VS INTERATIVA VERIFICADA) */}
+      <PracticeMetricsAndLogCard
+        progress={progress}
+        onUpdateProgress={onUpdateProgress}
+        onToastFeedback={(msg) => {
+          setToastFeedback(msg);
+          setTimeout(() => setToastFeedback(null), 3500);
+        }}
+      />
 
       {/* Quick Metrics Bar: Study Time, Completed Lessons, Daily Goal */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -641,21 +375,21 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         {/* Guitar Coach Quick Access */}
         <div
           onClick={() => onNavigateTab('guitar-coach')}
-          className="bg-white border-2 border-[#7B1E2B]/30 hover:border-[#7B1E2B] p-5 rounded-2xl cursor-pointer transition shadow-xs group flex flex-col justify-between"
+          className="bg-white dark:bg-[#1A1216] border border-[#7B1E2B]/30 hover:border-[#7B1E2B] dark:border-[#FF6B81]/30 dark:hover:border-[#FF6B81] p-5 rounded-2xl cursor-pointer transition shadow-2xs group flex flex-col justify-between"
         >
           <div>
-            <div className="w-10 h-10 rounded-xl bg-[#F5E8EA] flex items-center justify-center text-[#7B1E2B] mb-3 group-hover:scale-105 transition-transform border border-[#E8D3D6]">
-              <Zap className="w-5 h-5 text-[#B52A3A]" />
+            <div className="w-10 h-10 rounded-xl bg-[#F5E8EA] dark:bg-[#381A25] flex items-center justify-center text-[#7B1E2B] dark:text-[#FF6B81] mb-3 group-hover:scale-105 transition-transform border border-[#E8D3D6] dark:border-[#422933]">
+              <Zap className="w-5 h-5 text-[#B52A3A] dark:text-[#FF6B81]" />
             </div>
-            <h3 className="font-bold text-[#25252A] text-base group-hover:text-[#7B1E2B] transition-colors flex items-center gap-1.5">
+            <h3 className="font-bold text-[#25252A] dark:text-[#F8F7F4] text-base group-hover:text-[#7B1E2B] dark:group-hover:text-[#FF6B81] transition-colors flex items-center gap-1.5">
               <span>Guitar Coach</span>
-              <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-[#10b981]/15 text-[#047857] font-bold">Novo</span>
+              <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-[#10b981]/15 text-[#047857] dark:text-[#34D399] font-bold">Novo</span>
             </h3>
-            <p className="text-xs text-[#666672] mt-1">
+            <p className="text-xs text-[#666672] dark:text-[#B8B3C0] mt-1 leading-relaxed">
               Treine transições de acordes no tempo com metrônomo e avaliação acústica real.
             </p>
           </div>
-          <div className="mt-4 flex items-center gap-1 text-xs font-bold text-[#7B1E2B]">
+          <div className="mt-4 flex items-center gap-1 text-xs font-bold text-[#7B1E2B] dark:text-[#FF6B81]">
             <span>Abrir Treinador</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </div>
@@ -664,21 +398,21 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         {/* Professor IA Quick Access */}
         <div
           onClick={() => onNavigateTab('professor-ai')}
-          className="bg-white border-2 border-[#7B1E2B]/40 hover:border-[#7B1E2B] p-5 rounded-2xl cursor-pointer transition shadow-xs group flex flex-col justify-between bg-gradient-to-b from-white to-[#FAF6F6]"
+          className="bg-white dark:bg-[#1A1216] border border-[#7B1E2B]/40 hover:border-[#7B1E2B] dark:border-[#FF6B81]/40 dark:hover:border-[#FF6B81] p-5 rounded-2xl cursor-pointer transition shadow-2xs group flex flex-col justify-between bg-gradient-to-b from-white to-[#FAF6F6] dark:from-[#1A1216] dark:to-[#22141A]"
         >
           <div>
             <div className="w-10 h-10 rounded-xl bg-[#7B1E2B] flex items-center justify-center text-white mb-3 group-hover:scale-105 transition-transform shadow-xs">
               <Sparkles className="w-5 h-5 text-white" />
             </div>
-            <h3 className="font-bold text-[#25252A] text-base group-hover:text-[#7B1E2B] transition-colors flex items-center gap-1.5">
+            <h3 className="font-bold text-[#25252A] dark:text-[#F8F7F4] text-base group-hover:text-[#7B1E2B] dark:group-hover:text-[#FF6B81] transition-colors flex items-center gap-1.5">
               <span>Professor IA</span>
-              <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-[#7B1E2B]/15 text-[#7B1E2B] font-bold">Gemini</span>
+              <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-[#7B1E2B]/15 text-[#7B1E2B] dark:bg-[#FF6B81]/15 dark:text-[#FF6B81] font-bold">Gemini</span>
             </h3>
-            <p className="text-xs text-[#666672] mt-1">
+            <p className="text-xs text-[#666672] dark:text-[#B8B3C0] mt-1 leading-relaxed">
               Tira-dúvidas de harmonia, exercícios estruturados com correção e recomendação didática.
             </p>
           </div>
-          <div className="mt-4 flex items-center gap-1 text-xs font-bold text-[#7B1E2B]">
+          <div className="mt-4 flex items-center gap-1 text-xs font-bold text-[#7B1E2B] dark:text-[#FF6B81]">
             <span>Consultar Professor</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </div>
@@ -687,20 +421,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         {/* Tuner Pro Quick Access */}
         <div
           onClick={() => onNavigateTab('tuner')}
-          className="bg-white border border-[#D9D9D9] hover:border-[#7B1E2B] p-5 rounded-2xl cursor-pointer transition shadow-xs group flex flex-col justify-between"
+          className="bg-white dark:bg-[#1A1216] border border-[#E8E6E1] dark:border-[#422933] hover:border-[#7B1E2B] dark:hover:border-[#FF6B81] p-5 rounded-2xl cursor-pointer transition shadow-2xs group flex flex-col justify-between"
         >
           <div>
-            <div className="w-10 h-10 rounded-xl bg-[#F5E8EA] flex items-center justify-center text-[#7B1E2B] mb-3 group-hover:scale-105 transition-transform border border-[#E8D3D6]">
-              <Radio className="w-5 h-5 text-[#7B1E2B]" />
+            <div className="w-10 h-10 rounded-xl bg-[#F5E8EA] dark:bg-[#381A25] flex items-center justify-center text-[#7B1E2B] dark:text-[#FF6B81] mb-3 group-hover:scale-105 transition-transform border border-[#E8D3D6] dark:border-[#422933]">
+              <Radio className="w-5 h-5 text-[#7B1E2B] dark:text-[#FF6B81]" />
             </div>
-            <h3 className="font-bold text-[#25252A] text-base group-hover:text-[#7B1E2B] transition-colors">
+            <h3 className="font-bold text-[#25252A] dark:text-[#F8F7F4] text-base group-hover:text-[#7B1E2B] dark:group-hover:text-[#FF6B81] transition-colors">
               Afinador Pro
             </h3>
-            <p className="text-xs text-[#666672] mt-1">
+            <p className="text-xs text-[#666672] dark:text-[#B8B3C0] mt-1 leading-relaxed">
               Afinação da guitarra física via microfone real e agulha suave a 60 FPS.
             </p>
           </div>
-          <div className="mt-4 flex items-center gap-1 text-xs font-bold text-[#7B1E2B]">
+          <div className="mt-4 flex items-center gap-1 text-xs font-bold text-[#7B1E2B] dark:text-[#FF6B81]">
             <span>Afinar Guitarra</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </div>
@@ -709,20 +443,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         {/* Metronome Quick Access */}
         <div
           onClick={() => onNavigateTab('metronome')}
-          className="bg-white border border-[#D9D9D9] hover:border-[#7B1E2B] p-5 rounded-2xl cursor-pointer transition shadow-xs group flex flex-col justify-between"
+          className="bg-white dark:bg-[#1A1216] border border-[#E8E6E1] dark:border-[#422933] hover:border-[#7B1E2B] dark:hover:border-[#FF6B81] p-5 rounded-2xl cursor-pointer transition shadow-2xs group flex flex-col justify-between"
         >
           <div>
-            <div className="w-10 h-10 rounded-xl bg-[#F5E8EA] flex items-center justify-center text-[#7B1E2B] mb-3 group-hover:scale-105 transition-transform border border-[#E8D3D6]">
+            <div className="w-10 h-10 rounded-xl bg-[#F5E8EA] dark:bg-[#381A25] flex items-center justify-center text-[#7B1E2B] dark:text-[#FF6B81] mb-3 group-hover:scale-105 transition-transform border border-[#E8D3D6] dark:border-[#422933]">
               <Clock className="w-5 h-5" />
             </div>
-            <h3 className="font-bold text-[#25252A] text-base group-hover:text-[#7B1E2B] transition-colors">
+            <h3 className="font-bold text-[#25252A] dark:text-[#F8F7F4] text-base group-hover:text-[#7B1E2B] dark:group-hover:text-[#FF6B81] transition-colors">
               Metrônomo
             </h3>
-            <p className="text-xs text-[#666672] mt-1">
+            <p className="text-xs text-[#666672] dark:text-[#B8B3C0] mt-1 leading-relaxed">
               Treine tempo, subdivisões rítmicas e velocidade com o Speed Trainer.
             </p>
           </div>
-          <div className="mt-4 flex items-center gap-1 text-xs font-bold text-[#7B1E2B]">
+          <div className="mt-4 flex items-center gap-1 text-xs font-bold text-[#7B1E2B] dark:text-[#FF6B81]">
             <span>Abrir Metrônomo</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </div>
@@ -731,20 +465,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         {/* Chord Dictionary Quick Access */}
         <div
           onClick={() => onNavigateTab('chords')}
-          className="bg-white border border-[#D9D9D9] hover:border-[#7B1E2B] p-5 rounded-2xl cursor-pointer transition shadow-xs group flex flex-col justify-between"
+          className="bg-white dark:bg-[#1A1216] border border-[#E8E6E1] dark:border-[#422933] hover:border-[#7B1E2B] dark:hover:border-[#FF6B81] p-5 rounded-2xl cursor-pointer transition shadow-2xs group flex flex-col justify-between"
         >
           <div>
-            <div className="w-10 h-10 rounded-xl bg-[#F5E8EA] flex items-center justify-center text-[#7B1E2B] mb-3 group-hover:scale-105 transition-transform border border-[#E8D3D6]">
+            <div className="w-10 h-10 rounded-xl bg-[#F5E8EA] dark:bg-[#381A25] flex items-center justify-center text-[#7B1E2B] dark:text-[#FF6B81] mb-3 group-hover:scale-105 transition-transform border border-[#E8D3D6] dark:border-[#422933]">
               <Guitar className="w-5 h-5" />
             </div>
-            <h3 className="font-bold text-[#25252A] text-base group-hover:text-[#7B1E2B] transition-colors">
+            <h3 className="font-bold text-[#25252A] dark:text-[#F8F7F4] text-base group-hover:text-[#7B1E2B] dark:group-hover:text-[#FF6B81] transition-colors">
               Dicionário de Acordes
             </h3>
-            <p className="text-xs text-[#666672] mt-1">
+            <p className="text-xs text-[#666672] dark:text-[#B8B3C0] mt-1 leading-relaxed">
               Consulte digitações, pestanas, power chords e ouça o áudio das cordas.
             </p>
           </div>
-          <div className="mt-4 flex items-center gap-1 text-xs font-bold text-[#7B1E2B]">
+          <div className="mt-4 flex items-center gap-1 text-xs font-bold text-[#7B1E2B] dark:text-[#FF6B81]">
             <span>Consultar Acordes</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </div>
@@ -753,20 +487,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         {/* Interactive Fretboard Quick Access */}
         <div
           onClick={() => onNavigateTab('fretboard')}
-          className="bg-white border border-[#D9D9D9] hover:border-[#7B1E2B] p-5 rounded-2xl cursor-pointer transition shadow-xs group flex flex-col justify-between"
+          className="bg-white dark:bg-[#1A1216] border border-[#E8E6E1] dark:border-[#422933] hover:border-[#7B1E2B] dark:hover:border-[#FF6B81] p-5 rounded-2xl cursor-pointer transition shadow-2xs group flex flex-col justify-between"
         >
           <div>
-            <div className="w-10 h-10 rounded-xl bg-[#F5E8EA] flex items-center justify-center text-[#7B1E2B] mb-3 group-hover:scale-105 transition-transform border border-[#E8D3D6]">
-              <Sparkles className="w-5 h-5 text-[#B52A3A]" />
+            <div className="w-10 h-10 rounded-xl bg-[#F5E8EA] dark:bg-[#381A25] flex items-center justify-center text-[#7B1E2B] dark:text-[#FF6B81] mb-3 group-hover:scale-105 transition-transform border border-[#E8D3D6] dark:border-[#422933]">
+              <Sparkles className="w-5 h-5 text-[#B52A3A] dark:text-[#FF6B81]" />
             </div>
-            <h3 className="font-bold text-[#25252A] text-base group-hover:text-[#7B1E2B] transition-colors">
+            <h3 className="font-bold text-[#25252A] dark:text-[#F8F7F4] text-base group-hover:text-[#7B1E2B] dark:group-hover:text-[#FF6B81] transition-colors">
               Braço Interativo
             </h3>
-            <p className="text-xs text-[#666672] mt-1">
+            <p className="text-xs text-[#666672] dark:text-[#B8B3C0] mt-1 leading-relaxed">
               Mapeie escalas Pentatônicas, Modos gregos e localize notas nas casas 0 a 22.
             </p>
           </div>
-          <div className="mt-4 flex items-center gap-1 text-xs font-bold text-[#7B1E2B]">
+          <div className="mt-4 flex items-center gap-1 text-xs font-bold text-[#7B1E2B] dark:text-[#FF6B81]">
             <span>Explorar Braço</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </div>
@@ -775,20 +509,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         {/* Ear Training Quick Access */}
         <div
           onClick={() => onNavigateTab('ear-training')}
-          className="bg-white border border-[#D9D9D9] hover:border-[#7B1E2B] p-5 rounded-2xl cursor-pointer transition shadow-xs group flex flex-col justify-between"
+          className="bg-white dark:bg-[#1A1216] border border-[#E8E6E1] dark:border-[#422933] hover:border-[#7B1E2B] dark:hover:border-[#FF6B81] p-5 rounded-2xl cursor-pointer transition shadow-2xs group flex flex-col justify-between"
         >
           <div>
-            <div className="w-10 h-10 rounded-xl bg-[#F5E8EA] flex items-center justify-center text-[#7B1E2B] mb-3 group-hover:scale-105 transition-transform border border-[#E8D3D6]">
+            <div className="w-10 h-10 rounded-xl bg-[#F5E8EA] dark:bg-[#381A25] flex items-center justify-center text-[#7B1E2B] dark:text-[#FF6B81] mb-3 group-hover:scale-105 transition-transform border border-[#E8D3D6] dark:border-[#422933]">
               <Volume2 className="w-5 h-5" />
             </div>
-            <h3 className="font-bold text-[#25252A] text-base group-hover:text-[#7B1E2B] transition-colors">
+            <h3 className="font-bold text-[#25252A] dark:text-[#F8F7F4] text-base group-hover:text-[#7B1E2B] dark:group-hover:text-[#FF6B81] transition-colors">
               Treino Auditivo
             </h3>
-            <p className="text-xs text-[#666672] mt-1">
+            <p className="text-xs text-[#666672] dark:text-[#B8B3C0] mt-1 leading-relaxed">
               Eduque seus ouvidos para reconhecer intervalos e tirar músicas de ouvido.
             </p>
           </div>
-          <div className="mt-4 flex items-center gap-1 text-xs font-bold text-[#7B1E2B]">
+          <div className="mt-4 flex items-center gap-1 text-xs font-bold text-[#7B1E2B] dark:text-[#FF6B81]">
             <span>Iniciar Treino</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </div>
@@ -799,19 +533,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         
         {/* Recommended Exercise Card */}
-        <div className="bg-white border border-[#D9D9D9] rounded-3xl p-6 sm:p-8 shadow-xs space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-[#D9D9D9]">
-            <span className="text-xs font-bold text-[#7B1E2B] flex items-center gap-1.5 uppercase tracking-wider">
-              <Sparkles className="w-4 h-4 text-[#B52A3A]" />
+        <div className="bg-white dark:bg-[#1A1216] border border-[#E8E6E1] dark:border-[#422933] rounded-3xl p-6 sm:p-8 shadow-xs space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-[#E8E6E1] dark:border-[#422933]">
+            <span className="text-xs font-bold text-[#7B1E2B] dark:text-[#FF6B81] flex items-center gap-1.5 uppercase tracking-wider">
+              <Sparkles className="w-4 h-4 text-[#B52A3A] dark:text-[#FF6B81]" />
               Exercício Recomendado para Hoje
             </span>
           </div>
 
           <div>
-            <h3 className="font-bold text-[#25252A] text-lg">
+            <h3 className="font-bold text-[#25252A] dark:text-[#F8F7F4] text-lg">
               Coordenação & Digitação 1-2-3-4 Cromático
             </h3>
-            <p className="text-xs text-[#666672] mt-1 leading-relaxed">
+            <p className="text-xs text-[#666672] dark:text-[#B8B3C0] mt-1 leading-relaxed">
               Pratique o exercício de independência dos dedos nas 6 cordas da guitarra utilizando palhetada alternada estrita a 60 BPM durante 10 minutos.
             </p>
           </div>
@@ -819,13 +553,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <div className="flex items-center gap-3 pt-2">
             <button
               onClick={() => onNavigateTab('technique')}
-              className="px-4 py-2.5 rounded-xl bg-[#F8F7F4] hover:bg-[#F5E8EA] text-xs font-bold text-[#25252A] transition border border-[#D9D9D9]"
+              className="px-4 py-2.5 rounded-xl bg-[#F8F7F4] dark:bg-[#22141A] hover:bg-[#F5E8EA] dark:hover:bg-[#381A25] text-xs font-bold text-[#25252A] dark:text-[#F8F7F4] transition border border-[#E8E6E1] dark:border-[#422933]"
             >
               Ver Técnica & Tablatura
             </button>
             <button
               onClick={() => onNavigateTab('metronome')}
-              className="px-4 py-2.5 rounded-xl bg-[#7B1E2B] hover:bg-[#B52A3A] text-xs font-bold text-white transition shadow-xs"
+              className="px-4 py-2.5 rounded-xl bg-[#7B1E2B] dark:bg-[#FF6B81] hover:bg-[#B52A3A] text-xs font-bold text-white dark:text-[#180A0E] transition shadow-2xs"
             >
               Abrir Metrônomo (60 BPM)
             </button>
@@ -833,10 +567,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
 
         {/* Next Goals Card */}
-        <div className="bg-white border border-[#D9D9D9] rounded-3xl p-6 sm:p-8 shadow-xs space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-[#D9D9D9]">
-            <span className="text-xs font-bold text-[#7B1E2B] flex items-center gap-1.5 uppercase tracking-wider">
-              <Compass className="w-4 h-4 text-[#B52A3A]" />
+        <div className="bg-white dark:bg-[#1A1216] border border-[#E8E6E1] dark:border-[#422933] rounded-3xl p-6 sm:p-8 shadow-xs space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-[#E8E6E1] dark:border-[#422933]">
+            <span className="text-xs font-bold text-[#7B1E2B] dark:text-[#FF6B81] flex items-center gap-1.5 uppercase tracking-wider">
+              <Compass className="w-4 h-4 text-[#B52A3A] dark:text-[#FF6B81]" />
               Próximos Objetivos de Estudo
             </span>
           </div>
@@ -854,14 +588,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             ].map((goal, idx) => (
               <div
                 key={idx}
-                className="flex items-center gap-3 bg-[#F8F7F4] p-3 rounded-xl border border-[#D9D9D9] text-xs"
+                className="flex items-center gap-3 bg-[#F8F7F4] dark:bg-[#22141A] p-3 rounded-xl border border-[#E8E6E1] dark:border-[#422933] text-xs"
               >
                 {goal.done ? (
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                 ) : (
-                  <div className="w-4 h-4 rounded-full border-2 border-[#D9D9D9] shrink-0" />
+                  <div className="w-4 h-4 rounded-full border-2 border-[#D9D9D9] dark:border-[#422933] shrink-0" />
                 )}
-                <span className={goal.done ? 'text-[#666672] line-through font-normal' : 'text-[#25252A] font-semibold'}>
+                <span className={goal.done ? 'text-[#666672] dark:text-[#888892] line-through font-normal' : 'text-[#25252A] dark:text-[#F8F7F4] font-semibold'}>
                   {goal.title}
                 </span>
               </div>

@@ -96,19 +96,19 @@ export const DailyGoalSettings: React.FC<DailyGoalSettingsProps> = ({
       </div>
 
       {/* Selected Goal Highlight Display */}
-      <div className="bg-[#F8F7F4] border border-[#D9D9D9] rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="bg-[#F8F7F4] dark:bg-[#22141A] border border-[#E8E6E1] dark:border-[#422933] rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <div className="w-14 h-14 rounded-2xl bg-[#7B1E2B] text-white flex items-center justify-center font-black text-xl shadow-xs shrink-0">
+          <div className="w-14 h-14 rounded-2xl bg-[#7B1E2B] dark:bg-[#FF6B81] text-white dark:text-[#180A0E] flex items-center justify-center font-black text-xl shadow-xs shrink-0">
             {selectedMinutes}m
           </div>
           <div>
-            <span className="text-[11px] font-bold text-[#666672] uppercase tracking-wider block">
+            <span className="text-[11px] font-bold text-[#666672] dark:text-[#B8B3C0] uppercase tracking-wider block">
               Meta Selecionada
             </span>
-            <div className="text-lg sm:text-xl font-extrabold text-[#25252A] flex items-center gap-2">
+            <div className="text-lg sm:text-xl font-extrabold text-[#25252A] dark:text-[#F8F7F4] flex items-center gap-2">
               <span>{selectedMinutes} minutos por dia</span>
             </div>
-            <span className="text-xs text-[#7B1E2B] font-semibold flex items-center gap-1 mt-0.5">
+            <span className="text-xs text-[#7B1E2B] dark:text-[#FF6B81] font-semibold flex items-center gap-1 mt-0.5">
               <Calendar className="w-3.5 h-3.5" />
               Aproximadamente {weeklyHours} horas de guitarra por semana
             </span>
@@ -116,8 +116,8 @@ export const DailyGoalSettings: React.FC<DailyGoalSettingsProps> = ({
         </div>
 
         {/* Input numérico direto */}
-        <div className="flex items-center gap-2 self-start sm:self-auto bg-white border border-[#D9D9D9] rounded-xl px-3 py-1.5 shadow-xs">
-          <label htmlFor="custom-mins-input" className="text-xs font-bold text-[#666672]">
+        <div className="flex items-center gap-2 self-start sm:self-auto bg-white dark:bg-[#1A1216] border border-[#E8E6E1] dark:border-[#422933] rounded-xl px-3 py-1.5 shadow-2xs">
+          <label htmlFor="custom-mins-input" className="text-xs font-bold text-[#666672] dark:text-[#B8B3C0]">
             Ajuste exato:
           </label>
           <input
@@ -128,17 +128,17 @@ export const DailyGoalSettings: React.FC<DailyGoalSettingsProps> = ({
             step="5"
             value={selectedMinutes}
             onChange={handleCustomInputChange}
-            className="w-16 font-mono font-bold text-center text-sm text-[#25252A] focus:outline-none focus:border-[#7B1E2B]"
+            className="w-16 font-mono font-bold text-center text-sm text-[#25252A] dark:text-[#F8F7F4] bg-transparent focus:outline-hidden focus:border-[#7B1E2B]"
           />
-          <span className="text-xs font-bold text-[#666672]">min</span>
+          <span className="text-xs font-bold text-[#666672] dark:text-[#B8B3C0]">min</span>
         </div>
       </div>
 
       {/* Slider contínuo de 5 a 120 minutos */}
       <div className="space-y-2">
-        <div className="flex items-center justify-between text-xs font-bold text-[#666672]">
+        <div className="flex items-center justify-between text-xs font-bold text-[#666672] dark:text-[#B8B3C0]">
           <span>5 min (Mínimo)</span>
-          <span className="text-[#7B1E2B] font-extrabold">{selectedMinutes} minutos</span>
+          <span className="text-[#7B1E2B] dark:text-[#FF6B81] font-extrabold">{selectedMinutes} minutos</span>
           <span>120 min (Avançado)</span>
         </div>
         <input
@@ -148,13 +148,13 @@ export const DailyGoalSettings: React.FC<DailyGoalSettingsProps> = ({
           step="5"
           value={selectedMinutes}
           onChange={handleSliderChange}
-          className="w-full accent-[#7B1E2B] cursor-pointer h-2 bg-[#E5E5E5] rounded-lg"
+          className="w-full accent-[#7B1E2B] cursor-pointer h-2 bg-[#E5E5E5] dark:bg-[#422933] rounded-lg"
         />
       </div>
 
       {/* Grade de Metas Predefinidas */}
       <div className="space-y-2">
-        <label className="text-xs font-bold text-[#4D4D54] uppercase tracking-wider block">
+        <label className="text-xs font-bold text-[#4D4D54] dark:text-[#B8B3C0] uppercase tracking-wider block">
           Metas Recomendadas:
         </label>
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
@@ -167,19 +167,19 @@ export const DailyGoalSettings: React.FC<DailyGoalSettingsProps> = ({
                 onClick={() => handlePresetSelect(preset.minutes)}
                 className={`p-3.5 rounded-2xl border text-left transition relative ${
                   isSelected
-                    ? 'bg-[#F5E8EA] border-[#7B1E2B] text-[#7B1E2B] ring-2 ring-[#7B1E2B]/20 shadow-xs'
-                    : 'bg-white border-[#D9D9D9] hover:bg-[#F8F7F4] text-[#25252A]'
+                    ? 'bg-[#F5E8EA] dark:bg-[#381A25] border-[#7B1E2B] dark:border-[#FF6B81] text-[#7B1E2B] dark:text-[#FF6B81] ring-2 ring-[#7B1E2B]/20 shadow-xs'
+                    : 'bg-white dark:bg-[#22141A] border-[#E8E6E1] dark:border-[#422933] hover:bg-[#F8F7F4] dark:hover:bg-[#2A1720] text-[#25252A] dark:text-[#F8F7F4]'
                 }`}
               >
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-extrabold">{preset.label}</span>
                   {isSelected && (
-                    <div className="w-5 h-5 rounded-full bg-[#7B1E2B] text-white flex items-center justify-center">
+                    <div className="w-5 h-5 rounded-full bg-[#7B1E2B] dark:bg-[#FF6B81] text-white dark:text-[#180A0E] flex items-center justify-center">
                       <Check className="w-3 h-3 stroke-[3]" />
                     </div>
                   )}
                 </div>
-                <p className="text-[11px] text-[#666672] mt-1 leading-snug">
+                <p className="text-[11px] text-[#666672] dark:text-[#B8B3C0] mt-1 leading-snug">
                   {preset.description}
                 </p>
               </button>
@@ -189,11 +189,11 @@ export const DailyGoalSettings: React.FC<DailyGoalSettingsProps> = ({
       </div>
 
       {/* Conselho Pedagógico */}
-      <div className="p-4 rounded-2xl bg-[#F5E8EA]/60 border border-[#E8D3D6] text-xs text-[#7B1E2B] flex items-start gap-3">
-        <Sparkles className="w-4 h-4 text-[#B52A3A] shrink-0 mt-0.5" />
+      <div className="p-4 rounded-2xl bg-[#F5E8EA]/60 dark:bg-[#381A25]/60 border border-[#E8D3D6] dark:border-[#422933] text-xs text-[#7B1E2B] dark:text-[#FF6B81] flex items-start gap-3">
+        <Sparkles className="w-4 h-4 text-[#B52A3A] dark:text-[#FF6B81] shrink-0 mt-0.5" />
         <div className="space-y-1">
-          <strong className="font-bold block">Dica Pedagógica do Método Guitar Academy:</strong>
-          <p className="leading-relaxed text-[#666672]">
+          <strong className="font-bold block text-[#7B1E2B] dark:text-[#FF6B81]">Dica Pedagógica do Método Guitar Academy:</strong>
+          <p className="leading-relaxed text-[#666672] dark:text-[#B8B3C0]">
             {getPedagogicalAdvice(selectedMinutes)}
           </p>
         </div>
@@ -205,7 +205,7 @@ export const DailyGoalSettings: React.FC<DailyGoalSettingsProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="w-full sm:w-auto px-5 py-2.5 rounded-xl border border-[#D9D9D9] font-bold text-xs sm:text-sm text-[#666672] hover:bg-[#F2F2F2] transition text-center"
+            className="w-full sm:w-auto px-5 py-2.5 rounded-xl border border-[#E8E6E1] dark:border-[#422933] font-bold text-xs sm:text-sm text-[#666672] dark:text-[#B8B3C0] hover:bg-[#F2F2F2] dark:hover:bg-[#381A25] transition text-center"
           >
             Cancelar
           </button>
@@ -213,7 +213,7 @@ export const DailyGoalSettings: React.FC<DailyGoalSettingsProps> = ({
         <button
           type="button"
           onClick={handleSave}
-          className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-[#7B1E2B] hover:bg-[#B52A3A] text-white font-bold text-xs sm:text-sm shadow-xs transition flex items-center justify-center gap-2"
+          className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-[#7B1E2B] dark:bg-[#FF6B81] hover:bg-[#B52A3A] text-white dark:text-[#180A0E] font-bold text-xs sm:text-sm shadow-xs transition flex items-center justify-center gap-2"
         >
           <Check className="w-4 h-4 stroke-[2.5]" />
           <span>Confirmar Meta de {selectedMinutes} Minutos</span>
@@ -224,7 +224,7 @@ export const DailyGoalSettings: React.FC<DailyGoalSettingsProps> = ({
 
   if (variant === 'inline') {
     return (
-      <div className="bg-white border border-[#D9D9D9] rounded-3xl p-4 sm:p-8 shadow-xs">
+      <div className="bg-white dark:bg-[#1A1216] border border-[#E8E6E1] dark:border-[#422933] rounded-3xl p-4 sm:p-8 shadow-xs">
         {content}
       </div>
     );
@@ -233,7 +233,7 @@ export const DailyGoalSettings: React.FC<DailyGoalSettingsProps> = ({
   // Modal Variant
   return (
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto safe-area-bottom">
-      <div className="bg-white rounded-3xl border border-[#D9D9D9] max-w-2xl w-full p-4 sm:p-8 shadow-2xl animate-in fade-in zoom-in-95 my-auto max-h-[90vh] overflow-y-auto">
+      <div className="bg-white dark:bg-[#1A1216] rounded-3xl border border-[#E8E6E1] dark:border-[#422933] max-w-2xl w-full p-4 sm:p-8 shadow-2xl animate-in fade-in zoom-in-95 my-auto max-h-[90vh] overflow-y-auto">
         {content}
       </div>
     </div>

@@ -20,6 +20,8 @@ import {
   DiagnosticoIcon,
   ConfiguracoesIcon,
 } from '../common/GuitarIcons';
+import { GraduationCap } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface SubNavBarProps {
   primaryTab: PrimaryTab;
@@ -66,15 +68,25 @@ export const SubNavBar: React.FC<SubNavBarProps> = ({
   onSelectTab,
   className = '',
 }) => {
-  const items = SUB_TABS_BY_PRIMARY[primaryTab] || [];
+  const { user } = useAuth();
+  const isTeacher = user?.email === 'dramosdasilva7@gmail.com';
+
+  const baseItems = SUB_TABS_BY_PRIMARY[primaryTab] || [];
+  const items = primaryTab === 'evoluir' && isTeacher
+    ? [
+        ...baseItems.slice(0, 1),
+        { id: 'teacher-dashboard' as NavigationTab, label: 'Gestão Pedagógica', icon: GraduationCap },
+        ...baseItems.slice(1),
+      ]
+    : baseItems;
 
   return (
     <div
       role="tablist"
       aria-label={`Sub-navegação de ${primaryTab}`}
-      className={`w-full overflow-x-auto no-scrollbar py-2 px-2 sm:px-6 bg-white/70 dark:bg-[#1A1216]/70 backdrop-blur-md border-b border-[#D9D9D9]/80 dark:border-[#422933] flex items-center select-none no-swipe ${className}`}
+      className={`w-full overflow-x-auto no-scrollbar py-2 px-2 sm:px-6 bg-white/80 dark:bg-[#1A1216]/80 backdrop-blur-md border-b border-[#E8E6E1] dark:border-[#422933] flex items-center select-none no-swipe ${className}`}
     >
-      <div className="flex items-center gap-1 sm:gap-1.5 min-w-max mx-auto sm:justify-center px-1">
+      <div className="flex items-center gap-1.5 min-w-max justify-start sm:justify-center w-full px-1 sm:px-2">
         {items.map((item) => {
           const Icon = item.icon;
           const isActive = currentTab === item.id;
@@ -87,8 +99,8 @@ export const SubNavBar: React.FC<SubNavBarProps> = ({
               onClick={() => onSelectTab(item.id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition shrink-0 min-h-[36px] ${
                 isActive
-                  ? 'bg-[#7B1E2B] dark:bg-[#FF6B81] text-white dark:text-[#180A0E] shadow-xs'
-                  : 'text-[#666672] dark:text-[#B8B3C0] hover:text-[#25252A] dark:hover:text-[#F8F7F4] hover:bg-[#F5E8EA]/60 dark:hover:bg-[#381A25]/60'
+                  ? 'bg-[#7B1E2B] dark:bg-[#FF6B81] text-white dark:text-[#180A0E] shadow-2xs'
+                  : 'text-[#666672] dark:text-[#B8B3C0] hover:text-[#25252A] dark:hover:text-[#F8F7F4] hover:bg-[#F5E8EA]/70 dark:hover:bg-[#381A25]/70'
               }`}
             >
               <Icon className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />

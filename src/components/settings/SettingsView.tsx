@@ -2,9 +2,10 @@ import React, { useState, useRef } from 'react';
 import { UserProgress, NavigationTab } from '../../types';
 import { storageService } from '../../services/storageService';
 import { PWAInstallButton } from '../common/PWAInstallButton';
-import { Settings, Music, Clock, Sliders, Smartphone, Check, Target, ShieldCheck, Sun, Moon, Monitor, Download, Upload } from 'lucide-react';
+import { Settings, Music, Clock, Sliders, Smartphone, Check, Target, ShieldCheck, Sun, Moon, Monitor, Download, Upload, User as UserIcon, Cloud, RefreshCw, LogOut, GraduationCap } from 'lucide-react';
 import { DailyGoalSettings } from '../dashboard/DailyGoalSettings';
 import { themeService, ThemeMode } from '../../services/themeService';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface SettingsViewProps {
   progress: UserProgress;
@@ -13,6 +14,8 @@ interface SettingsViewProps {
 }
 
 export const SettingsView: React.FC<SettingsViewProps> = ({ progress, onUpdateProgress, onNavigateTab }) => {
+  const { user, signInWithGoogle, logOut, syncNow, syncStatus, lastSyncedAt } = useAuth();
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [showGoalModal, setShowGoalModal] = useState<boolean>(false);
   const [backupMessage, setBackupMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -98,6 +101,150 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ progress, onUpdatePr
 
       {/* Settings Grid */}
       <div className="space-y-4">
+        {/* Conta do Aluno & Sincronização Google (Multi-Usuário) */}
+        <div className="bg-white dark:bg-[#1A1216] border border-[#D9D9D9] dark:border-[#422933] rounded-2xl p-6 shadow-xs space-y-4 transition-colors">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-[#25252A] dark:text-[#F8F7F4] font-bold text-sm">
+              <UserIcon className="w-4 h-4 text-[#7B1E2B] dark:text-[#FF6B81]" />
+              <span>Conta do Estudante & Nuvem (Multi-Usuário)</span>
+            </div>
+            {user ? (
+              <span className="text-[10px] font-mono-code font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800 flex items-center gap-1">
+                <Check className="w-3 h-3" />
+                Google Conectado
+              </span>
+            ) : (
+              <span className="text-[10px] font-mono-code font-bold px-2 py-0.5 rounded-full bg-[#FAF1F2] text-[#7B1E2B] border border-[#E8D3D6] dark:bg-[#381A25] dark:text-[#FF6B81] dark:border-[#522536]">
+                Offline / Convidado
+              </span>
+            )}
+          </div>
+
+          <p className="text-xs text-[#666672] dark:text-[#B8B3C0]">
+            O Guitar Academy isola o progresso de cada aluno por conta Google, sincronizando aulas concluídas, rotinas e histórico do braço na nuvem.
+          </p>
+
+          {user ? (
+            <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-xl bg-[#F8F7F4] dark:bg-[#251820] border border-[#E8E6E1] dark:border-[#422933]">
+              <div className="flex items-center gap-3">
+                {user.photoURL ? (
+                  <img
+                    src={user.photoURL}
+                    alt={user.displayName || 'Estudante'}
+                    className="w-10 h-10 rounded-xl object-cover border border-[#C5A059]"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <div className="w-10 h-10 rounded-xl bg-[#7B1E2B] text-white font-bold text-sm flex items-center justify-center">
+                    {(user.displayName || user.email || 'G')[0].toUpperCase()}
+                  </div>
+                )}
+                <div>
+                  <span className="font-bold text-xs sm:text-sm text-[#1F1F24] dark:text-[#F8F7F4] block">
+                    {user.displayName || 'Estudante'}
+                  </span>
+                  <span className="text-[11px] text-[#666672] dark:text-[#B8B3C0] block">
+                    {user.email}
+                  </span>
+                  <span className="text-[10px] text-[#16A34A] dark:text-[#4ADE80] flex items-center gap-1 mt-0.5 font-medium">
+                    <Cloud className="w-3 h-3" />
+                    {lastSyncedAt ? `Sincronizado às ${lastSyncedAt.toLocaleTimeString()}` : 'Pronto na nuvem'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={async () => {
+                    setIsSyncing(true);
+                    try {
+                      await syncNow();
+                      setBackupMessage({ type: 'success', text: 'Progresso sincronizado com sucesso no Cloud Firestore!' });
+                    } catch {
+                      setBackupMessage({ type: 'error', text: 'Falha ao sincronizar. Seus dados estão preservados no aparelho.' });
+                    } finally {
+                      setIsSyncing(false);
+                      setTimeout(() => setBackupMessage(null), 4000);
+                    }
+                  }}
+                  disabled={isSyncing}
+                  className="px-3 py-1.5 rounded-xl bg-white dark:bg-[#1A1216] hover:bg-[#F5E8EA] dark:hover:bg-[#381A25] text-[#7B1E2B] dark:text-[#FF6B81] border border-[#E8E6E1] dark:border-[#422933] text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+                  <span>Sincronizar</span>
+                </button>
+
+                {user?.email === 'dramosdasilva7@gmail.com' && (
+                  <button
+                    onClick={() => onNavigateTab?.('teacher-dashboard')}
+                    className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer"
+                  >
+                    <GraduationCap className="w-3.5 h-3.5" />
+                    <span>Gestão Pedagógica</span>
+                  </button>
+                )}
+
+                <button
+                  onClick={async () => {
+                    await logOut();
+                    onUpdateProgress(storageService.loadProgress());
+                    setBackupMessage({ type: 'success', text: 'Você desconectou da sua conta Google.' });
+                    setTimeout(() => setBackupMessage(null), 4000);
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-[#FFF0F2] dark:bg-[#3A141A] hover:bg-[#FFE0E4] dark:hover:bg-[#481820] text-[#7B1E2B] dark:text-[#FF8095] border border-[#B52A3A]/20 text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>Sair</span>
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-xl bg-[#F8F7F4] dark:bg-[#251820] border border-[#E8E6E1] dark:border-[#422933]">
+              <div className="text-xs text-[#666672] dark:text-[#B8B3C0]">
+                <span className="font-bold text-[#1F1F24] dark:text-[#F8F7F4] block mb-0.5">
+                  Conecte sua conta para não perder seus estudos
+                </span>
+                Salve seu histórico e acesse de qualquer outro celular ou computador.
+              </div>
+              <button
+                onClick={async () => {
+                  try {
+                    await signInWithGoogle();
+                    const updated = storageService.loadProgress();
+                    onUpdateProgress(updated);
+                    setBackupMessage({ type: 'success', text: 'Conta Google conectada com sucesso!' });
+                  } catch (err: any) {
+                    setBackupMessage({ type: 'error', text: err?.message || 'Não foi possível conectar com o Google.' });
+                  } finally {
+                    setTimeout(() => setBackupMessage(null), 4000);
+                  }
+                }}
+                className="px-4 py-2 rounded-xl bg-white dark:bg-[#1A1216] hover:bg-[#F5F5F5] dark:hover:bg-[#2A1822] text-[#1F1F24] dark:text-[#F8F7F4] border border-[#D9D9D9] dark:border-[#422933] text-xs font-bold transition flex items-center gap-2 shadow-xs cursor-pointer"
+              >
+                <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+                  <path
+                    fill="#4285F4"
+                    d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                  />
+                  <path
+                    fill="#34A853"
+                    d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                  />
+                  <path
+                    fill="#FBBC05"
+                    d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+                  />
+                  <path
+                    fill="#EA4335"
+                    d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+                  />
+                </svg>
+                <span>Entrar com o Google</span>
+              </button>
+            </div>
+          )}
+        </div>
+
         {/* Seletor de Tema: Modo Claro / Modo Escuro (Identidade Visual & Contraste) */}
         <div className="bg-white border border-[#D9D9D9] rounded-2xl p-6 shadow-xs space-y-4">
           <div className="flex items-center justify-between">

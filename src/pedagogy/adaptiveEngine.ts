@@ -525,10 +525,10 @@ export function getAdaptiveRecommendation(
 
   // REGRA 2: Reexplicar Conceito com Erros Recorrentes (Dificuldade Teórica ou Prática)
   const skillsWithErrors = allSkills
-    .filter((s) => Object.values(s.recurringErrors).reduce((a, b) => a + b, 0) >= 2)
+    .filter((s) => s.recurringErrors && Object.values(s.recurringErrors).reduce((a, b) => a + b, 0) >= 2)
     .sort((a, b) => {
-      const sumA = Object.values(a.recurringErrors).reduce((x, y) => x + y, 0);
-      const sumB = Object.values(b.recurringErrors).reduce((x, y) => x + y, 0);
+      const sumA = a.recurringErrors ? Object.values(a.recurringErrors).reduce((x, y) => x + y, 0) : 0;
+      const sumB = b.recurringErrors ? Object.values(b.recurringErrors).reduce((x, y) => x + y, 0) : 0;
       return sumB - sumA;
     });
 

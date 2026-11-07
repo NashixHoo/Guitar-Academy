@@ -36,8 +36,20 @@ import { SettingsView } from './components/settings/SettingsView';
 import { DiagnosticsView } from './components/diagnostics/DiagnosticsView';
 import { OfflineIndicator } from './components/common/OfflineIndicator';
 import { SplashScreen } from './components/common/SplashScreen';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { LoginModal } from './components/auth/LoginModal';
+import { LegacyDataModal } from './components/auth/LegacyDataModal';
+import { UserProfileModal } from './components/profile/UserProfileModal';
+import { TeacherDashboardView } from './components/teacher/TeacherDashboardView';
+import { StudentJoinClassModal } from './components/teacher/StudentJoinClassModal';
+import { StudentPrivacyNotice } from './components/teacher/StudentPrivacyNotice';
 
-export default function App() {
+function MainAppContent() {
+  const { user, showLegacyModal } = useAuth();
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showJoinClassModal, setShowJoinClassModal] = useState(false);
+  const [showPrivacyModal, setShowPrivacyModal] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
   const [currentTab, setCurrentTab] = useState<NavigationTab>('home');
   const [primaryTab, setPrimaryTab] = useState<PrimaryTab>(() => navigationService.getPrimaryTab('home'));
@@ -55,6 +67,12 @@ export default function App() {
     const active = progress.themePreference || themeService.getSavedTheme();
     themeService.applyTheme(active);
   }, []);
+
+  // Sincroniza o progresso isolado do estudante sempre que o usuário ativo alternar
+  useEffect(() => {
+    const loaded = storageService.loadProgress(user?.uid);
+    setProgress(loaded);
+  }, [user]);
 
   // Ouvinte de histórico popstate do navegador (botão voltar físico ou browser)
   useEffect(() => {
@@ -204,9 +222,8 @@ export default function App() {
   const handleSelectLesson = (lessonId: string) => {
     // Ao abrir uma aula a partir de qualquer contexto, garante que a aula inicie estritamente no topo (scrollTop = 0)
     navigateToTab('curriculum', lessonId, true);
-    setProgress((prev) => {
-      const updated = { ...prev, currentLessonId: lessonId };
-      storageService.saveProgress(updated);
+    setProgress((_prev) => {
+      const updated = storageService.setActiveLessonAndCourse(lessonId);
       return updated;
     });
   };
@@ -297,6 +314,8 @@ export default function App() {
           canGoBack={canGoBack}
           onGoBack={handleGoBack}
           backTitle={backTitle}
+          onOpenAuth={() => setShowLoginModal(true)}
+          onOpenProfile={() => setShowProfileModal(true)}
         />
 
         {/* Sub-navegação secundária das ferramentas do pilar ativo */}
@@ -446,6 +465,13 @@ export default function App() {
                   onNavigateTab={(tab) => navigateToTab(tab, null)}
                 />
               )}
+
+              {/* TAB 18: Gestão Pedagógica & Analytics do Professor */}
+              {currentTab === 'teacher-dashboard' && (
+                <TeacherDashboardView
+                  onBackToApp={() => navigateToTab('home', null)}
+                />
+              )}
             </div>
 
             {/* TAB 3: Sessão de Prática / Rotina Guiada — mantida montada para preservar andamento, BPM, timer e áudio */}
@@ -484,6 +510,67 @@ export default function App() {
 
       {/* Abertura Premium (Splash Screen Fase 5.2) */}
       {showSplash && <SplashScreen onFinish={() => setShowSplash(false)} />}
+
+      {/* Modais de Autenticação Google, Perfil do Aluno e Migração Segura */}
+      <LoginModal 
+        isOpen={showLoginModal} 
+        onClose={() => setShowLoginModal(false)} 
+      />
+
+      <UserProfileModal
+        isOpen={showProfileModal}
+        onClose={() => setShowProfileModal(false)}
+        progress={progress}
+        onUpdateProgress={setProgress}
+        onNavigateTab={(tab) => {
+          setShowProfileModal(false);
+          navigateToTab(tab, null);
+        }}
+        onOpenJoinClass={() => {
+          setShowProfileModal(false);
+          setShowJoinClassModal(true);
+        }}
+        onOpenPrivacyNotice={() => {
+          setShowProfileModal(false);
+          setShowPrivacyModal(true);
+        }}
+      />
+
+      {/* Modal de Entrada em Turma via Código Seguro (para Alunos) */}
+      <StudentJoinClassModal
+        isOpen={showJoinClassModal}
+        onClose={() => setShowJoinClassModal(false)}
+        studentUid={user?.uid || ''}
+        studentName={user?.displayName || 'Estudante'}
+        studentEmail={user?.email || ''}
+        studentPhotoUrl={user?.photoURL || undefined}
+        onJoined={() => {
+          setShowJoinClassModal(false);
+        }}
+      />
+
+      {/* Modal de Transparência e LGPD */}
+      <StudentPrivacyNotice
+        isOpen={showPrivacyModal}
+        onClose={() => setShowPrivacyModal(false)}
+      />
+
+      <LegacyDataModal
+        isOpen={showLegacyModal}
+        onChoiceMade={() => {
+          const updated = storageService.loadProgress(user?.uid);
+          setProgress(updated);
+        }}
+      />
     </div>
   );
 }
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <MainAppContent />
+    </AuthProvider>
+  );
+}
+

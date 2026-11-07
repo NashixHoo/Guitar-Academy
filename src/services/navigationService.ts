@@ -42,6 +42,7 @@ export const TAB_TO_PRIMARY_MAP: Record<NavigationTab, PrimaryTab> = {
   'professor-ai': 'evoluir',
   diagnostics: 'evoluir',
   settings: 'evoluir',
+  'teacher-dashboard': 'evoluir',
 };
 
 // Rótulos legíveis para o histórico e botão voltar
@@ -63,6 +64,7 @@ export const SCREEN_TITLES: Record<NavigationTab, string> = {
   progress: 'Meu Progresso',
   settings: 'Configurações',
   diagnostics: 'Diagnóstico',
+  'teacher-dashboard': 'Gestão Pedagógica',
 };
 
 // Tela inicial padrão para cada uma das três abas principais

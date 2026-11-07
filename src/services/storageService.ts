@@ -1,14 +1,126 @@
-import { UserProgress, MetronomeConfig, PracticeSessionRecord } from '../types';
+import { UserProgress, MetronomeConfig, PracticeSessionRecord, ManualPracticeLogEntry } from '../types';
 import {
   createInitialPedagogicalProfile,
   migrateLegacyProgressToPedagogical,
   recordSkillEvidence,
   LESSON_TO_SKILL_MAP,
 } from '../pedagogy/adaptiveEngine';
+import { fetchCloudProgress, syncProgressToCloud } from './firebase';
+import { TeacherService } from './teacherService';
 
-const PROGRESS_KEY = 'guitar_academy_user_progress_v1';
-const METRONOME_KEY = 'guitar_academy_metronome_v1';
-const SEARCH_HISTORY_KEY = 'guitar_academy_search_history_v1';
+export const LEGACY_PROGRESS_KEY = 'guitar_academy_user_progress_v1';
+export const LEGACY_METRONOME_KEY = 'guitar_academy_metronome_v1';
+export const LEGACY_SEARCH_HISTORY_KEY = 'guitar_academy_search_history_v1';
+export const LEGACY_BACKUP_KEY = 'guitar_academy:legacy_backup_v1';
+export const ACTIVE_USER_KEY = 'guitar_academy:active_user_uid';
+
+let activeUserId: string | null = null;
+
+if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+  try {
+    activeUserId = localStorage.getItem(ACTIVE_USER_KEY) || null;
+  } catch {
+    activeUserId = null;
+  }
+}
+
+export function getProgressKey(uid?: string | null): string {
+  const target = uid !== undefined ? uid : activeUserId;
+  return target ? `guitar_academy:${target}:progress` : LEGACY_PROGRESS_KEY;
+}
+
+export function getMetronomeKey(uid?: string | null): string {
+  const target = uid !== undefined ? uid : activeUserId;
+  return target ? `guitar_academy:${target}:metronome` : LEGACY_METRONOME_KEY;
+}
+
+export function getSearchKey(uid?: string | null): string {
+  const target = uid !== undefined ? uid : activeUserId;
+  return target ? `guitar_academy:${target}:search_history` : LEGACY_SEARCH_HISTORY_KEY;
+}
+
+/**
+ * Realiza a mesclagem não-destrutiva e bidirecional de dados entre o armazenamento local e a nuvem
+ */
+export function mergeProgressStates(local: UserProgress, cloud: UserProgress): UserProgress {
+  // 1. União sem duplicatas de todas as aulas concluídas
+  const completedSet = new Set<string>([...(local.completedLessons || []), ...(cloud.completedLessons || [])]);
+  const completedLessons = Array.from(completedSet);
+
+  // 2. Tempo de estudo acumulado (maior tempo registrado)
+  const totalStudyTimeSeconds = Math.max(local.totalStudyTimeSeconds || 0, cloud.totalStudyTimeSeconds || 0);
+
+  // 3. Andamento máximo praticado
+  const practicedBpm = Math.max(local.practicedBpm || 80, cloud.practicedBpm || 80);
+
+  // 4. União de registros de prática por aula
+  const practiceLogs = { ...(cloud.practiceLogs || {}), ...(local.practiceLogs || {}) };
+  if (cloud.practiceLogs && local.practiceLogs) {
+    for (const lessonId of Object.keys(cloud.practiceLogs)) {
+      const cLog = cloud.practiceLogs[lessonId];
+      const lLog = local.practiceLogs[lessonId];
+      if (cLog && lLog) {
+        practiceLogs[lessonId] = {
+          ...cLog,
+          ...lLog,
+          timesPracticed: Math.max(cLog.timesPracticed || 0, lLog.timesPracticed || 0),
+          status: lLog.status === 'mastered' || cLog.status === 'mastered' ? 'mastered' : (lLog.status || cLog.status),
+        };
+      }
+    }
+  }
+
+  // 5. União de contadores de repetições de exercícios
+  const exerciseRepetitions = { ...(cloud.exerciseRepetitions || {}) };
+  if (local.exerciseRepetitions) {
+    for (const [k, v] of Object.entries(local.exerciseRepetitions)) {
+      exerciseRepetitions[k] = Math.max(exerciseRepetitions[k] || 0, v);
+    }
+  }
+
+  // 6. Conquistas
+  const achievements = Array.from(new Set([...(local.achievements || []), ...(cloud.achievements || [])]));
+
+  // 7. Sessões de prática guiada (máximo 50)
+  const sessionMap = new Map<string, PracticeSessionRecord>();
+  (cloud.practiceSessions || []).forEach((s) => sessionMap.set(s.id, s));
+  (local.practiceSessions || []).forEach((s) => sessionMap.set(s.id, s));
+  const practiceSessions = Array.from(sessionMap.values()).slice(0, 50);
+
+  // 8. Registros manuais offline (máximo 100)
+  const manualMap = new Map<string, ManualPracticeLogEntry>();
+  (cloud.manualPracticeLogs || []).forEach((m) => manualMap.set(m.id, m));
+  (local.manualPracticeLogs || []).forEach((m) => manualMap.set(m.id, m));
+  const manualPracticeLogs = Array.from(manualMap.values()).slice(0, 100);
+
+  // 9. Perfil pedagógico adaptativo
+  const baseMerged: UserProgress = {
+    ...local,
+    ...cloud,
+    completedLessons,
+    totalStudyTimeSeconds,
+    practicedBpm,
+    practiceLogs,
+    exerciseRepetitions,
+    achievements,
+    practiceSessions,
+    manualPracticeLogs,
+    lastStudyDate: getLocalDateString(),
+  };
+
+  baseMerged.pedagogicalProfile = migrateLegacyProgressToPedagogical(baseMerged);
+  return baseMerged;
+}
+
+
+/**
+ * Retorna o identificador do curso a partir do ID da aula
+ */
+export function getCourseIdFromLessonId(lessonId: string): 'violao' | 'canonical' | 'solo' {
+  if (lessonId.startsWith('violao-')) return 'violao';
+  if (lessonId.startsWith('solo-')) return 'solo';
+  return 'canonical';
+}
 
 /**
  * Retorna a data local (calendário do dispositivo do usuário) no formato YYYY-MM-DD.
@@ -76,6 +188,13 @@ export const INITIAL_PROGRESS: UserProgress = {
   themePreference: 'light',
   achievements: ['welcome-pioneer'],
   pedagogicalProfile: createInitialPedagogicalProfile(),
+  manualPracticeLogs: [],
+  lastAccessedCourseId: 'canonical',
+  courseLastLesson: {
+    canonical: 'lesson-1',
+    violao: 'violao-lesson-1',
+    solo: 'solo-lesson-1',
+  },
 };
 
 export const INITIAL_METRONOME: MetronomeConfig = {
@@ -208,6 +327,11 @@ export function validateBackupData(data: unknown): BackupValidationResult {
     practiceSessions: Array.isArray(progressCandidate.practiceSessions)
       ? progressCandidate.practiceSessions
       : [],
+    manualPracticeLogs: Array.isArray(progressCandidate.manualPracticeLogs)
+      ? progressCandidate.manualPracticeLogs
+      : [],
+    lastAccessedCourseId: progressCandidate.lastAccessedCourseId || 'canonical',
+    courseLastLesson: progressCandidate.courseLastLesson || INITIAL_PROGRESS.courseLastLesson,
   };
 
   // Garante integridade do Perfil Pedagógico Adaptativo
@@ -240,14 +364,119 @@ export function validateBackupData(data: unknown): BackupValidationResult {
   };
 }
 
+export function createDefaultProgress(): UserProgress {
+  return JSON.parse(JSON.stringify(INITIAL_PROGRESS));
+}
+
 export const storageService = {
   getLocalDateString,
+  getCourseIdFromLessonId,
   validateBackupData,
+  createDefaultProgress,
 
-  loadProgress(): UserProgress {
+  setCurrentUser(uid: string | null): void {
+    activeUserId = uid;
+    if (typeof localStorage !== 'undefined') {
+      try {
+        if (uid) {
+          localStorage.setItem(ACTIVE_USER_KEY, uid);
+        } else {
+          localStorage.removeItem(ACTIVE_USER_KEY);
+        }
+      } catch {
+        // ignore
+      }
+    }
+  },
+
+  getCurrentUser(): string | null {
+    return activeUserId;
+  },
+
+  hasUserLocalData(uid: string): boolean {
+    if (typeof localStorage === 'undefined') return false;
     try {
-      const data = localStorage.getItem(PROGRESS_KEY);
-      if (!data) return INITIAL_PROGRESS;
+      const data = localStorage.getItem(getProgressKey(uid));
+      return !!data;
+    } catch {
+      return false;
+    }
+  },
+
+  hasLegacyData(): boolean {
+    if (typeof localStorage === 'undefined') return false;
+    try {
+      const data = localStorage.getItem(LEGACY_PROGRESS_KEY);
+      if (!data) return false;
+      const parsed = JSON.parse(data);
+      return Array.isArray(parsed?.completedLessons) && parsed.completedLessons.length > 0;
+    } catch {
+      return false;
+    }
+  },
+
+  archiveLegacyData(): boolean {
+    if (typeof localStorage === 'undefined') return false;
+    try {
+      const raw = localStorage.getItem(LEGACY_PROGRESS_KEY);
+      if (raw && !localStorage.getItem(LEGACY_BACKUP_KEY)) {
+        localStorage.setItem(LEGACY_BACKUP_KEY, raw);
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  },
+
+  getLegacyData(): UserProgress | null {
+    if (typeof localStorage === 'undefined') return null;
+    try {
+      const raw = localStorage.getItem(LEGACY_BACKUP_KEY) || localStorage.getItem(LEGACY_PROGRESS_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      const validated = validateBackupData(parsed);
+      return validated.isValid && validated.progress ? validated.progress : null;
+    } catch {
+      return null;
+    }
+  },
+
+  importLegacyDataForUser(uid: string): UserProgress {
+    const legacy = this.getLegacyData() || createDefaultProgress();
+    this.saveProgress(legacy, uid);
+    return legacy;
+  },
+
+  createFreshSlateForUser(uid: string): UserProgress {
+    const fresh = createDefaultProgress();
+    this.saveProgress(fresh, uid);
+    return fresh;
+  },
+
+  async syncUserWithCloud(uid: string): Promise<{ success: boolean; progress: UserProgress; synced: boolean }> {
+    try {
+      const local = this.loadProgress(uid);
+      const cloud = await fetchCloudProgress(uid);
+      if (!cloud) {
+        await syncProgressToCloud(uid, local);
+        return { success: true, progress: local, synced: true };
+      }
+      const merged = mergeProgressStates(local, cloud);
+      this.saveProgress(merged, uid);
+      await syncProgressToCloud(uid, merged);
+      return { success: true, progress: merged, synced: true };
+    } catch (err) {
+      console.warn('Falha na sincronização em nuvem:', err);
+      return { success: false, progress: this.loadProgress(uid), synced: false };
+    }
+  },
+
+  loadProgress(uid?: string): UserProgress {
+    try {
+      const targetKey = getProgressKey(uid);
+      const data = localStorage.getItem(targetKey);
+      if (!data) return createDefaultProgress();
       const parsed: UserProgress = JSON.parse(data);
 
       // Reset diário sincronizado estritamente com o calendário LOCAL do usuário (YYYY-MM-DD)
@@ -259,10 +488,16 @@ export const storageService = {
 
       // Safe migration: ensure practiceLogs, exerciseRepetitions and studyPlan exist
       const migrated: UserProgress = {
-        ...INITIAL_PROGRESS,
+        ...createDefaultProgress(),
         ...parsed,
         practiceLogs: parsed.practiceLogs || {},
         exerciseRepetitions: parsed.exerciseRepetitions || {},
+        manualPracticeLogs: parsed.manualPracticeLogs || [],
+        lastAccessedCourseId: parsed.lastAccessedCourseId || getCourseIdFromLessonId(parsed.currentLessonId || 'lesson-1'),
+        courseLastLesson: {
+          ...INITIAL_PROGRESS.courseLastLesson,
+          ...(parsed.courseLastLesson || {}),
+        },
         studyPlan: {
           ...INITIAL_PROGRESS.studyPlan,
           ...(parsed.studyPlan || {}),
@@ -275,7 +510,7 @@ export const storageService = {
 
       return migrated;
     } catch {
-      return INITIAL_PROGRESS;
+      return createDefaultProgress();
     }
   },
 
@@ -337,6 +572,24 @@ export const storageService = {
 
     if (practiceData.status === 'mastered' && !updated.completedLessons.includes(lessonId)) {
       updated.completedLessons = [...updated.completedLessons, lessonId];
+    }
+
+    if (activeUserId) {
+      try {
+        TeacherService.logEducationalEvent({
+          studentUid: activeUserId,
+          studentName: 'Aluno',
+          studentEmail: '',
+          classId: 'all',
+          courseId: getCourseIdFromLessonId(lessonId),
+          lessonId,
+          eventType: practiceData.status === 'mastered' ? 'lesson_completed' : 'lesson_opened',
+          category: 'guided_lessons',
+          durationSeconds: 300,
+          measurementType: 'verified_interactive',
+          metadata: { bpm: practiceData.practicedBpm, status: practiceData.status },
+        });
+      } catch {}
     }
 
     this.saveProgress(updated);
@@ -534,13 +787,119 @@ export const storageService = {
       pedagogicalProfile: updatedProfile,
     };
 
+    if (activeUserId) {
+      try {
+        TeacherService.logEducationalEvent({
+          studentUid: activeUserId,
+          studentName: 'Aluno',
+          studentEmail: '',
+          classId: 'all',
+          courseId: 'violao',
+          eventType: 'practice_session_recorded',
+          category: 'instrumental_practice',
+          durationSeconds: effectiveSeconds || 600,
+          measurementType: 'verified_interactive',
+          metadata: { bpm: session.highestBpm, rating: session.overallRating },
+        });
+      } catch {}
+    }
+
     this.saveProgress(updated);
     return updated;
   },
 
-  saveProgress(progress: UserProgress): StorageSaveResult {
+  recordManualPractice(entry: ManualPracticeLogEntry): UserProgress {
+    const current = this.loadProgress();
+    const existingLogs = current.manualPracticeLogs || [];
+
+    // Prevenção de duplicidade por ID
+    if (existingLogs.some((l) => l.id === entry.id)) {
+      return current;
+    }
+
+    const durationSeconds = Math.max(60, (entry.durationMinutes || 0) * 60);
+    const todaySeconds = (current.todayStudyTimeSeconds || 0) + durationSeconds;
+    const totalSeconds = (current.totalStudyTimeSeconds || 0) + durationSeconds;
+
+    const updatedManualLogs = [entry, ...existingLogs].slice(0, 100);
+
+    const updatedAchievements = [...current.achievements];
+    if (!updatedAchievements.includes('first-offline-practice')) {
+      updatedAchievements.push('first-offline-practice');
+    }
+
+    const updated: UserProgress = {
+      ...current,
+      todayStudyTimeSeconds: todaySeconds,
+      totalStudyTimeSeconds: totalSeconds,
+      lastStudyDate: getLocalDateString(),
+      manualPracticeLogs: updatedManualLogs,
+      achievements: updatedAchievements,
+      lastAccessedCourseId:
+        entry.relatedCourseId === 'violao' || entry.relatedCourseId === 'solo' || entry.relatedCourseId === 'canonical'
+          ? entry.relatedCourseId
+          : entry.courseRelation === 'violao' || entry.courseRelation === 'solo' || entry.courseRelation === 'canonical'
+          ? entry.courseRelation
+          : current.lastAccessedCourseId,
+    };
+
+    if (activeUserId) {
+      try {
+        TeacherService.logEducationalEvent({
+          studentUid: activeUserId,
+          studentName: 'Aluno',
+          studentEmail: '',
+          classId: 'all',
+          courseId:
+            entry.relatedCourseId === 'violao' || entry.relatedCourseId === 'solo' || entry.relatedCourseId === 'canonical'
+              ? entry.relatedCourseId
+              : 'violao',
+          eventType: 'manual_practice_logged',
+          category: 'instrumental_practice',
+          durationSeconds,
+          measurementType: 'manual_logged',
+          metadata: { notes: entry.notes },
+        });
+      } catch {}
+    }
+
+    this.saveProgress(updated);
+    return updated;
+  },
+
+  setActiveLessonAndCourse(lessonId: string): UserProgress {
+    const current = this.loadProgress();
+    const courseId = getCourseIdFromLessonId(lessonId);
+
+    const updatedCourseLast = {
+      ...(current.courseLastLesson || INITIAL_PROGRESS.courseLastLesson || {}),
+      [courseId]: lessonId,
+    };
+
+    const updated: UserProgress = {
+      ...current,
+      currentLessonId: lessonId,
+      lastAccessedCourseId: courseId,
+      courseLastLesson: updatedCourseLast,
+    };
+
+    this.saveProgress(updated);
+    return updated;
+  },
+
+  saveProgress(progress: UserProgress, uid?: string): StorageSaveResult {
+    const targetKey = getProgressKey(uid);
     try {
-      localStorage.setItem(PROGRESS_KEY, JSON.stringify(progress));
+      localStorage.setItem(targetKey, JSON.stringify(progress));
+
+      // Sincronização assíncrona com Cloud Firestore em background para usuários autenticados
+      const targetUid = uid !== undefined ? uid : activeUserId;
+      if (targetUid) {
+        syncProgressToCloud(targetUid, progress).catch((err) => {
+          console.warn('Sync em segundo plano falhou (offline):', err);
+        });
+      }
+
       return { success: true };
     } catch (err: any) {
       console.warn('Failed to save progress to localStorage', err);
@@ -559,9 +918,9 @@ export const storageService = {
     }
   },
 
-  loadMetronome(): MetronomeConfig {
+  loadMetronome(uid?: string): MetronomeConfig {
     try {
-      const data = localStorage.getItem(METRONOME_KEY);
+      const data = localStorage.getItem(getMetronomeKey(uid));
       if (!data) return INITIAL_METRONOME;
       return { ...INITIAL_METRONOME, ...JSON.parse(data) };
     } catch {
@@ -569,9 +928,9 @@ export const storageService = {
     }
   },
 
-  saveMetronome(config: MetronomeConfig): StorageSaveResult {
+  saveMetronome(config: MetronomeConfig, uid?: string): StorageSaveResult {
     try {
-      localStorage.setItem(METRONOME_KEY, JSON.stringify(config));
+      localStorage.setItem(getMetronomeKey(uid), JSON.stringify(config));
       return { success: true };
     } catch (err: any) {
       console.warn('Failed to save metronome config to localStorage', err);
@@ -688,9 +1047,9 @@ export const storageService = {
     }
   },
 
-  getRecentSearches(): string[] {
+  getRecentSearches(uid?: string): string[] {
     try {
-      const data = localStorage.getItem(SEARCH_HISTORY_KEY);
+      const data = localStorage.getItem(getSearchKey(uid));
       if (!data) return [];
       const parsed = JSON.parse(data);
       return Array.isArray(parsed) ? parsed : [];
@@ -699,41 +1058,41 @@ export const storageService = {
     }
   },
 
-  addRecentSearch(term: string): string[] {
+  addRecentSearch(term: string, uid?: string): string[] {
     const cleanTerm = term.trim();
-    if (!cleanTerm) return this.getRecentSearches();
+    if (!cleanTerm) return this.getRecentSearches(uid);
     try {
-      const current = this.getRecentSearches();
+      const current = this.getRecentSearches(uid);
       const updated = [cleanTerm, ...current.filter((t) => t.toLowerCase() !== cleanTerm.toLowerCase())].slice(0, 8);
-      localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(updated));
+      localStorage.setItem(getSearchKey(uid), JSON.stringify(updated));
       return updated;
     } catch {
       return [cleanTerm];
     }
   },
 
-  removeRecentSearch(term: string): string[] {
+  removeRecentSearch(term: string, uid?: string): string[] {
     try {
-      const current = this.getRecentSearches();
+      const current = this.getRecentSearches(uid);
       const updated = current.filter((t) => t.toLowerCase() !== term.toLowerCase());
-      localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(updated));
+      localStorage.setItem(getSearchKey(uid), JSON.stringify(updated));
       return updated;
     } catch {
       return [];
     }
   },
 
-  clearRecentSearches(): void {
+  clearRecentSearches(uid?: string): void {
     try {
-      localStorage.removeItem(SEARCH_HISTORY_KEY);
+      localStorage.removeItem(getSearchKey(uid));
     } catch {
       // ignore
     }
   },
 
-  resetAll(): void {
-    localStorage.removeItem(PROGRESS_KEY);
-    localStorage.removeItem(METRONOME_KEY);
-    localStorage.removeItem(SEARCH_HISTORY_KEY);
+  resetAll(uid?: string): void {
+    localStorage.removeItem(getProgressKey(uid));
+    localStorage.removeItem(getMetronomeKey(uid));
+    localStorage.removeItem(getSearchKey(uid));
   }
 };

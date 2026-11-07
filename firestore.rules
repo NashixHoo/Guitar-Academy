@@ -1,0 +1,67 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAuthenticated() {
+      return request.auth != null && request.auth.uid != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isTeacher() {
+      return isAuthenticated() && (
+        request.auth.token.email == 'dramosdasilva7@gmail.com' ||
+        exists(/databases/$(database)/documents/system_roles/$(request.auth.uid))
+      );
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-\\.:]+$');
+    }
+
+    // 1. Dados dos Estudantes: Leitura pelo aluno e professor autorizado; Escrita estrita pelo aluno
+    match /users/{userId} {
+      allow read: if (isOwner(userId) || isTeacher()) && isValidId(userId);
+      allow write: if isOwner(userId) && isValidId(userId);
+
+      match /{allSubcollections=**} {
+        allow read: if (isOwner(userId) || isTeacher()) && isValidId(userId);
+        // O professor NÃO pode alterar arbitrariamente o progresso do estudante
+        allow write: if isOwner(userId) && isValidId(userId);
+      }
+    }
+
+    // 2. Turmas Pedagógicas (Classes): Gerenciadas pelo professor; consulta por alunos autenticados
+    match /classes/{classId} {
+      allow read: if isAuthenticated() && isValidId(classId);
+      allow create, update, delete: if isTeacher() && isValidId(classId);
+
+      // Matrículas de Alunos na Turma
+      match /students/{studentId} {
+        allow read: if (isOwner(studentId) || isTeacher()) && isValidId(studentId);
+        allow create: if (isOwner(studentId) || isTeacher()) && isValidId(studentId);
+        allow update, delete: if isTeacher() && isValidId(studentId);
+      }
+
+      // Eventos Analíticos Educacionais da Turma
+      match /events/{eventId} {
+        allow read: if isTeacher() && isValidId(eventId);
+        allow create: if isAuthenticated() && isValidId(eventId);
+        allow update, delete: if false;
+      }
+    }
+
+    // 3. Papéis do Sistema: Imutáveis pelo cliente para impedir auto-atribuição de permissões
+    match /system_roles/{userId} {
+      allow read: if (isOwner(userId) || isTeacher()) && isValidId(userId);
+      allow write: if false;
+    }
+
+    // Bloqueio explícito por padrão contra acessos não autorizados
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

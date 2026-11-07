@@ -243,6 +243,37 @@ export interface TabSnippet {
   instruction?: string;
 }
 
+export type InstrumentType = 'violao_aco' | 'guitarra' | 'violao_nylon' | 'outro';
+export type PracticeActivityType =
+  | 'aquecimento'
+  | 'troca_acordes'
+  | 'aulas_curso'
+  | 'solos_escalas'
+  | 'repertorio_livre'
+  | 'acordes'
+  | 'tecnica'
+  | 'repertorio'
+  | 'escalas'
+  | 'teoria'
+  | 'livre';
+export type PracticeCourseRelation = 'violao' | 'canonical' | 'solo' | 'pratica_livre' | 'livre';
+export type PerceivedDifficulty = 'facil' | 'adequado' | 'confortavel' | 'desafiador' | 'dificil';
+
+export interface ManualPracticeLogEntry {
+  id: string;
+  date?: string; // YYYY-MM-DD local
+  dateStr?: string; // alias
+  durationMinutes: number;
+  instrument: InstrumentType;
+  activityType: PracticeActivityType;
+  relatedCourseId?: PracticeCourseRelation;
+  courseRelation?: PracticeCourseRelation; // alias
+  notes?: string;
+  perceivedDifficulty: PerceivedDifficulty;
+  isManual: true;
+  timestamp: string | number; // ISO ou ms
+}
+
 export interface UserProgress {
   currentLessonId: string;
   completedLessons: string[];
@@ -263,6 +294,9 @@ export interface UserProgress {
   achievements: string[];
   pedagogicalProfile?: PedagogicalProfile;
   practiceSessions?: PracticeSessionRecord[];
+  manualPracticeLogs?: ManualPracticeLogEntry[];
+  lastAccessedCourseId?: 'violao' | 'canonical' | 'solo';
+  courseLastLesson?: Record<string, string>;
 }
 
 export interface MetronomeConfig {
@@ -297,7 +331,8 @@ export type NavigationTab =
   | 'library'
   | 'progress'
   | 'settings'
-  | 'diagnostics';
+  | 'diagnostics'
+  | 'teacher-dashboard';
 
 export interface ProfessorMessage {
   id: string;
@@ -437,5 +472,9 @@ export interface AdaptiveRecommendation {
   suggestedMinutes: number;
   pendingReviewsCount: number;
 }
+
+export * from './teacher';
+export * from '../academia/core/types';
+export * from '../academia/curriculum/masterCurriculumRegistry';
 
 

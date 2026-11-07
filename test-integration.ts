@@ -37,6 +37,7 @@ import {
   NavigationTab,
   PracticeSessionRecord,
   PracticeSessionStepRecord,
+  ManualPracticeLogEntry,
 } from './src/types';
 import {
   generatePracticeRoutine,
@@ -44,7 +45,16 @@ import {
   ExecutablePracticeExercise,
   GeneratedRoutine,
 } from './src/pedagogy/practiceRoutineEngine';
-import { storageService, INITIAL_PROGRESS, getLocalDateString, validateBackupData } from './src/services/storageService';
+import { 
+  storageService, 
+  INITIAL_PROGRESS, 
+  getLocalDateString, 
+  validateBackupData,
+  getProgressKey,
+  getMetronomeKey,
+  getSearchKey,
+  mergeProgressStates
+} from './src/services/storageService';
 import {
   searchAll,
   getSearchIndexStats,
@@ -55,6 +65,20 @@ import { TunerSmoother } from './src/audio/tunerSmoother';
 import { STANDARD_TUNING, getFretNote } from './src/data/musicTheory';
 import { CHORD_DATABASE } from './src/data/chordDatabase';
 import { ChordEngine } from './src/chords/chord-engine';
+import {
+  COURSES_CATALOG,
+  getAllLessons,
+  getCourseId,
+  getCourseLessons,
+  getLessonById,
+  getCourseProgressSummary,
+  getLearningContinuity,
+  getSkillEvolutionMap,
+  getContextualRecommendations,
+  getPracticeMetrics,
+  generateDailyPracticePlan,
+  DOMAIN_AREAS_METADATA,
+} from './src/services/learningEngine';
 import fs from 'fs';
 import path from 'path';
 
@@ -2504,6 +2528,1146 @@ assert(
   '18.8 App.tsx inicia aulas no topo e preserva a posição anterior da lista do currículo'
 );
 
+// =============================================================
+// GRUPO 19 — INTELLIGENT LEARNING SYSTEM V1
+// Motor Central, Continuidade, 12 Domínios, Prática Real & Planos
+// =============================================================
+
+console.log('\n--- GRUPO 19: INTELLIGENT LEARNING SYSTEM V1 ---');
+
+// 19.1 Catálogo Unificado e Compatibilidade dos 3 Cursos (18 + 60 + 20 = 98 aulas)
+const allLessonsUnified = getAllLessons();
+assert(
+  allLessonsUnified.length === 98,
+  `19.1 Catálogo unificado consolida exatamente 98 aulas distintas (encontradas: ${allLessonsUnified.length})`
+);
+assert(
+  getCourseLessons('canonical').length === 18 &&
+  getCourseLessons('violao').length === 60 &&
+  getCourseLessons('solo').length === 20,
+  '19.1 Cursos segregados corretamente: Conservatório (18), Violão (60), Guitarra Solo (20)'
+);
+assert(
+  getCourseId('violao-lesson-15') === 'violao' &&
+  getCourseId('solo-lesson-7') === 'solo' &&
+  getCourseId('lesson-3') === 'canonical',
+  '19.1 getCourseId identifica com precisão o curso pertencente a partir do ID da aula'
+);
+
+// 19.2 Recuperação da Última Aula Acessada em Múltiplos Cursos & Continuidade
+let testProg: UserProgress = {
+  ...INITIAL_PROGRESS,
+  completedLessons: ['lesson-1', 'violao-lesson-1'],
+  currentLessonId: 'violao-lesson-2',
+  lastAccessedCourseId: 'violao',
+  courseLastLesson: {
+    violao: 'violao-lesson-2',
+    canonical: 'lesson-2',
+    solo: 'solo-lesson-1',
+  },
+};
+
+const contViolao = getLearningContinuity(testProg);
+assert(
+  contViolao.activeCourse.id === 'violao' &&
+  contViolao.currentLesson.id === 'violao-lesson-2' &&
+  contViolao.otherCourses.length === 2,
+  '19.2 getLearningContinuity recupera o curso ativo (violao) e a última aula acessada (violao-lesson-2)'
+);
+
+// Simula troca para curso Solo
+testProg.currentLessonId = 'solo-lesson-5';
+testProg.lastAccessedCourseId = 'solo';
+testProg.courseLastLesson = { ...testProg.courseLastLesson, solo: 'solo-lesson-5' };
+const contSolo = getLearningContinuity(testProg);
+assert(
+  contSolo.activeCourse.id === 'solo' &&
+  contSolo.currentLesson.id === 'solo-lesson-5' &&
+  contSolo.otherCourses.some((c) => c.id === 'violao' && c.nextLesson?.id === 'violao-lesson-2'),
+  '19.2 Alternância entre cursos preserva ponteiros independentes de última aula para cada trilha'
+);
+
+// 19.3 Preservação de Aulas Concluídas Sem Marcação Automática
+const initialCompletedCount = testProg.completedLessons.length;
+// Acessar ou calcular plano não altera completedLessons
+const planTest = generateDailyPracticePlan(20, testProg);
+assert(
+  testProg.completedLessons.length === initialCompletedCount,
+  '19.3 O cálculo do plano ou continuidade preserva estritamente completedLessons sem marcação fictícia'
+);
+
+// 19.4 Recomendações Contextuais para Aluno Iniciante/Zerado
+const freshProgress: UserProgress = {
+  ...INITIAL_PROGRESS,
+  completedLessons: [],
+  currentLessonId: 'violao-lesson-1',
+  practiceSessions: [],
+  manualPracticeLogs: [],
+};
+const recsFresh = getContextualRecommendations(freshProgress);
+assert(
+  recsFresh.length > 0 && recsFresh.some((r) => r.type === 'continuity'),
+  '19.4 Aluno iniciante recebe recomendação determinística de continuidade para a primeira aula'
+);
+
+// 19.5 Recomendações Contextuais com Dados e Revisões Pendentes
+const matureProgress: UserProgress = {
+  ...INITIAL_PROGRESS,
+  completedLessons: ['lesson-1', 'lesson-2', 'violao-lesson-1'],
+  pedagogicalProfile: {
+    ...createInitialPedagogicalProfile(),
+    skills: {
+      ...createInitialPedagogicalProfile().skills,
+      'skill-alternate-picking': {
+        ...createInitialPedagogicalProfile().skills['skill-alternate-picking'],
+        masteryLevel: 'practicing',
+        attemptsCount: 6,
+        correctCount: 5,
+        masteryScore: 83,
+        lastPracticedDate: '2026-10-01',
+        nextReviewDate: '2026-10-05', // Vencida
+        reviewIntervalDays: 4,
+        evidences: [
+          {
+            id: 'ev-alt-1',
+            source: 'practice_session',
+            date: '2026-10-01',
+            score: 83,
+            details: 'Palhetada alternada a 80 BPM',
+          },
+        ],
+      },
+    },
+  },
+};
+const recsMature = getContextualRecommendations(matureProgress);
+assert(
+  recsMature.some((r) => r.type === 'spaced_review'),
+  '19.5 Recomendações identificam revisões espaçadas vencidas com prioridade determinística'
+);
+
+// 19.6 Geração do Plano Diário de Prática para Todas as Durações (10, 15, 20, 30, 45, 60m)
+const durations: (10 | 15 | 20 | 30 | 45 | 60)[] = [10, 15, 20, 30, 45, 60];
+for (const dur of durations) {
+  const p = generateDailyPracticePlan(dur, matureProgress);
+  assert(
+    p.totalMinutes === dur,
+    `19.6 Plano de prática diária de ${dur} min soma exatamente ${dur} minutos (soma: ${p.totalMinutes})`
+  );
+  assert(
+    p.steps.length === 5,
+    `19.6 Plano de ${dur} min possui 5 etapas progressivas (Aquecimento, Habilidade, Aplicação, Revisão, Encerramento)`
+  );
+  assert(
+    !!p.steps[0] && p.steps[0].phase === 'Aquecimento Técnico' && (p.steps[0].bpm || 0) > 0,
+    `19.6 Etapa 1 de ${dur} min define aquecimento técnico com BPM e tablatura real`
+  );
+}
+
+// 19.7 Geração de Rotinas na Central de Prática para 5, 10, 15, 20, 30, 45, 60 min
+const routineDurations = [5, 10, 15, 20, 30, 45, 60] as const;
+for (const rDur of routineDurations) {
+  const routine = generatePracticeRoutine(rDur, matureProgress);
+  assert(
+    routine.totalEstimatedMinutes === rDur,
+    `19.7 generatePracticeRoutine gera rotina precisa de ${rDur} min (obtido: ${routine.totalEstimatedMinutes})`
+  );
+}
+
+// 19.8 Registro de Prática Real Manual Offline e Ausência de Duplicações
+const initialManualLogsCount = matureProgress.manualPracticeLogs?.length || 0;
+const sampleManualEntry: ManualPracticeLogEntry = {
+  id: 'manual-test-unique-1',
+  timestamp: Date.now(),
+  date: '2026-11-02',
+  dateStr: '2026-11-02',
+  durationMinutes: 25,
+  instrument: 'violao_aco',
+  activityType: 'acordes',
+  relatedCourseId: 'violao',
+  courseRelation: 'violao',
+  perceivedDifficulty: 'confortavel',
+  notes: 'Treino de pestanas limpas nas casas 1 a 5',
+  isManual: true,
+};
+const updatedWithManual = storageService.recordManualPractice(sampleManualEntry);
+assert(
+  (updatedWithManual.manualPracticeLogs?.length || 0) === initialManualLogsCount + 1,
+  '19.8 recordManualPractice adiciona o registro manual com sucesso no progresso'
+);
+// Tenta adicionar novamente com o mesmo ID (não deve duplicar)
+const duplicateAttempt = storageService.recordManualPractice(sampleManualEntry);
+assert(
+  (duplicateAttempt.manualPracticeLogs?.length || 0) === initialManualLogsCount + 1,
+  '19.8 recordManualPractice previne duplicações de registros com o mesmo ID'
+);
+
+// 19.9 Diferenciação de Métricas: Tempo Manual Offline vs Interativo Verificado
+const metrics = getPracticeMetrics(duplicateAttempt);
+assert(
+  metrics.manualOfflineSeconds >= 25 * 60,
+  '19.9 getPracticeMetrics contabiliza corretamente o tempo manual offline (>= 25 min)'
+);
+assert(
+  typeof metrics.verifiedInteractiveSeconds === 'number',
+  '19.9 getPracticeMetrics segrega o tempo verificado interativo de sessões guiadas'
+);
+
+// 19.10 Mapa de Domínio Musical: 12 Áreas Técnicas e Regra da Honestidade Pedagógica
+const domainMap = getSkillEvolutionMap(freshProgress);
+assert(
+  domainMap.domains.length === 12,
+  `19.10 Mapa de domínio agrupa exatamente 12 áreas técnicas (encontradas: ${domainMap.domains.length})`
+);
+assert(
+  domainMap.evaluatedSkillsCount === 0 && domainMap.overallEvaluatedScore === 0,
+  '19.10 Aluno sem testes práticos possui 0 habilidades avaliadas'
+);
+const allUnevaluated = domainMap.domains.every((d) =>
+  d.skills.every((s) => s.statusLabel === 'Ainda não avaliado' && s.masteryScore === null)
+);
+assert(
+  allUnevaluated,
+  '19.10 REGRA DA HONESTIDADE: Habilidades sem tentativas reais exibem estritamente "Ainda não avaliado" e score nulo'
+);
+
+// 19.11 Habilidades Avaliadas Efetivamente no Mapa de Domínio
+const evaluatedMap = getSkillEvolutionMap(matureProgress);
+assert(
+  evaluatedMap.evaluatedSkillsCount >= 1,
+  '19.11 Mapa de domínio calcula score de domínio apenas para habilidades com evidências reais'
+);
+const pickingSkillItem = evaluatedMap.domains
+  .find((d) => d.area === 'technique_right_hand')
+  ?.skills.find((s) => s.id === 'skill-alternate-picking');
+assert(
+  pickingSkillItem !== undefined &&
+  pickingSkillItem.isEvaluated &&
+  pickingSkillItem.masteryScore !== null &&
+  pickingSkillItem.statusLabel !== 'Ainda não avaliado',
+  '19.11 Habilidade avaliada exibe score calculado e status condizente (Em Treinamento / Proficiente)'
+);
+
+// 19.12 Preservação da Central de Prática, Metrônomo e Afinador
+const appSourceContent = fs.readFileSync('src/App.tsx', 'utf-8');
+assert(
+  appSourceContent.includes("currentTab === 'practice-routine'") &&
+  appSourceContent.includes("currentTab === 'metronome'") &&
+  appSourceContent.includes("currentTab === 'tuner'"),
+  '19.12 App.tsx preserva integralmente as rotas da Central de Prática, Metrônomo e Afinador'
+);
+
+// 19.13 Integridade do DashboardView com as 5 Fases do Intelligent Learning System
+const dashboardViewContent = fs.readFileSync('src/components/dashboard/DashboardView.tsx', 'utf-8');
+assert(
+  dashboardViewContent.includes('<ContinueFormationCard') &&
+  dashboardViewContent.includes('<DailyPracticePlanCard') &&
+  dashboardViewContent.includes('<SkillDomainMapCard') &&
+  dashboardViewContent.includes('<ContextualRecommendationsCard') &&
+  dashboardViewContent.includes('<PracticeMetricsAndLogCard'),
+  '19.13 DashboardView integra com sucesso os 5 componentes do Intelligent Learning System V1'
+);
+
+// =============================================================
+console.log('\n--- GRUPO 20: GOOGLE AUTHENTICATION & MULTI-USER SYSTEM V1 ---');
+
+// 20.1 Scoped Keys por UID
+const keyAlphaProgress = getProgressKey('user_alpha_123');
+const keyAlphaMetronome = getMetronomeKey('user_alpha_123');
+const keyAlphaSearch = getSearchKey('user_alpha_123');
+assert(
+  keyAlphaProgress === 'guitar_academy:user_alpha_123:progress',
+  '20.1 Chave de progresso isolada por UID (guitar_academy:user_alpha_123:progress)'
+);
+assert(
+  keyAlphaMetronome === 'guitar_academy:user_alpha_123:metronome',
+  '20.1 Chave de metrônomo isolada por UID (guitar_academy:user_alpha_123:metronome)'
+);
+assert(
+  keyAlphaSearch === 'guitar_academy:user_alpha_123:search_history',
+  '20.1 Chave de busca isolada por UID (guitar_academy:user_alpha_123:search_history)'
+);
+
+// 20.2 Isolamento de Dados Multiusuário (Usuário A vs Usuário B)
+storageService.setCurrentUser('user_alpha_123');
+const progressAlpha = storageService.loadProgress();
+progressAlpha.completedLessons = ['lesson-1', 'violao-lesson-1'];
+progressAlpha.totalStudyTimeSeconds = 3600;
+storageService.saveProgress(progressAlpha);
+
+storageService.setCurrentUser('user_beta_456');
+const progressBeta = storageService.loadProgress();
+assert(
+  progressBeta.completedLessons.length === 0,
+  '20.2 Usuário B inicia com progresso limpo, sem contaminação dos dados do Usuário A'
+);
+progressBeta.completedLessons = ['solo-lesson-1'];
+progressBeta.totalStudyTimeSeconds = 1800;
+storageService.saveProgress(progressBeta);
+
+// Validação cruzada: Usuário A não foi alterado pelo Usuário B
+storageService.setCurrentUser('user_alpha_123');
+const checkAlpha = storageService.loadProgress();
+assert(
+  checkAlpha.completedLessons.length === 2 &&
+  checkAlpha.completedLessons.includes('lesson-1') &&
+  checkAlpha.completedLessons.includes('violao-lesson-1') &&
+  !checkAlpha.completedLessons.includes('solo-lesson-1'),
+  '20.2 Usuário A preserva estritamente suas aulas sem vazamento de dados do Usuário B'
+);
+
+// Validação cruzada: Usuário B mantém apenas suas próprias aulas
+storageService.setCurrentUser('user_beta_456');
+const checkBeta = storageService.loadProgress();
+assert(
+  checkBeta.completedLessons.length === 1 &&
+  checkBeta.completedLessons.includes('solo-lesson-1') &&
+  !checkBeta.completedLessons.includes('lesson-1'),
+  '20.2 Usuário B mantém isolamento absoluto de suas próprias aulas'
+);
+
+// 20.3 Metrônomo e Busca Isolados por Estudante
+storageService.setCurrentUser('user_alpha_123');
+storageService.saveMetronome({ ...INITIAL_PROGRESS as any, bpm: 155, volume: 0.9, timerMinutes: 15, subdivision: 'quarter', accentFirstBeat: true, speedTrainer: { enabled: false, bpmIncrement: 5, everyMeasures: 4, targetBpm: 160 } } as any);
+storageService.addRecentSearch('caged sistema');
+
+storageService.setCurrentUser('user_beta_456');
+storageService.saveMetronome({ ...INITIAL_PROGRESS as any, bpm: 95, volume: 0.5, timerMinutes: 10, subdivision: 'quarter', accentFirstBeat: true, speedTrainer: { enabled: false, bpmIncrement: 5, everyMeasures: 4, targetBpm: 160 } } as any);
+storageService.addRecentSearch('fingerstyle violao');
+
+storageService.setCurrentUser('user_alpha_123');
+assert(
+  storageService.loadMetronome().bpm === 155,
+  '20.3 Metrônomo do Usuário A preserva andamento independente de 155 BPM'
+);
+assert(
+  storageService.getRecentSearches().includes('caged sistema') &&
+  !storageService.getRecentSearches().includes('fingerstyle violao'),
+  '20.3 Histórico de buscas do Usuário A isolado de outros estudantes'
+);
+
+storageService.setCurrentUser('user_beta_456');
+assert(
+  storageService.loadMetronome().bpm === 95,
+  '20.3 Metrônomo do Usuário B preserva andamento independente de 95 BPM'
+);
+assert(
+  storageService.getRecentSearches().includes('fingerstyle violao') &&
+  !storageService.getRecentSearches().includes('caged sistema'),
+  '20.3 Histórico de buscas do Usuário B isolado de outros estudantes'
+);
+
+// 20.4 Preservação e Arquivamento Não-Destrutivo de Dados Legados
+localStorage.setItem('guitar_academy_user_progress_v1', JSON.stringify({
+  ...INITIAL_PROGRESS,
+  completedLessons: ['lesson-1', 'lesson-2', 'lesson-3'],
+  totalStudyTimeSeconds: 5400,
+}));
+assert(
+  storageService.hasLegacyData(),
+  '20.4 Sistema detecta dados legados pré-existentes no dispositivo'
+);
+const archived = storageService.archiveLegacyData();
+assert(
+  archived,
+  '20.4 Sistema arquiva backup preventivo não-destrutivo em guitar_academy:legacy_backup_v1'
+);
+const legacyBackupContent = storageService.getLegacyData();
+assert(
+  legacyBackupContent !== null && legacyBackupContent.completedLessons.length === 3,
+  '20.4 Backup legado recuperável preserva exatamente as 3 aulas concluídas anteriores'
+);
+
+// 20.5 Criação de Conservatório Limpo para Novo Aluno
+storageService.createFreshSlateForUser('user_gamma_789');
+const gammaProgress = storageService.loadProgress('user_gamma_789');
+assert(
+  gammaProgress.completedLessons.length === 0,
+  '20.5 Novo aluno que opta por início limpo recebe conservatório da Aula 1 sem histórico contaminado'
+);
+
+// 20.6 Importação Controlada de Dados Legados
+storageService.importLegacyDataForUser('user_delta_101');
+const deltaProgress = storageService.loadProgress('user_delta_101');
+assert(
+  deltaProgress.completedLessons.length === 3 &&
+  deltaProgress.completedLessons.includes('lesson-3'),
+  '20.6 Aluno que opta por importar histórico anterior recebe os dados com sucesso'
+);
+
+// 20.7 Algoritmo de Mesclagem Bidirecional Local/Nuvem (Fase 7)
+const localState: UserProgress = {
+  ...INITIAL_PROGRESS,
+  completedLessons: ['lesson-1', 'lesson-2'],
+  totalStudyTimeSeconds: 2000,
+  practicedBpm: 120,
+};
+const cloudState: UserProgress = {
+  ...INITIAL_PROGRESS,
+  completedLessons: ['lesson-2', 'lesson-3', 'violao-lesson-1'],
+  totalStudyTimeSeconds: 3200,
+  practicedBpm: 140,
+};
+const mergedState = mergeProgressStates(localState, cloudState);
+assert(
+  mergedState.completedLessons.length === 4 &&
+  mergedState.completedLessons.includes('lesson-1') &&
+  mergedState.completedLessons.includes('lesson-3') &&
+  mergedState.completedLessons.includes('violao-lesson-1'),
+  '20.7 Mesclagem nuvem/local realiza união sem duplicatas de aulas concluídas'
+);
+assert(
+  mergedState.totalStudyTimeSeconds === 3200,
+  '20.7 Mesclagem nuvem/local preserva o maior tempo total de estudo acumulado (3200s)'
+);
+assert(
+  mergedState.practicedBpm === 140,
+  '20.7 Mesclagem nuvem/local preserva o maior andamento de metrônomo praticado (140 BPM)'
+);
+
+// 20.8 Logout e Limpeza de Sessão
+storageService.setCurrentUser('user_alpha_123');
+assert(storageService.getCurrentUser() === 'user_alpha_123', '20.8 Usuário ativo autenticado');
+storageService.setCurrentUser(null);
+assert(
+  storageService.getCurrentUser() === null,
+  '20.8 Logout limpa ponteiro do usuário ativo em memória e chave de sessão'
+);
+
+// 20.9 Validação do Blueprint e Regras de Segurança do Firestore
+const blueprintRaw = fs.readFileSync('firebase-blueprint.json', 'utf-8');
+const blueprintObj = JSON.parse(blueprintRaw);
+assert(
+  blueprintObj.entities?.UserProfile &&
+  blueprintObj.entities?.UserProgress &&
+  blueprintObj.firestore?.['/users/{userId}'],
+  '20.9 firebase-blueprint.json define entidades UserProfile, UserProgress e caminho /users/{userId}'
+);
+
+const rulesRaw = fs.readFileSync('firestore.rules', 'utf-8');
+assert(
+  rulesRaw.includes('request.auth.uid == userId') &&
+  rulesRaw.includes('allow read, write: if false;'),
+  '20.9 firestore.rules aplica Zero-Trust: estritamente restrito a request.auth.uid == userId com negação padrão'
+);
+
+// 20.10 Arquitetura e Integração com a Aplicação
+const appAuthCode = fs.readFileSync('src/App.tsx', 'utf-8');
+assert(
+  appAuthCode.includes('<AuthProvider>') &&
+  appAuthCode.includes('<LoginModal') &&
+  appAuthCode.includes('<UserProfileModal') &&
+  appAuthCode.includes('<LegacyDataModal'),
+  '20.10 App.tsx integra AuthProvider, LoginModal, UserProfileModal e LegacyDataModal'
+);
+
+const headerAuthCode = fs.readFileSync('src/components/layout/Header.tsx', 'utf-8');
+assert(
+  headerAuthCode.includes('useAuth') &&
+  (headerAuthCode.includes('onOpenProfile') || headerAuthCode.includes('onOpenAuth')),
+  '20.10 Header.tsx exibe avatar do aluno autenticado e gatilhos de login/perfil'
+);
+
+// -------------------------------------------------------------
+// GRUPO 21: Teacher Intelligence Dashboard V1 (Gestão Pedagógica, Analytics e Governança)
+// -------------------------------------------------------------
+console.log('\n--- GRUPO 21: Teacher Intelligence Dashboard V1 ---');
+
+import { TeacherService } from './src/services/teacherService';
+import { 
+  EducationalEvent, 
+  ClassGroup, 
+  TeacherFilterState 
+} from './src/types/index';
+
+// 21.1 Resolução de Papéis e Permissões (RBAC)
+const teacherRole = await TeacherService.resolveUserRole('teacher_uid', 'dramosdasilva7@gmail.com');
+assert(
+  teacherRole === 'admin' || teacherRole === 'teacher',
+  '21.1 Email institucional do coordenador dramosdasilva7@gmail.com resolve perfil administrativo/docente'
+);
+
+const studentRole = await TeacherService.resolveUserRole('student_uid_1', 'aluno.iniciante@gmail.com');
+assert(
+  studentRole === 'student',
+  '21.1 Email de aluno comum resolve estritamente perfil student sem privilégios administrativos'
+);
+
+// 21.2 Criação Segura de Turmas e Geração de Código de Convite
+const newClass = await TeacherService.createClass(
+  'teacher_uid',
+  'dramosdasilva7@gmail.com',
+  'Prof. Dennis',
+  'Turma Conservatório Violão Noite',
+  'Turma noturna focada nas 60 aulas de Violão'
+);
+const classCode = newClass.code || (newClass as any).inviteCode;
+assert(
+  newClass.id && classCode && classCode.startsWith('GA-'),
+  '21.2 Turma criada com identificador único e código de convite seguro com prefixo GA-'
+);
+
+// 21.3 Vinculação de Aluno à Turma via Código de Convite
+const joinResult = await TeacherService.joinClassWithInviteCode(
+  classCode,
+  'student_test_1',
+  'Carlos Eduardo',
+  'carlos.violao@gmail.com'
+);
+assert(
+  joinResult.success && joinResult.classGroup?.id === newClass.id,
+  '21.3 Aluno entra com sucesso na turma utilizando o código de convite emitido'
+);
+
+// Tentativa com código inválido
+const invalidJoin = await TeacherService.joinClassWithInviteCode(
+  'GA-INVALID-999',
+  'student_test_2',
+  'Marina Silva',
+  'marina@gmail.com'
+);
+assert(
+  Boolean(!invalidJoin.success && invalidJoin.error),
+  '21.3 Código de convite inexistente é rejeitado com mensagem de erro clara'
+);
+
+// 21.4 Modelo de Eventos Educacionais e Separação de Medição
+const testEventVerified: Omit<EducationalEvent, 'id' | 'timestamp'> = {
+  studentUid: 'student_test_1',
+  studentName: 'Carlos Eduardo',
+  studentEmail: 'carlos.violao@gmail.com',
+  classId: newClass.id,
+  courseId: 'violao',
+  lessonId: 'violao-lesson-1',
+  eventType: 'lesson_completed',
+  category: 'guided_lessons',
+  durationSeconds: 900,
+  measurementType: 'verified_interactive',
+  metadata: { bpm: 72, repetitions: 50 },
+};
+const loggedVerified = await TeacherService.logEducationalEvent(testEventVerified);
+assert(
+  Boolean(loggedVerified.id && loggedVerified.measurementType === 'verified_interactive'),
+  '21.4 Evento interativo com metrônomo/quiz classificado como verified_interactive'
+);
+
+const testEventManual: Omit<EducationalEvent, 'id' | 'timestamp'> = {
+  studentUid: 'student_test_1',
+  studentName: 'Carlos Eduardo',
+  studentEmail: 'carlos.violao@gmail.com',
+  classId: newClass.id,
+  courseId: 'violao',
+  eventType: 'manual_practice_logged',
+  category: 'instrumental_practice',
+  durationSeconds: 1800,
+  measurementType: 'manual_logged',
+  metadata: { notes: 'Estudo de pestanas e dedilhado' },
+};
+const loggedManual = await TeacherService.logEducationalEvent(testEventManual);
+assert(
+  Boolean(loggedManual.id && loggedManual.measurementType === 'manual_logged'),
+  '21.4 Prática offline registrada manualmente classificada como manual_logged'
+);
+
+// 21.5 Integridade Matemática da Tabela Analítica e Denominador Explícito
+const testFilter: TeacherFilterState = {
+  period: '30d',
+  classId: newClass.id,
+  courseId: 'all',
+  category: 'all',
+};
+const sampleEvents: EducationalEvent[] = [
+  loggedVerified,
+  loggedManual,
+  {
+    id: 'evt_3',
+    studentUid: 'student_test_1',
+    studentName: 'Carlos Eduardo',
+    studentEmail: 'carlos.violao@gmail.com',
+    classId: newClass.id,
+    courseId: 'violao',
+    eventType: 'theory_content_opened',
+    category: 'music_theory',
+    durationSeconds: 600,
+    measurementType: 'verified_interactive',
+    timestamp: new Date().toISOString(),
+  },
+];
+const analyticsTable = TeacherService.buildAnalyticsTable(sampleEvents, 1);
+assert(
+  analyticsTable.length > 0,
+  '21.5 Tabela analítica gerada a partir dos eventos educacionais da turma'
+);
+const guidedRow = analyticsTable.find((r) => r.category === 'guided_lessons');
+assert(
+  Boolean(guidedRow && guidedRow.verifiedCount === 1 && guidedRow.denominatorTotal === 3),
+  '21.5 Tabela analítica calcula percentual com base no denominador total de eventos (1/3 = 33.3%)'
+);
+assert(
+  guidedRow?.verifiedTimeSeconds === 900 && guidedRow?.manualTimeSeconds === 0,
+  '21.5 Tempo interativo verificado e tempo manual são segregados matematicamente'
+);
+
+// 21.6 Funil Pedagógico dos Cursos (Violão 60, Conservatório 18, Solo 20)
+const sampleSummaries = TeacherService.getStudentSummaries(newClass.id);
+const funnelViolao = TeacherService.buildCourseFunnel('violao', sampleSummaries, sampleEvents);
+assert(
+  funnelViolao.length === 60,
+  '21.6 Funil pedagógico do curso Violão contém exatamente as 60 aulas estruturadas'
+);
+assert(
+  funnelViolao[0].lessonNumber === 1 && funnelViolao[59].lessonNumber === 60,
+  '21.6 Funil de Violão mapeia da Aula 1 até a Aula 60 sequencialmente'
+);
+
+const funnelConservatorio = TeacherService.buildCourseFunnel('canonical', sampleSummaries, sampleEvents);
+assert(
+  funnelConservatorio.length === 18,
+  '21.6 Funil pedagógico do Conservatório Canônico contém as 18 aulas da grade'
+);
+
+const funnelSolo = TeacherService.buildCourseFunnel('solo', sampleSummaries, sampleEvents);
+assert(
+  funnelSolo.length === 20,
+  '21.6 Funil pedagógico de Guitarra Solo contém as 20 aulas do curso avançado'
+);
+
+// 21.7 Diagnóstico de Gargalos Pedagógicos (Estrutura Tripartite: Fato, Hipótese, Intervenção)
+const sampleFunnelRows = [
+  {
+    lessonId: 'violao-lesson-7',
+    lessonTitle: 'Primeiros Acordes Maiores: Dó (C) e Sol (G)',
+    moduleTitle: 'Módulo 2: Acordes Fundamentais',
+    lessonNumber: 7,
+    eligibleStudents: 10,
+    startedStudents: 10,
+    masteredStudents: 4,
+    completionRatePct: 40,
+    dropRatePct: 35,
+    averagePracticeMinutes: 12,
+  },
+];
+const bottlenecks = TeacherService.detectPedagogicalBottlenecks(sampleFunnelRows, []);
+assert(
+  bottlenecks.length > 0,
+  '21.7 Sistema detecta automaticamente aula com taxa de evasão superior a 30%'
+);
+assert(
+  bottlenecks[0].observedFact.length > 0 &&
+  bottlenecks[0].pedagogicalHypothesis.length > 0 &&
+  bottlenecks[0].interventionSuggestion.length > 0,
+  '21.7 Diagnóstico estruturado no padrão pedagógico: Fato Observado, Hipótese e Intervenção Sugerida'
+);
+
+// 21.8 Exportação de Relatórios em Formato CSV Seguro
+const csvStudents = TeacherService.exportReportToCsv('students', sampleSummaries, 'Turma_Teste');
+assert(
+  Boolean(
+    csvStudents.success &&
+    csvStudents.csvContent &&
+    csvStudents.csvContent.includes('Nome,Email,Turma') &&
+    csvStudents.csvContent.includes('Carlos Eduardo')
+  ),
+  '21.8 Exportador CSV gera cabeçalhos padronizados e escapa registros de alunos'
+);
+
+const csvBottlenecks = TeacherService.exportReportToCsv('bottlenecks', bottlenecks, 'Turma_Teste');
+assert(
+  Boolean(
+    csvBottlenecks.success &&
+    csvBottlenecks.csvContent &&
+    csvBottlenecks.csvContent.includes('Gravidade,Titulo,Fato Observado,Hipotese Pedagogica,Sugestao Intervencao')
+  ),
+  '21.8 Exportador CSV gera relatório analítico de gargalos pedagógicos'
+);
+
+// 21.9 Regras de Segurança do Firestore (Zero-Trust ABAC)
+const firestoreRulesText = fs.readFileSync('firestore.rules', 'utf-8');
+assert(
+  firestoreRulesText.includes('isTeacher()') &&
+  firestoreRulesText.includes('dramosdasilva7@gmail.com'),
+  '21.9 firestore.rules valida explicitamente a credencial do professor via token.email ou system_roles'
+);
+assert(
+  firestoreRulesText.includes('match /users/{userId}') &&
+  firestoreRulesText.includes('isOwner(userId) || isTeacher()') &&
+  firestoreRulesText.includes('allow write: if isOwner(userId)'),
+  '21.9 firestore.rules permite leitura autorizada ao professor mas impede escrita no progresso do aluno'
+);
+assert(
+  firestoreRulesText.includes('match /classes/{classId}') &&
+  firestoreRulesText.includes('if isTeacher()'),
+  '21.9 firestore.rules restringe criação e edição de turmas ao professor'
+);
+
+// 21.10 Integração com Navegação e Interface
+const navigationServiceCode = fs.readFileSync('src/services/navigationService.ts', 'utf-8');
+assert(
+  navigationServiceCode.includes("'teacher-dashboard'") &&
+  navigationServiceCode.includes('Gestão Pedagógica'),
+  '21.10 navigationService.ts registra a aba teacher-dashboard mapeada para o pilar Evoluir'
+);
+
+const teacherHeaderCode = fs.readFileSync('src/components/layout/Header.tsx', 'utf-8');
+assert(
+  teacherHeaderCode.includes('dramosdasilva7@gmail.com') &&
+  teacherHeaderCode.includes('teacher-dashboard'),
+  '21.10 Header.tsx exibe atalho de acesso ao Painel de Gestão para o professor autorizado'
+);
+
+const userProfileModalCode = fs.readFileSync('src/components/profile/UserProfileModal.tsx', 'utf-8');
+assert(
+  userProfileModalCode.includes('Abrir Painel de Gestão Pedagógica') &&
+  userProfileModalCode.includes('Vincular a uma Turma com Código'),
+  '21.10 UserProfileModal.tsx oferece atalhos contextuais para professor e para adesão de alunos a turmas'
+);
+
+const appTsxCode = fs.readFileSync('src/App.tsx', 'utf-8');
+assert(
+  appTsxCode.includes('TeacherDashboardView') &&
+  appTsxCode.includes('StudentJoinClassModal') &&
+  appTsxCode.includes('StudentPrivacyNotice'),
+  '21.10 App.tsx integra TeacherDashboardView, StudentJoinClassModal e StudentPrivacyNotice'
+);
+
+// -------------------------------------------------------------
+// GRUPO 22: MASTER CORE V1.0 — NÚCLEO DA MATRIZ CENTRAL (FASE 2)
+// -------------------------------------------------------------
+console.log('\n--- GRUPO 22: MASTER CORE V1.0 — NÚCLEO DA MATRIZ CENTRAL (FASE 2) ---');
+
+import { 
+  OFFICIAL_INSTRUMENTS, 
+  OFFICIAL_LEVELS, 
+  OFFICIAL_COURSES,
+  getRegisteredInstruments,
+  getInstrumentById,
+  getLevelDefinition,
+  getOfficialCourses,
+  getCourseById,
+  verifyCurriculumIntegrity,
+  getCourseLessonSummaries
+} from './src/academia/curriculum/masterCurriculumRegistry';
+
+// 22.1 Cinco instrumentos oficiais definidos
+assert(
+  OFFICIAL_INSTRUMENTS.length === 5,
+  '22.1 Matriz Central registra exatamente os 5 instrumentos oficiais'
+);
+const instrumentIds = OFFICIAL_INSTRUMENTS.map(i => i.id);
+assert(
+  instrumentIds.includes('violao') &&
+  instrumentIds.includes('guitarra') &&
+  instrumentIds.includes('baixo') &&
+  instrumentIds.includes('teclado') &&
+  instrumentIds.includes('bateria'),
+  '22.1 Instrumentos oficiais: Violão, Guitarra, Baixo, Teclado e Bateria'
+);
+const violaoInst = getInstrumentById('violao');
+assert(
+  violaoInst?.status === 'active' && violaoInst?.family === 'cordas_acusticas' && violaoInst?.stringsCount === 6,
+  '22.1 Violão configurado como ativo com 6 cordas e família de cordas acústicas'
+);
+const guitarraInst = getInstrumentById('guitarra');
+assert(
+  guitarraInst?.status === 'active' && guitarraInst?.family === 'cordas_eletricas',
+  '22.1 Guitarra configurada como ativa com família de cordas elétricas'
+);
+const baixoInst = getInstrumentById('baixo');
+assert(
+  (baixoInst?.status === 'active' || baixoInst?.status === 'in_development') && baixoInst?.stringsCount === 4,
+  '22.1 Baixo registrado no núcleo com 4 cordas'
+);
+const tecladoInst = getInstrumentById('teclado');
+assert(
+  (tecladoInst?.status === 'active' || tecladoInst?.status === 'in_development') && tecladoInst?.keysCount === 61,
+  '22.1 Teclado registrado no núcleo com 61 teclas'
+);
+const bateriaInst = getInstrumentById('bateria');
+assert(
+  (bateriaInst?.status === 'active' || bateriaInst?.status === 'in_development') && bateriaInst?.family === 'percussao',
+  '22.1 Bateria registrada no núcleo com família percussão'
+);
+
+// 22.2 Seis níveis acadêmicos padronizados de 0 a 5
+assert(
+  OFFICIAL_LEVELS.length === 6,
+  '22.2 Matriz Central padroniza exatamente os 6 níveis acadêmicos de conservatório (0 a 5)'
+);
+const level0 = getLevelDefinition(0);
+const level1 = getLevelDefinition(1);
+const level2 = getLevelDefinition(2);
+const level3 = getLevelDefinition(3);
+const level4 = getLevelDefinition(4);
+const level5 = getLevelDefinition(5);
+
+assert(
+  level0.code === 'LVL-0' && level0.name.includes('Fundamentos'),
+  '22.2 Nível 0 padronizado: Fundamentos (Absoluto Zero)'
+);
+assert(
+  level1.code === 'LVL-1' && level1.name.includes('Iniciação'),
+  '22.2 Nível 1 padronizado: Iniciação'
+);
+assert(
+  level2.code === 'LVL-2' && level2.name.includes('Desenvolvimento Básico'),
+  '22.2 Nível 2 padronizado: Desenvolvimento Básico'
+);
+assert(
+  level3.code === 'LVL-3' && level3.name.includes('Intermediário'),
+  '22.2 Nível 3 padronizado: Intermediário'
+);
+assert(
+  level4.code === 'LVL-4' && level4.name.includes('Avançado'),
+  '22.2 Nível 4 padronizado: Avançado'
+);
+assert(
+  level5.code === 'LVL-5' && level5.name.includes('Especialização e Performance'),
+  '22.2 Nível 5 padronizado: Especialização e Performance'
+);
+
+// 22.3 Catálogo oficial de cursos da Matriz Central
+const courses = getOfficialCourses();
+assert(
+  courses.length >= 3 &&
+  courses.some(c => c.id === 'violao') &&
+  courses.some(c => c.id === 'canonical') &&
+  courses.some(c => c.id === 'solo'),
+  '22.3 Catálogo central registra os 3 cursos consolidados (Violão 60, Guitarra 18, Solo 20)'
+);
+const violaoCourse = getCourseById('violao');
+assert(
+  violaoCourse?.totalLessons === 60 && violaoCourse?.totalModules === 10 && violaoCourse?.isCanonical === true,
+  '22.3 Curso de Violão registrado com 60 aulas, 10 módulos e status canônico'
+);
+const canonicalCourse = getCourseById('canonical');
+assert(
+  canonicalCourse?.totalLessons === 18 && canonicalCourse?.totalModules === 6,
+  '22.3 Conservatório Canônico de Guitarra registrado com 18 aulas e 6 níveis'
+);
+const soloCourse = getCourseById('solo');
+assert(
+  soloCourse?.totalLessons === 20 && soloCourse?.totalModules === 5,
+  '22.3 Formação em Guitarra Solo registrada com 20 aulas e 5 etapas'
+);
+
+// 22.4 Preservação e integridade dos currículos existentes
+const integrityCheck = verifyCurriculumIntegrity();
+assert(
+  integrityCheck.isValid === true && integrityCheck.errors.length === 0,
+  `22.4 Auditoria em runtime confirma integridade absoluta dos currículos (Erros: ${integrityCheck.errors.join(', ') || 'Nenhum'})`
+);
+assert(
+  integrityCheck.violaoCount === 60,
+  '22.4 Exatamente 60 aulas de Violão preservadas'
+);
+assert(
+  integrityCheck.canonicalCount === 18,
+  '22.4 Exatamente 18 aulas canônicas de Guitarra preservadas'
+);
+assert(
+  integrityCheck.soloCount === 20,
+  '22.4 Exatamente 20 aulas de Guitarra Solo preservadas'
+);
+assert(
+  integrityCheck.violaoCount + integrityCheck.canonicalCount + integrityCheck.soloCount === 98,
+  '22.4 Total acumulado preservado: 98 aulas completas de conservatório'
+);
+
+// 22.5 Geração de sumários de aulas no padrão da Matriz Central
+const violaoSummaries = getCourseLessonSummaries('violao');
+assert(
+  violaoSummaries.length === 60 && violaoSummaries[0].id === 'violao-lesson-1' && violaoSummaries[59].id === 'violao-lesson-60',
+  '22.5 Sumários de Violão cobrem da Aula 1 à Aula 60 com integridade'
+);
+const canonicalSummaries = getCourseLessonSummaries('canonical');
+assert(
+  canonicalSummaries.length === 18 && canonicalSummaries[0].id === 'lesson-1',
+  '22.5 Sumários da Guitarra Canônica cobrem as 18 aulas'
+);
+const soloSummaries = getCourseLessonSummaries('solo');
+assert(
+  soloSummaries.length === 20 && soloSummaries[0].id === 'solo-lesson-1',
+  '22.5 Sumários de Guitarra Solo cobrem as 20 aulas especializadas'
+);
+
+// 22.6 Contratos de dados exportados e verificados
+const typesFileCode = fs.readFileSync('src/academia/core/types.ts', 'utf-8');
+assert(
+  typesFileCode.includes('AcademicInstrument') &&
+  typesFileCode.includes('AcademicLevelDefinition') &&
+  typesFileCode.includes('AcademicCourse') &&
+  typesFileCode.includes('AcademicCompetency') &&
+  typesFileCode.includes('AcademicEnrollment') &&
+  typesFileCode.includes('AcademicProgressSnapshot') &&
+  typesFileCode.includes('AcademicAssessmentRubric') &&
+  typesFileCode.includes('AcademicPracticalAssessment') &&
+  typesFileCode.includes('AcademicCertificate'),
+  '22.6 Contratos de dados mestres da Matriz Central implementados em src/academia/core/types.ts'
+);
+
+const indexTypesCode = fs.readFileSync('src/types/index.ts', 'utf-8');
+assert(
+  indexTypesCode.includes('../academia/core/types') &&
+  indexTypesCode.includes('../academia/curriculum/masterCurriculumRegistry'),
+  '22.6 src/types/index.ts reexporta os contratos da academia mantendo compatibilidade'
+);
+
+// -------------------------------------------------------------
+// GRUPO 23: FASE 3 — EXPANSÃO CURRICULAR E REGISTRO UNIFICADO DOS 5 INSTRUMENTOS
+// -------------------------------------------------------------
+console.log('\n--- GRUPO 23: FASE 3 — EXPANSÃO CURRICULAR E REGISTRO UNIFICADO DOS 5 INSTRUMENTOS ---');
+
+import { 
+  BAIXO_CURRICULUM_MODULES,
+  TECLADO_CURRICULUM_MODULES,
+  BATERIA_CURRICULUM_MODULES,
+  getCurriculumModulesByInstrument,
+  getAllExpandedCurriculumModules
+} from './src/academia/curriculo/mestreCurriculumRegistry';
+
+// 23.1 Novo Curso — Baixo Elétrico (6 níveis, 18 aulas estruturadas)
+assert(
+  BAIXO_CURRICULUM_MODULES.length === 6,
+  '23.1 Baixo Elétrico estruturado em exatamente 6 níveis acadêmicos (0 a 5)'
+);
+const baixoNiveis = BAIXO_CURRICULUM_MODULES.map(m => m.nivel);
+assert(
+  baixoNiveis.includes(0) && baixoNiveis.includes(1) && baixoNiveis.includes(2) &&
+  baixoNiveis.includes(3) && baixoNiveis.includes(4) && baixoNiveis.includes(5),
+  '23.1 Baixo Elétrico cobre todos os 6 níveis de 0 a 5 sequencialmente'
+);
+const baixoMod0 = BAIXO_CURRICULUM_MODULES.find(m => m.nivel === 0);
+assert(
+  Boolean(baixoMod0?.nome.includes('Anatomia') &&
+  baixoMod0?.conteudos.some(c => c.includes('E-A-D-G')) &&
+  baixoMod0?.aulas.length === 3),
+  '23.1 Baixo Nível 0: Anatomia de 4 cordas, afinação E-A-D-G, postura e pulsação'
+);
+const baixoMod1 = BAIXO_CURRICULUM_MODULES.find(m => m.nivel === 1);
+assert(
+  Boolean(baixoMod1?.nome.includes('Pizzicato') &&
+  baixoMod1?.conteudos.some(c => c.includes('Alternância')) &&
+  baixoMod1?.aulas.length === 3),
+  '23.1 Baixo Nível 1: Alternância de dedos, pizzicato, notas naturais e primeiras linhas'
+);
+const baixoMod2 = BAIXO_CURRICULUM_MODULES.find(m => m.nivel === 2);
+assert(
+  Boolean(baixoMod2?.nome.includes('Groove') &&
+  baixoMod2?.conteudos.some(c => c.includes('Tônica')) &&
+  baixoMod2?.aulas.length === 3),
+  '23.1 Baixo Nível 2: Escalas, intervalos T-5-8, groove, síncopes e acompanhamento'
+);
+const baixoMod3 = BAIXO_CURRICULUM_MODULES.find(m => m.nivel === 3);
+assert(
+  Boolean(baixoMod3?.nome.includes('Walking Bass') &&
+  baixoMod3?.conteudos.some(c => c.includes('Ghost notes')) &&
+  baixoMod3?.aulas.length === 3),
+  '23.1 Baixo Nível 3: Campo harmônico, arpejos de tétrades, walking bass e ghost notes'
+);
+const baixoMod4 = BAIXO_CURRICULUM_MODULES.find(m => m.nivel === 4);
+assert(
+  Boolean(baixoMod4?.nome.includes('Slap') &&
+  baixoMod4?.conteudos.some(c => c.includes('Pop')) &&
+  baixoMod4?.aulas.length === 3),
+  '23.1 Baixo Nível 4: Slap, pop, tapping, modos gregos e métricas compostas'
+);
+const baixoMod5 = BAIXO_CURRICULUM_MODULES.find(m => m.nivel === 5);
+assert(
+  Boolean(baixoMod5?.nome.includes('Performance') &&
+  baixoMod5?.conteudos.some(c => c.includes('Improvisação')) &&
+  baixoMod5?.aulas.length === 3),
+  '23.1 Baixo Nível 5: Improvisação, harmonia avançada, linhas autorais e performance'
+);
+
+// 23.2 Novo Curso — Teclado e Piano Complementar (6 níveis, 18 aulas estruturadas)
+assert(
+  TECLADO_CURRICULUM_MODULES.length === 6,
+  '23.2 Teclado estruturado em exatamente 6 níveis acadêmicos (0 a 5)'
+);
+const tecladoNiveis = TECLADO_CURRICULUM_MODULES.map(m => m.nivel);
+assert(
+  tecladoNiveis.includes(0) && tecladoNiveis.includes(1) && tecladoNiveis.includes(2) &&
+  tecladoNiveis.includes(3) && tecladoNiveis.includes(4) && tecladoNiveis.includes(5),
+  '23.2 Teclado cobre todos os 6 níveis de 0 a 5 sequencialmente'
+);
+const tecladoMod0 = TECLADO_CURRICULUM_MODULES.find(m => m.nivel === 0);
+assert(
+  Boolean(tecladoMod0?.nome.includes('Geografia') &&
+  tecladoMod0?.conteudos.some(c => c.includes('2 e 3 teclas pretas')) &&
+  tecladoMod0?.aulas.length === 3),
+  '23.2 Teclado Nível 0: Geografia das teclas, notas musicais, postura, dedos 1 a 5'
+);
+const tecladoMod1 = TECLADO_CURRICULUM_MODULES.find(m => m.nivel === 1);
+assert(
+  Boolean(tecladoMod1?.nome.includes('Dedilhado') &&
+  tecladoMod1?.conteudos.some(c => c.includes('passagem do polegar')) &&
+  tecladoMod1?.aulas.length === 3),
+  '23.2 Teclado Nível 1: Escalas maiores, passagem de polegar, intervalos e tríades'
+);
+const tecladoMod2 = TECLADO_CURRICULUM_MODULES.find(m => m.nivel === 2);
+assert(
+  Boolean(tecladoMod2?.nome.includes('Inversões') &&
+  tecladoMod2?.conteudos.some(c => c.includes('campo harmônico')) &&
+  tecladoMod2?.aulas.length === 3),
+  '23.2 Teclado Nível 2: Inversões de tríades, escalas menores, campo harmônico e independência'
+);
+const tecladoMod3 = TECLADO_CURRICULUM_MODULES.find(m => m.nivel === 3);
+assert(
+  Boolean(tecladoMod3?.nome.includes('Tétrades') &&
+  tecladoMod3?.conteudos.some(c => c.includes('II-V-I')) &&
+  tecladoMod3?.aulas.length === 3),
+  '23.2 Teclado Nível 3: Tétrades, dominantes, cadência II-V-I, condução de vozes e arpejos'
+);
+const tecladoMod4 = TECLADO_CURRICULUM_MODULES.find(m => m.nivel === 4);
+assert(
+  Boolean(tecladoMod4?.nome.includes('Tensões') &&
+  tecladoMod4?.conteudos.some(c => c.includes('Voicings')) &&
+  tecladoMod4?.aulas.length === 3),
+  '23.2 Teclado Nível 4: Tensões harmônicas (9, 11, 13), aberturas quartais, rearmonização e modos'
+);
+const tecladoMod5 = TECLADO_CURRICULUM_MODULES.find(m => m.nivel === 5);
+assert(
+  Boolean(tecladoMod5?.nome.includes('Arranjos') &&
+  tecladoMod5?.conteudos.some(c => c.includes('alterada')) &&
+  tecladoMod5?.aulas.length === 3),
+  '23.2 Teclado Nível 5: Harmonia avançada, piano solo completo, improvisação e performance'
+);
+
+// 23.3 Novo Curso — Bateria e Prática Rítmica (6 níveis, 18 aulas estruturadas)
+assert(
+  BATERIA_CURRICULUM_MODULES.length === 6,
+  '23.3 Bateria estruturada em exatamente 6 níveis acadêmicos (0 a 5)'
+);
+const bateriaNiveis = BATERIA_CURRICULUM_MODULES.map(m => m.nivel);
+assert(
+  bateriaNiveis.includes(0) && bateriaNiveis.includes(1) && bateriaNiveis.includes(2) &&
+  bateriaNiveis.includes(3) && bateriaNiveis.includes(4) && bateriaNiveis.includes(5),
+  '23.3 Bateria cobre todos os 6 níveis de 0 a 5 sequencialmente'
+);
+const bateriaMod0 = BATERIA_CURRICULUM_MODULES.find(m => m.nivel === 0);
+assert(
+  Boolean(bateriaMod0?.nome.includes('Baquetas') &&
+  bateriaMod0?.conteudos.some(c => c.includes('fulcro')) &&
+  bateriaMod0?.aulas.length === 3),
+  '23.3 Bateria Nível 0: Anatomia das peças, postura, pegada matched grip, fulcro e pulsação'
+);
+const bateriaMod1 = BATERIA_CURRICULUM_MODULES.find(m => m.nivel === 1);
+assert(
+  Boolean(bateriaMod1?.nome.includes('Rudimentos') &&
+  bateriaMod1?.conteudos.some(c => c.includes('Paradiddle')) &&
+  bateriaMod1?.aulas.length === 3),
+  '23.3 Bateria Nível 1: Rudimentos básicos (single, double, paradiddle) e levada 4/4'
+);
+const bateriaMod2 = BATERIA_CURRICULUM_MODULES.find(m => m.nivel === 2);
+assert(
+  Boolean(bateriaMod2?.nome.includes('Coordenação') &&
+  bateriaMod2?.conteudos.some(c => c.includes('6/8')) &&
+  bateriaMod2?.aulas.length === 3),
+  '23.3 Bateria Nível 2: Coordenação membros, levadas em 4/4 e 6/8, viradas dinâmicas'
+);
+const bateriaMod3 = BATERIA_CURRICULUM_MODULES.find(m => m.nivel === 3);
+assert(
+  Boolean(bateriaMod3?.nome.includes('Ghost Notes') &&
+  bateriaMod3?.conteudos.some(c => c.includes('Moeller')) &&
+  bateriaMod3?.aulas.length === 3),
+  '23.3 Bateria Nível 3: Pé esquerdo no chimbal, ghost notes Moeller, acentuações e leitura'
+);
+const bateriaMod4 = BATERIA_CURRICULUM_MODULES.find(m => m.nivel === 4);
+assert(
+  Boolean(bateriaMod4?.nome.includes('Polirritmia') &&
+  bateriaMod4?.conteudos.some(c => c.includes('7/8')) &&
+  bateriaMod4?.aulas.length === 3),
+  '23.3 Bateria Nível 4: Métricas ímpares (7/8), polirritmias (3:2, 4:3), ostinatos e técnica linear'
+);
+const bateriaMod5 = BATERIA_CURRICULUM_MODULES.find(m => m.nivel === 5);
+assert(
+  Boolean(bateriaMod5?.nome.includes('Grooves Autorais') &&
+  bateriaMod5?.conteudos.some(c => c.includes('Jazz')) &&
+  bateriaMod5?.aulas.length === 3),
+  '23.3 Bateria Nível 5: Improvisação de solos, Jazz com vassourinhas, ritmos brasileiros e recital'
+);
+
+// 23.4 Padrão Acadêmico Obrigatório dos Módulos
+const allExpandedMods = getAllExpandedCurriculumModules();
+assert(
+  allExpandedMods.length === 18,
+  '23.4 Total de 18 módulos expandidos criados (6 Baixo + 6 Teclado + 6 Bateria)'
+);
+const modStructureValid = allExpandedMods.every(m => 
+  Boolean(m.id) &&
+  Boolean(m.nome) &&
+  Boolean(m.objetivoAcademico) &&
+  m.competenciasDesenvolvidas.length >= 3 &&
+  m.preRequisitos.length >= 1 &&
+  m.conteudos.length >= 4 &&
+  m.exerciciosPraticos.length >= 2 &&
+  m.criteriosDominio.length >= 2 &&
+  Boolean(m.formaAvaliacao) &&
+  m.aulas.length === 3
+);
+assert(
+  modStructureValid === true,
+  '23.4 Todos os 18 módulos cumprem rigorosamente os 9 requisitos do Padrão Acadêmico Obrigatório'
+);
+
+// 23.5 Registro Mestre Unificado dos 5 Instrumentos
+const allInstruments = getRegisteredInstruments();
+assert(
+  allInstruments.length === 5 &&
+  allInstruments.every(i => i.status === 'active'),
+  '23.5 Todos os cinco instrumentos oficiais ativos no registro unificado'
+);
+const officialCourseIds = getOfficialCourses().map(c => c.id);
+assert(
+  officialCourseIds.includes('violao') &&
+  officialCourseIds.includes('canonical') &&
+  officialCourseIds.includes('solo') &&
+  officialCourseIds.includes('baixo') &&
+  officialCourseIds.includes('teclado') &&
+  officialCourseIds.includes('bateria'),
+  '23.5 Catálogo unificado registra os 6 cursos oficiais do conservatório sem omissões'
+);
+
+// 23.6 Preservação Integral dos Cursos Anteriores e Unicidade de Identificadores
+const fullAudit = verifyCurriculumIntegrity();
+assert(
+  fullAudit.isValid === true && fullAudit.errors.length === 0,
+  `23.6 Auditoria global confirma integridade de todos os currículos (Erros: ${fullAudit.errors.join(', ') || 'Nenhum'})`
+);
+assert(
+  fullAudit.violaoCount === 60,
+  '23.6 Violão Acústico: 60 aulas em 10 módulos 100% preservadas'
+);
+assert(
+  fullAudit.canonicalCount === 18,
+  '23.6 Guitarra Canônica: 18 aulas em 6 níveis 100% preservadas'
+);
+assert(
+  fullAudit.soloCount === 20,
+  '23.6 Guitarra Solo: 20 aulas em 5 etapas 100% preservadas'
+);
+assert(
+  fullAudit.baixoCount === 18 && fullAudit.tecladoCount === 18 && fullAudit.bateriaCount === 18,
+  '23.6 Novos instrumentos totalizam exatamente 54 aulas estruturadas (18 Baixo + 18 Teclado + 18 Bateria)'
+);
+assert(
+  fullAudit.totalLessons === 152,
+  '23.6 Plataforma acumula exatamente 152 aulas estruturadas de conservatório'
+);
+assert(
+  fullAudit.uniqueIdsValid === true,
+  '23.6 Todos os 152 identificadores de aulas e módulos são estritamente únicos sem qualquer duplicata'
+);
+
+// 23.7 Sumários de Aulas de Todos os 6 Cursos Gerados com Sucesso
+const baixoSummaries = getCourseLessonSummaries('baixo');
+const tecladoSummaries = getCourseLessonSummaries('teclado');
+const bateriaSummaries = getCourseLessonSummaries('bateria');
+assert(
+  baixoSummaries.length === 18 && tecladoSummaries.length === 18 && bateriaSummaries.length === 18,
+  '23.7 getCourseLessonSummaries gera sumários completos para Baixo, Teclado e Bateria'
+);
+
 console.log('\n===========================================================');
 console.log(`TOTAL DE TESTES: ${totalTests}`);
 console.log(`PASSOU: ${passedTests}`);
@@ -2513,6 +3677,8 @@ console.log('===========================================================');
 if (failedTests > 0) {
   process.exit(1);
 } else {
-  console.log('✓ Todos os testes de integração do motor musical, detector, currículo, Central de Prática, Busca Global e Fase 6 foram APROVADOS com sucesso!\n');
+  console.log('✓ Todos os testes de integração do motor musical, detector, currículo, Central de Prática, Busca Global e Autenticação Google Multiusuário foram APROVADOS com sucesso!\n');
+  process.exit(0);
 }
+
 
