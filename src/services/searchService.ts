@@ -1,6 +1,9 @@
 import { CURRICULUM_LEVELS } from '../data/curriculum';
 import { SOLO_LESSONS } from '../data/soloCourse';
 import { VIOLAO_LESSONS } from '../data/violaoCourse';
+import { BASS_LESSONS } from '../data/bassCourse';
+import { KEYBOARD_LESSONS } from '../data/keyboardCourse';
+import { DRUMS_LESSONS } from '../data/drumsCourse';
 import { CHORD_DATABASE } from '../data/chordDatabase';
 import { SCALES, INTERVALS, CIRCLE_OF_FIFTHS } from '../data/musicTheory';
 
@@ -184,6 +187,126 @@ function buildSearchIndex(): SearchResultItem[] {
       badge: `Violão • Mód ${lesson.moduleNumber}`,
       category: lesson.moduleTitle,
       detail: `${lesson.estimatedMinutes} min • Metrônomo: ${lesson.speedGoals.startingBpm} a ${lesson.speedGoals.targetBpm} BPM`,
+      lessonId: lesson.id,
+      keywords,
+    });
+  });
+
+  // 1.3 Formação em Contrabaixo Elétrico (18 Aulas)
+  BASS_LESSONS.forEach((lesson) => {
+    const keywords = [
+      lesson.title,
+      lesson.subtitle,
+      lesson.objective,
+      `Nível ${lesson.level}`,
+      lesson.moduleTitle,
+      `aula ${lesson.lessonNumber}`,
+      'baixo',
+      'contrabaixo',
+      'baixo eletrico',
+      'bass',
+      'slap',
+      'pop',
+      'walking bass',
+      'ghost note',
+      'arpejos',
+      'groove',
+      'pentatonica',
+      'rest stroke',
+      'movable thumb',
+      ...lesson.parts.map((p) => p.title),
+    ];
+
+    items.push({
+      id: `baixo-${lesson.id}`,
+      type: 'lesson',
+      title: lesson.title,
+      subtitle: lesson.subtitle,
+      badge: `Baixo • Nível ${lesson.level}`,
+      category: lesson.moduleTitle,
+      detail: `${lesson.estimatedMinutes} min • ${lesson.tuning || 'E-A-D-G'}`,
+      lessonId: lesson.id,
+      keywords,
+    });
+  });
+
+  // 1.4 Formação em Teclado / Piano (18 Aulas)
+  KEYBOARD_LESSONS.forEach((lesson) => {
+    const keywords = [
+      lesson.title,
+      lesson.subtitle,
+      lesson.objective,
+      `Nível ${lesson.level}`,
+      lesson.moduleTitle,
+      `aula ${lesson.lessonNumber}`,
+      'teclado',
+      'piano',
+      'keyboard',
+      'triades',
+      'tetrades',
+      'harmonia',
+      'arpejos',
+      'ii-v-i',
+      'voicings',
+      'quartal',
+      'bossa nova',
+      'independencia de maos',
+      'passagem do polegar',
+      ...lesson.parts.map((p) => p.title),
+    ];
+
+    items.push({
+      id: `teclado-${lesson.id}`,
+      type: 'lesson',
+      title: lesson.title,
+      subtitle: lesson.subtitle,
+      badge: `Teclado • Nível ${lesson.level}`,
+      category: lesson.moduleTitle,
+      detail: `${lesson.estimatedMinutes} min • ${lesson.keyRange || '61 / 88 Teclas'}`,
+      lessonId: lesson.id,
+      keywords,
+    });
+  });
+
+  // 1.5 Formação em Bateria e Prática Rítmica (18 Aulas)
+  DRUMS_LESSONS.forEach((lesson) => {
+    const keywords = [
+      lesson.title,
+      lesson.subtitle,
+      lesson.objective,
+      `Nível ${lesson.level}`,
+      lesson.moduleTitle,
+      `aula ${lesson.lessonNumber}`,
+      'bateria',
+      'drums',
+      'percussao',
+      'ritmo',
+      'groove',
+      'viradas',
+      'bumbo',
+      'caixa',
+      'chimbal',
+      'pratos',
+      'paradiddle',
+      'moeller',
+      'ghost notes',
+      'linear drumming',
+      'compassos impares',
+      'vassourinhas',
+      'samba',
+      'jazz swing',
+      ...(lesson.rudimentsFocused || []),
+      ...lesson.parts.map((p) => p.title),
+    ];
+
+    items.push({
+      id: `bateria-${lesson.id}`,
+      type: 'lesson',
+      title: lesson.title,
+      subtitle: lesson.subtitle,
+      badge: `Bateria • Nível ${lesson.level}`,
+      category: lesson.moduleTitle,
+      detail: `${lesson.estimatedMinutes} min • Bateria e Percussão`,
       lessonId: lesson.id,
       keywords,
     });
@@ -432,10 +555,13 @@ export function searchAll(query: string, maxResults = 25): SearchResultsGrouped 
 export function getSearchIndexStats() {
   return {
     totalItems: SEARCH_INDEX.length,
-    lessonsCount: SEARCH_INDEX.filter((i) => i.type === 'lesson' && !i.id.startsWith('solo-') && !i.id.startsWith('violao-')).length,
+    lessonsCount: SEARCH_INDEX.filter((i) => i.type === 'lesson' && !i.id.startsWith('solo-') && !i.id.startsWith('violao-') && !i.id.startsWith('baixo-') && !i.id.startsWith('teclado-') && !i.id.startsWith('bateria-')).length,
     chordsCount: SEARCH_INDEX.filter((i) => i.type === 'chord').length,
     theoryCount: SEARCH_INDEX.filter((i) => i.type === 'theory').length,
     soloLessonsCount: SEARCH_INDEX.filter((i) => i.id.startsWith('solo-')).length,
     violaoLessonsCount: SEARCH_INDEX.filter((i) => i.id.startsWith('violao-')).length,
+    bassLessonsCount: SEARCH_INDEX.filter((i) => i.id.startsWith('baixo-')).length,
+    keyboardLessonsCount: SEARCH_INDEX.filter((i) => i.id.startsWith('teclado-')).length,
+    drumsLessonsCount: SEARCH_INDEX.filter((i) => i.id.startsWith('bateria-')).length,
   };
 }

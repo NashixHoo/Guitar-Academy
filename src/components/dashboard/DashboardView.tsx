@@ -26,8 +26,15 @@ import {
   TrendingUp,
   Sliders,
   RotateCcw,
-  AlertCircle
+  AlertCircle,
+  Lock,
+  Unlock
 } from 'lucide-react';
+import { 
+  getPrimaryCourseId, 
+  calculateCourseProgress, 
+  COURSE_METADATA_MAP 
+} from '../../academia/progress/unlockGate';
 import { IniciarIcon, PraticarIcon, AulasIcon } from '../common/GuitarIcons';
 import { DailyGoalSettings } from './DailyGoalSettings';
 import { ContinueFormationCard } from './ContinueFormationCard';
@@ -98,6 +105,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const adaptiveRec = getAdaptiveRecommendation(pedagogicalProfile, progress);
   const skillsList = Object.values(pedagogicalProfile.skills);
   const masteredSkillsCount = skillsList.filter((s) => s.masteryLevel === 'mastered').length;
+
+  // Matriz Central — Curso Principal e Desbloqueio de Eletivas (Fase 4)
+  const primaryCourseId = getPrimaryCourseId(progress);
+  const primaryMeta = COURSE_METADATA_MAP[primaryCourseId];
+  const primaryProg = calculateCourseProgress(primaryCourseId, progress);
 
   // Update Daily Practice Goal
   const handleUpdateDailyGoal = (newGoalMinutes: number) => {
@@ -208,6 +220,82 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         onSelectLesson={onSelectLesson}
         onNavigateTab={onNavigateTab}
       />
+
+      {/* FASE 4: STATUS DO CURSO PRINCIPAL & DESBLOQUEIO DE INSTRUMENTOS (REGRA DOS 50%) */}
+      <div className="bg-white dark:bg-[#25252A] border border-[#D9D9D9] dark:border-[#33333E] rounded-3xl p-5 sm:p-6 shadow-xs space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-[#F5E8EA] dark:bg-[#3A1E24] border border-[#E8D3D6] dark:border-[#4D2830] flex items-center justify-center text-[#7B1E2B] dark:text-[#FF6B81] shrink-0">
+              <Guitar className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-black uppercase tracking-wider text-[#7B1E2B] dark:text-[#FF6B81] bg-[#F5E8EA] dark:bg-[#3A1E24] px-2 py-0.5 rounded-md">
+                  Curso Principal Ativo
+                </span>
+                <span className="text-xs text-[#666672] dark:text-[#B8B3C0]">
+                  {primaryMeta.instrumentName}
+                </span>
+              </div>
+              <h3 className="text-base sm:text-lg font-black text-[#25252A] dark:text-[#F8F7F4] mt-0.5">
+                {primaryMeta.name}
+              </h3>
+            </div>
+          </div>
+
+          <button
+            onClick={() => onNavigateTab('curriculum')}
+            className="self-start sm:self-auto flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#F8F7F4] dark:bg-[#1A1A20] hover:bg-[#F5E8EA] dark:hover:bg-[#3A1E24] text-[#7B1E2B] dark:text-[#FF6B81] border border-[#D9D9D9] dark:border-[#33333E] text-xs font-bold transition"
+          >
+            <span>Ver Catálogo Completo</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+
+        {/* Barra de Progresso com Marco de 50% */}
+        <div className="space-y-2 pt-1">
+          <div className="flex items-center justify-between text-xs font-bold">
+            <span className="text-[#25252A] dark:text-[#F8F7F4]">
+              Progresso no Curso Base ({primaryProg.completedMandatoryActivities} de {primaryProg.totalMandatoryActivities} aulas concluídas):
+            </span>
+            <span className="font-mono-code text-[#7B1E2B] dark:text-[#FF6B81]">
+              {primaryProg.progressPercentage}%
+            </span>
+          </div>
+
+          <div className="relative w-full bg-[#F0EFEB] dark:bg-[#1A1A20] h-3.5 rounded-full overflow-hidden border border-[#D9D9D9] dark:border-[#33333E]">
+            {/* Linha indicadora de 50% */}
+            <div className="absolute top-0 bottom-0 left-1/2 w-0.5 bg-amber-500 z-10" title="Marco de 50% para desbloqueio do catálogo" />
+            <div
+              className={`h-full transition-all duration-300 ${
+                primaryProg.isFiftyPercentReached
+                  ? 'bg-emerald-600 dark:bg-emerald-500'
+                  : 'bg-[#7B1E2B] dark:bg-[#FF6B81]'
+              }`}
+              style={{ width: `${Math.min(100, primaryProg.progressPercentage)}%` }}
+            />
+          </div>
+
+          <div className="flex items-center justify-between text-[11px] text-[#666672] dark:text-[#B8B3C0]">
+            <span className="flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-amber-500" />
+              <span>Marco de Desbloqueio: 50.0%</span>
+            </span>
+
+            {primaryProg.isFiftyPercentReached ? (
+              <span className="font-bold text-emerald-700 dark:text-emerald-400 flex items-center gap-1">
+                <Unlock className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Catálogo de 5 instrumentos liberado por mérito!</span>
+              </span>
+            ) : (
+              <span className="font-semibold text-amber-700 dark:text-amber-400 flex items-center gap-1">
+                <Lock className="w-3.5 h-3.5 text-amber-600" />
+                <span>Restam {primaryProg.remainingActivitiesToFifty} aulas ({primaryProg.remainingPercentageToFifty}%) para liberar todos os instrumentos</span>
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
 
       {/* FASE 3: PLANO INTELIGENTE DE PRÁTICA (5 ETAPAS: 10, 15, 20, 30, 45, 60 MIN) */}
       <DailyPracticePlanCard

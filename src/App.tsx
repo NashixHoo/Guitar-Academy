@@ -12,6 +12,9 @@ import { useSwipeNavigation } from './hooks/useSwipeNavigation';
 import { CURRICULUM_LEVELS } from './data/curriculum';
 import { SOLO_LESSONS } from './data/soloCourse';
 import { VIOLAO_LESSONS } from './data/violaoCourse';
+import { BASS_LESSONS } from './data/bassCourse';
+import { KEYBOARD_LESSONS } from './data/keyboardCourse';
+import { DRUMS_LESSONS } from './data/drumsCourse';
 import { Header } from './components/layout/Header';
 import { Navigation } from './components/layout/Navigation';
 import { BottomNavigation } from './components/layout/BottomNavigation';
@@ -278,11 +281,14 @@ function MainAppContent() {
       ? previousEntry.title 
       : SCREEN_TITLES[currentTab] || 'Anterior';
 
-  // Localiza a aula ativa se selecionada (suporta currículo canônico, formação solo e academia do violão)
+  // Localiza a aula ativa se selecionada (suporta os 5 instrumentos: Violão, Guitarra, Baixo, Teclado, Bateria)
   const allLessons: Lesson[] = [
     ...CURRICULUM_LEVELS.flatMap((l) => l.lessons),
     ...SOLO_LESSONS,
     ...VIOLAO_LESSONS,
+    ...(BASS_LESSONS as Lesson[]),
+    ...(KEYBOARD_LESSONS as Lesson[]),
+    ...(DRUMS_LESSONS as Lesson[]),
   ];
   const activeLesson: Lesson | undefined = selectedLessonId
     ? allLessons.find((l) => l.id === selectedLessonId)

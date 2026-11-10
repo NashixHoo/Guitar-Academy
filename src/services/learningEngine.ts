@@ -18,6 +18,9 @@ import {
 import { CURRICULUM_LEVELS } from '../data/curriculum';
 import { SOLO_LESSONS } from '../data/soloCourse';
 import { VIOLAO_LESSONS } from '../data/violaoCourse';
+import { BASS_LESSONS } from '../data/bassCourse';
+import { KEYBOARD_LESSONS } from '../data/keyboardCourse';
+import { DRUMS_LESSONS } from '../data/drumsCourse';
 import {
   CANONICAL_SKILLS,
   LESSON_TO_SKILL_MAP,
@@ -350,11 +353,23 @@ export const DOMAIN_AREAS_METADATA: Record<DomainArea, { title: string; descript
 };
 
 /**
- * Retorna todas as lições do catálogo unificado
+ * Retorna as lições do catálogo unificado de guitarra e violão (98 aulas)
  */
 export function getAllLessons(): (Lesson | SoloLesson | ViolaoLesson)[] {
   const canonicalLessons = CURRICULUM_LEVELS.flatMap((l) => l.lessons);
   return [...canonicalLessons, ...SOLO_LESSONS, ...VIOLAO_LESSONS];
+}
+
+/**
+ * Retorna todas as 152 lições de conservatório da plataforma (todos os 5 instrumentos)
+ */
+export function getAllPlatformLessons(): Lesson[] {
+  return [
+    ...getAllLessons(),
+    ...BASS_LESSONS,
+    ...KEYBOARD_LESSONS,
+    ...DRUMS_LESSONS,
+  ];
 }
 
 /**
@@ -376,10 +391,10 @@ export function getCourseLessons(courseId: CourseId): (Lesson | SoloLesson | Vio
 }
 
 /**
- * Obtém a lição por ID
+ * Obtém a lição por ID (busca em todos os 6 cursos da plataforma)
  */
 export function getLessonById(lessonId: string): Lesson | SoloLesson | ViolaoLesson | undefined {
-  return getAllLessons().find((l) => l.id === lessonId);
+  return getAllPlatformLessons().find((l) => l.id === lessonId);
 }
 
 /**
@@ -445,10 +460,9 @@ export function getCourseProgressSummary(
 export function getLearningContinuity(progress: UserProgress): LearningContinuityState {
   const allCourses: CourseId[] = ['canonical', 'violao', 'solo'];
 
-  // Determina o curso ativo mais recente
   let activeCourseId: CourseId = 'canonical';
-  if (progress.lastAccessedCourseId && allCourses.includes(progress.lastAccessedCourseId)) {
-    activeCourseId = progress.lastAccessedCourseId;
+  if (progress.lastAccessedCourseId && allCourses.includes(progress.lastAccessedCourseId as CourseId)) {
+    activeCourseId = progress.lastAccessedCourseId as CourseId;
   } else if (progress.currentLessonId) {
     activeCourseId = getCourseId(progress.currentLessonId);
   }

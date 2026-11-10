@@ -68,6 +68,7 @@ import { ChordEngine } from './src/chords/chord-engine';
 import {
   COURSES_CATALOG,
   getAllLessons,
+  getAllPlatformLessons,
   getCourseId,
   getCourseLessons,
   getLessonById,
@@ -3666,6 +3667,497 @@ const bateriaSummaries = getCourseLessonSummaries('bateria');
 assert(
   baixoSummaries.length === 18 && tecladoSummaries.length === 18 && bateriaSummaries.length === 18,
   '23.7 getCourseLessonSummaries gera sumários completos para Baixo, Teclado e Bateria'
+);
+
+// 23.8 Objetos de Dados dos Novos Cursos em src/data/ (Compatibilidade com a Interface Lesson)
+import { BASS_COURSE_LEVELS, BASS_LESSONS } from './src/data/bassCourse';
+import { KEYBOARD_COURSE_LEVELS, KEYBOARD_LESSONS } from './src/data/keyboardCourse';
+import { DRUMS_COURSE_LEVELS, DRUMS_LESSONS } from './src/data/drumsCourse';
+
+assert(
+  BASS_COURSE_LEVELS.length === 6 && BASS_LESSONS.length === 18,
+  '23.8 bassCourse.ts exporta BASS_COURSE_LEVELS (6 níveis) e BASS_LESSONS (18 aulas completas)'
+);
+const bassLessonsValid = BASS_LESSONS.every(l => 
+  Boolean(l.id) &&
+  typeof l.level === 'number' &&
+  Boolean(l.moduleTitle) &&
+  typeof l.lessonNumber === 'number' &&
+  Boolean(l.title) &&
+  Boolean(l.subtitle) &&
+  Boolean(l.objective) &&
+  l.estimatedMinutes > 0 &&
+  l.parts.length >= 1 &&
+  l.parts.every(p => Boolean(p.title) && Boolean(p.contentMarkdown)) &&
+  Boolean(l.quiz && l.quiz.questions.length >= 1)
+);
+assert(
+  bassLessonsValid === true,
+  '23.8 Todas as 18 aulas de Baixo implementam integralmente o contrato Lesson (partes ricas em markdown e quizzes)'
+);
+
+assert(
+  KEYBOARD_COURSE_LEVELS.length === 6 && KEYBOARD_LESSONS.length === 18,
+  '23.8 keyboardCourse.ts exporta KEYBOARD_COURSE_LEVELS (6 níveis) e KEYBOARD_LESSONS (18 aulas completas)'
+);
+const keyboardLessonsValid = KEYBOARD_LESSONS.every(l => 
+  Boolean(l.id) &&
+  typeof l.level === 'number' &&
+  Boolean(l.moduleTitle) &&
+  typeof l.lessonNumber === 'number' &&
+  Boolean(l.title) &&
+  Boolean(l.subtitle) &&
+  Boolean(l.objective) &&
+  l.estimatedMinutes > 0 &&
+  l.parts.length >= 1 &&
+  l.parts.every(p => Boolean(p.title) && Boolean(p.contentMarkdown)) &&
+  Boolean(l.quiz && l.quiz.questions.length >= 1)
+);
+assert(
+  keyboardLessonsValid === true,
+  '23.8 Todas as 18 aulas de Teclado implementam integralmente o contrato Lesson (partes ricas em markdown e quizzes)'
+);
+
+assert(
+  DRUMS_COURSE_LEVELS.length === 6 && DRUMS_LESSONS.length === 18,
+  '23.8 drumsCourse.ts exporta DRUMS_COURSE_LEVELS (6 níveis) e DRUMS_LESSONS (18 aulas completas)'
+);
+const drumsLessonsValid = DRUMS_LESSONS.every(l => 
+  Boolean(l.id) &&
+  typeof l.level === 'number' &&
+  Boolean(l.moduleTitle) &&
+  typeof l.lessonNumber === 'number' &&
+  Boolean(l.title) &&
+  Boolean(l.subtitle) &&
+  Boolean(l.objective) &&
+  l.estimatedMinutes > 0 &&
+  l.parts.length >= 1 &&
+  l.parts.every(p => Boolean(p.title) && Boolean(p.contentMarkdown)) &&
+  Boolean(l.quiz && l.quiz.questions.length >= 1)
+);
+assert(
+  drumsLessonsValid === true,
+  '23.8 Todas as 18 aulas de Bateria implementam integralmente o contrato Lesson (partes ricas em markdown e quizzes)'
+);
+
+// -------------------------------------------------------------
+// GRUPO 24: FASE 4 — MATRÍCULA, PROGRESSÃO E DESBLOQUEIO AUTOMÁTICO DE CURSOS (50%)
+// -------------------------------------------------------------
+console.log('\n--- GRUPO 24: FASE 4 — MATRÍCULA, PROGRESSÃO E DESBLOQUEIO DE CURSOS (50%) ---');
+
+import {
+  calculateCourseProgress,
+  getMandatoryLessonIdsForCourse,
+  getPrimaryCourseId,
+  enrollPrimaryCourse,
+  isCourseUnlocked,
+  canAccessCourse,
+  getCatalogCoursesStatus,
+  COURSE_METADATA_MAP,
+  OfficialCourseId,
+} from './src/academia/progress/unlockGate';
+
+// 1. Cálculo de progresso com 0%
+const prog0 = storageService.createDefaultProgress();
+prog0.completedLessons = [];
+const calc0 = calculateCourseProgress('violao', prog0);
+assert(
+  calc0.progressPercentage === 0 && calc0.isFiftyPercentReached === false && calc0.canUnlockElectives === false,
+  '24.1 Aluno com 0 aulas concluídas tem 0.00% de progresso e cursos eletivos bloqueados'
+);
+assert(
+  isCourseUnlocked('canonical', prog0) === false && isCourseUnlocked('baixo', prog0) === false,
+  '24.1 isCourseUnlocked rejeita acesso a instrumentos secundários com 0% de progresso no curso principal'
+);
+
+// 2. Cálculo de progresso com 25% (15 de 60 aulas de Violão)
+const prog25 = storageService.createDefaultProgress();
+const g24ViolaoLessonIds = getMandatoryLessonIdsForCourse('violao');
+prog25.completedLessons = g24ViolaoLessonIds.slice(0, 15);
+const calc25 = calculateCourseProgress('violao', prog25);
+assert(
+  calc25.progressPercentage === 25.0 && calc25.isFiftyPercentReached === false,
+  '24.2 15 de 60 aulas de Violão equivalem a exatamente 25.00% de progresso'
+);
+assert(
+  isCourseUnlocked('canonical', prog25) === false && calc25.remainingActivitiesToFifty === 15,
+  '24.2 Com 25% de progresso, cursos secundários permanecem bloqueados e restam 15 aulas para 50%'
+);
+
+// 3. Cálculo de progresso com 49% (29 de 60 aulas de Violão = 48.33%)
+const prog48 = storageService.createDefaultProgress();
+prog48.completedLessons = g24ViolaoLessonIds.slice(0, 29);
+const calc48 = calculateCourseProgress('violao', prog48);
+assert(
+  calc48.progressPercentage === 48.33 && calc48.isFiftyPercentReached === false,
+  '24.3 29 de 60 aulas de Violão equivalem a 48.33% (< 50%) e mantêm o catálogo bloqueado'
+);
+assert(
+  isCourseUnlocked('teclado', prog48) === false && isCourseUnlocked('bateria', prog48) === false,
+  '24.3 isCourseUnlocked bloqueia estritamente Teclado e Bateria com progresso de 48.33%'
+);
+
+// 4. Cálculo com valor rigorosamente abaixo de 50.00% (49.99%)
+const calcSimulated = {
+  progressPercentage: 49.99,
+  isFiftyPercentReached: 49.99 >= 50.0
+};
+assert(
+  calcSimulated.isFiftyPercentReached === false,
+  '24.4 A regra dos 50% é estrita: 49.99% não desbloqueia os cursos do conservatório'
+);
+
+// 5. Cálculo de progresso com 50% exato (30 de 60 aulas de Violão)
+const prog50 = storageService.createDefaultProgress();
+prog50.completedLessons = g24ViolaoLessonIds.slice(0, 30);
+const calc50 = calculateCourseProgress('violao', prog50);
+assert(
+  calc50.progressPercentage === 50.0 && calc50.isFiftyPercentReached === true && calc50.canUnlockElectives === true,
+  '24.5 30 de 60 aulas de Violão atingem exatamente 50.00% com canUnlockElectives verdadeiro'
+);
+assert(
+  isCourseUnlocked('canonical', prog50) === true &&
+  isCourseUnlocked('baixo', prog50) === true &&
+  isCourseUnlocked('teclado', prog50) === true &&
+  isCourseUnlocked('bateria', prog50) === true,
+  '24.5 Com exatamente 50% no curso principal, todos os outros instrumentos são desbloqueados automaticamente'
+);
+
+// 6. Cálculo de progresso com 51% ou mais (31 de 60 aulas = 51.67%)
+const prog51 = storageService.createDefaultProgress();
+prog51.completedLessons = g24ViolaoLessonIds.slice(0, 31);
+const calc51 = calculateCourseProgress('violao', prog51);
+assert(
+  calc51.progressPercentage === 51.67 && calc51.isFiftyPercentReached === true,
+  '24.6 31 de 60 aulas de Violão equivalem a 51.67% (> 50%) e confirmam desbloqueio'
+);
+assert(
+  isCourseUnlocked('solo', prog51) === true && isCourseUnlocked('teclado', prog51) === true,
+  '24.6 Progresso acima de 50% mantém todas as eletivas plenamente autorizadas'
+);
+
+// 7. Cálculo de progresso com 100%
+const prog100 = storageService.createDefaultProgress();
+prog100.completedLessons = [...g24ViolaoLessonIds];
+const calc100 = calculateCourseProgress('violao', prog100);
+assert(
+  calc100.progressPercentage === 100.0 && calc100.remainingPercentageToFifty === 0 && calc100.remainingActivitiesToFifty === 0,
+  '24.7 60 de 60 aulas de Violão atingem 100.00% com 0 pendências'
+);
+assert(
+  isCourseUnlocked('canonical', prog100) === true && isCourseUnlocked('bateria', prog100) === true,
+  '24.7 Aluno graduado (100%) tem acesso universal a todos os cursos do conservatório'
+);
+
+// 8. Curso sem atividades obrigatórias válidas (0 atividades)
+const emptyCourseCalc = calculateCourseProgress('violao', {
+  ...storageService.createDefaultProgress(),
+  completedLessons: []
+});
+assert(
+  !isNaN(emptyCourseCalc.progressPercentage) && isFinite(emptyCourseCalc.progressPercentage),
+  '24.8 Cálculo previne divisão por zero ou valores NaN / Infinity'
+);
+
+// 9. Aulas meramente visualizadas ('viewed' em practiceLogs) não contam
+const progViewed = storageService.createDefaultProgress();
+progViewed.completedLessons = []; // nenhuma aula concluída
+progViewed.practiceLogs = {
+  'violao-lesson-1': { lessonId: 'violao-lesson-1', status: 'viewed', timesPracticed: 10, practicedBpm: 60, lastPracticedDate: '2026-03-30', confidence: 'playable_slow', needsReview: false },
+  'violao-lesson-2': { lessonId: 'violao-lesson-2', status: 'viewed', timesPracticed: 5, practicedBpm: 60, lastPracticedDate: '2026-03-30', confidence: 'playable_slow', needsReview: false },
+  'violao-lesson-3': { lessonId: 'violao-lesson-3', status: 'practicing', timesPracticed: 2, practicedBpm: 60, lastPracticedDate: '2026-03-30', confidence: 'playable_slow', needsReview: false }
+};
+const calcViewed = calculateCourseProgress('violao', progViewed);
+assert(
+  calcViewed.completedMandatoryActivities === 0 && calcViewed.progressPercentage === 0,
+  '24.9 Aulas com status "viewed" ou "practicing" sem conclusão comprovada não contam no progresso de 50%'
+);
+assert(
+  isCourseUnlocked('canonical', progViewed) === false,
+  '24.9 isCourseUnlocked rejeita contagem de aulas meramente abertas ou visualizadas'
+);
+
+// 10. Tempo de estudo no app não altera percentual de desbloqueio
+const progTimeOnly = storageService.createDefaultProgress();
+progTimeOnly.completedLessons = [];
+progTimeOnly.totalStudyTimeSeconds = 360000; // 100 horas de app
+progTimeOnly.todayStudyTimeSeconds = 18000;
+const calcTimeOnly = calculateCourseProgress('violao', progTimeOnly);
+assert(
+  calcTimeOnly.progressPercentage === 0 && calcTimeOnly.canUnlockElectives === false,
+  '24.10 Tempo de permanência no app (100h) não concede desbloqueio de cursos'
+);
+
+// 11. Tentativa de acessar curso bloqueado é rejeitada com motivo pedagógico
+const accessAttempt = canAccessCourse('baixo', prog25);
+assert(
+  accessAttempt.allowed === false && Boolean(accessAttempt.reason) && accessAttempt.reason!.includes('50%'),
+  '24.11 canAccessCourse bloqueia curso secundário e devolve justificativa pedagógica com meta de 50%'
+);
+
+// 12. Matrícula no curso principal é persistida corretamente
+const enrollTestProg = storageService.createDefaultProgress();
+const enrollResult = enrollPrimaryCourse(enrollTestProg, 'violao');
+assert(
+  enrollResult.success === true && enrollResult.progress.primaryCourseId === 'violao',
+  '24.12 enrollPrimaryCourse matricula o aluno no curso de Violão e persiste a chave primaryCourseId'
+);
+
+// 13. Prevenção de duplicidade na matrícula
+const repeatEnrollResult = enrollPrimaryCourse(enrollResult.progress, 'violao');
+assert(
+  repeatEnrollResult.success === true && repeatEnrollResult.message.includes('já está matriculado'),
+  '24.13 Matrícula repetida no mesmo curso é tratada de forma idempotente sem duplicar registros'
+);
+
+// 14. Tentativa de contorno trocando de curso principal
+const bypassAttempt = enrollPrimaryCourse(prog25, 'baixo');
+const isCanonicalUnlockedAfterBypass = isCourseUnlocked('canonical', bypassAttempt.progress);
+assert(
+  isCanonicalUnlockedAfterBypass === false,
+  '24.14 Troca de curso principal para instrumento com 0 aulas não burla o desbloqueio das demais eletivas'
+);
+
+// 15. Migração de dados de alunos existentes sem primaryCourseId
+const legacyDataWithoutPrimary: any = {
+  currentLessonId: 'violao-lesson-5',
+  completedLessons: ['violao-lesson-1', 'violao-lesson-2'],
+  totalStudyTimeSeconds: 1200
+};
+const deducedPrimary = getPrimaryCourseId(legacyDataWithoutPrimary);
+assert(
+  deducedPrimary === 'violao',
+  '24.15 Migração inteligente deduz curso principal "violao" a partir do histórico de aulas concluídas'
+);
+
+// 16. Isolamento entre múltiplos alunos (Aluno A com 100% não desbloqueia Aluno B com 0%)
+const studentA = storageService.createDefaultProgress();
+studentA.completedLessons = [...g24ViolaoLessonIds]; // 100%
+const studentB = storageService.createDefaultProgress();
+studentB.completedLessons = []; // 0%
+assert(
+  isCourseUnlocked('baixo', studentA) === true && isCourseUnlocked('baixo', studentB) === false,
+  '24.16 Isolamento multiusuário estrito: progresso do Aluno A não vaza e não desbloqueia cursos do Aluno B'
+);
+
+// 17. Sincronização e merge preservam matrícula e status de desbloqueio
+const localStudent = { ...prog50, primaryCourseId: 'violao' as const };
+const cloudStudent = { ...prog25, primaryCourseId: 'violao' as const };
+const mergedStudent = mergeProgressStates(localStudent, cloudStudent);
+assert(
+  mergedStudent.primaryCourseId === 'violao' && isCourseUnlocked('canonical', mergedStudent) === true,
+  '24.17 mergeProgressStates preserva curso principal e união de progresso elegível para desbloqueio'
+);
+
+// 18. Todos os 5 instrumentos contemplados no catálogo de status
+const fullCatalogStatus = getCatalogCoursesStatus(prog25);
+const expectedCourses: OfficialCourseId[] = ['violao', 'canonical', 'solo', 'baixo', 'teclado', 'bateria'];
+assert(
+  expectedCourses.every((cId) => Boolean(fullCatalogStatus[cId])) &&
+  fullCatalogStatus['violao'].isPrimary === true &&
+  fullCatalogStatus['baixo'].isUnlocked === false &&
+  fullCatalogStatus['teclado'].isUnlocked === false &&
+  fullCatalogStatus['bateria'].isUnlocked === false,
+  '24.18 getCatalogCoursesStatus contempla todos os 5 instrumentos e 6 cursos com status rigoroso'
+);
+
+// =========================================================================
+// GRUPO 25: FASE 5 — MASTER CONTENT ENGINE
+// EXPANSÃO PEDAGÓGICA E TÉCNICA DOS CURSOS EXTRAS (54 AULAS)
+// Contrabaixo Elétrico (18 Aulas) • Teclado / Piano (18 Aulas) • Bateria (18 Aulas)
+// =========================================================================
+
+console.log('\n--- GRUPO 25: FASE 5 — MASTER CONTENT ENGINE (54 AULAS DE CONSERVATÓRIO) ---');
+
+// 1. Contagem exata e conformidade das 18 aulas de Contrabaixo Elétrico
+assert(
+  BASS_LESSONS.length === 18 && BASS_COURSE_LEVELS.length === 6,
+  '25.1 Contrabaixo Elétrico possui exatamente 18 aulas distribuídas em 6 níveis canônicos (0 a 5)'
+);
+const bassLevelsDistribution = BASS_COURSE_LEVELS.every((lvl) => lvl.lessons.length === 3);
+assert(
+  bassLevelsDistribution === true,
+  '25.2 Cada um dos 6 níveis do Contrabaixo possui exatamente 3 aulas progressivas'
+);
+
+// 2. Contagem exata e conformidade das 18 aulas de Teclado / Piano
+assert(
+  KEYBOARD_LESSONS.length === 18 && KEYBOARD_COURSE_LEVELS.length === 6,
+  '25.3 Teclado / Piano possui exatamente 18 aulas distribuídas em 6 níveis canônicos (0 a 5)'
+);
+const keyboardLevelsDistribution = KEYBOARD_COURSE_LEVELS.every((lvl) => lvl.lessons.length === 3);
+assert(
+  keyboardLevelsDistribution === true,
+  '25.4 Cada um dos 6 níveis do Teclado possui exatamente 3 aulas progressivas'
+);
+
+// 3. Contagem exata e conformidade das 18 aulas de Bateria e Prática Rítmica
+assert(
+  DRUMS_LESSONS.length === 18 && DRUMS_COURSE_LEVELS.length === 6,
+  '25.5 Bateria e Prática Rítmica possui exatamente 18 aulas distribuídas em 6 níveis canônicos (0 a 5)'
+);
+const drumsLevelsDistribution = DRUMS_COURSE_LEVELS.every((lvl) => lvl.lessons.length === 3);
+assert(
+  drumsLevelsDistribution === true,
+  '25.6 Cada um dos 6 níveis da Bateria possui exatamente 3 aulas progressivas'
+);
+
+// 4. Catálogo Global Unificado da Plataforma (152 Aulas Totais)
+const unifiedLessons = getAllPlatformLessons();
+assert(
+  unifiedLessons.length === 152,
+  `25.7 getAllPlatformLessons() unifica rigorosamente as 152 aulas de toda a plataforma (60 Violão + 18 Guitarra Canônica + 20 Solo + 18 Baixo + 18 Teclado + 18 Bateria = 152, obtido: ${unifiedLessons.length})`
+);
+
+// 5. Integridade do Padrão Master Lesson em todas as 54 aulas extras
+const extraLessons = [...BASS_LESSONS, ...KEYBOARD_LESSONS, ...DRUMS_LESSONS];
+assert(
+  extraLessons.length === 54,
+  '25.8 Total de aulas extras dos três novos instrumentos totaliza exatamente 54 aulas'
+);
+
+const allHaveMandatoryMetadata = extraLessons.every((l) =>
+  Boolean(l.id) &&
+  typeof l.level === 'number' &&
+  Boolean(l.moduleTitle) &&
+  Boolean(l.lessonNumber) &&
+  Boolean(l.title) &&
+  Boolean(l.subtitle) &&
+  Boolean(l.objective) &&
+  typeof l.estimatedMinutes === 'number' &&
+  l.estimatedMinutes >= 20 &&
+  Array.isArray(l.parts) &&
+  l.parts.length >= 2
+);
+assert(
+  allHaveMandatoryMetadata === true,
+  '25.9 Todas as 54 aulas possuem metadados completos, objetivos claros, duração estimada e múltiplas seções didáticas'
+);
+
+// 6. Exercício Prático Obrigatório em 100% das 54 Aulas Extras
+const allHavePracticalExercise = extraLessons.every((l) => {
+  const ex = l.practicalExercise;
+  return (
+    Boolean(ex) &&
+    typeof ex?.targetBpm === 'number' &&
+    ex.targetBpm > 0 &&
+    typeof ex?.targetRepetitions === 'number' &&
+    ex.targetRepetitions > 0 &&
+    Array.isArray(ex?.precisionCriteria) &&
+    ex.precisionCriteria.length >= 2 &&
+    Array.isArray(ex?.commonErrors) &&
+    ex.commonErrors.length >= 2 &&
+    Boolean(ex?.tablatureText)
+  );
+});
+assert(
+  allHavePracticalExercise === true,
+  '25.10 100% das 54 aulas extras possuem practicalExercise com BPM alvo, repetições, critérios de precisão, erros comuns e notação'
+);
+
+// 7. Quiz de Fixação Obrigatório com Explicações em 100% das 54 Aulas Extras
+const allHaveQuizWithExplanations = extraLessons.every((l) => {
+  const qz = l.quiz;
+  return (
+    Boolean(qz) &&
+    typeof qz?.passingScore === 'number' &&
+    qz.passingScore >= 70 &&
+    Array.isArray(qz?.questions) &&
+    qz.questions.length >= 2 &&
+    qz.questions.every((q) =>
+      Boolean(q.question) &&
+      Array.isArray(q.options) &&
+      q.options.length >= 2 &&
+      typeof q.correctIndex === 'number' &&
+      q.correctIndex >= 0 &&
+      q.correctIndex < q.options.length &&
+      Boolean(q.explanation) &&
+      q.explanation.length >= 15
+    )
+  );
+});
+assert(
+  allHaveQuizWithExplanations === true,
+  '25.11 100% das 54 aulas extras possuem quiz com passingScore, múltiplas questões e justificativas pedagógicas detalhadas'
+);
+
+// 8. Validação de Conteúdo Especializado e Autenticidade — CONTRABAIXO
+const bassJoinedContent = BASS_LESSONS.map((l) => l.parts.map((p) => p.contentMarkdown).join(' ')).join(' ');
+const bassHasKeyTopics =
+  bassJoinedContent.includes('Toque apoiado') &&
+  bassJoinedContent.includes('Simandl') &&
+  bassJoinedContent.includes('Slap') &&
+  bassJoinedContent.includes('Walking Bass') &&
+  bassJoinedContent.includes('Ghost Notes') &&
+  bassJoinedContent.includes('Dórico') &&
+  bassJoinedContent.includes('Movable Thumb');
+assert(
+  bassHasKeyTopics === true,
+  '25.12 Contrabaixo contempla anatomia, Simandl, slap, walking bass, ghost notes, modos gregos e ergonomia sem lesão'
+);
+
+// 9. Validação de Conteúdo Especializado e Autenticidade — TECLADO / PIANO
+const keyboardJoinedContent = KEYBOARD_LESSONS.map((l) => l.parts.map((p) => p.contentMarkdown).join(' ')).join(' ');
+const keyboardHasKeyTopics =
+  keyboardJoinedContent.includes('Dó Central') &&
+  keyboardJoinedContent.includes('Tríades') &&
+  keyboardJoinedContent.includes('II-V-I') &&
+  keyboardJoinedContent.includes('Voicings') &&
+  keyboardJoinedContent.includes('Quartal') &&
+  keyboardJoinedContent.includes('Bossa Nova') &&
+  keyboardJoinedContent.includes('Polegar');
+assert(
+  keyboardHasKeyTopics === true,
+  '25.13 Teclado/Piano contempla topografia 2/3 pretas, Dó central, tríades, inversões, cadência II-V-I, voicings sem fundamental e harmonia quartal'
+);
+
+// 10. Validação de Conteúdo Especializado e Autenticidade — BATERIA
+const drumsJoinedContent = DRUMS_LESSONS.map((l) => l.parts.map((p) => p.contentMarkdown).join(' ')).join(' ');
+const drumsHasKeyTopics =
+  drumsJoinedContent.includes('Fulcro') &&
+  drumsJoinedContent.includes('Single Stroke') &&
+  drumsJoinedContent.includes('Double Stroke') &&
+  drumsJoinedContent.includes('Paradiddle') &&
+  drumsJoinedContent.includes('Moeller') &&
+  drumsJoinedContent.includes('Ghost Notes') &&
+  drumsJoinedContent.includes('Linear Drumming') &&
+  drumsJoinedContent.includes('7/8') &&
+  drumsJoinedContent.includes('Vassourinhas') &&
+  drumsJoinedContent.includes('Samba');
+assert(
+  drumsHasKeyTopics === true,
+  '25.14 Bateria contempla anatomia, fulcro, Single/Double Rolls, Paradiddle, Moeller, Ghost Notes, Linear Drumming, 7/8 e ritmos brasileiros'
+);
+
+// 11. Busca Global (searchService) indexa os novos instrumentos
+const slapSearch = searchAll('slap');
+const iiViSearch = searchAll('ii-v-i');
+const paradiddleSearch = searchAll('paradiddle');
+assert(
+  slapSearch.lessons.some((r) => r.lessonId?.startsWith('baixo-')) &&
+  iiViSearch.lessons.some((r) => r.lessonId?.startsWith('teclado-')) &&
+  paradiddleSearch.lessons.some((r) => r.lessonId?.startsWith('bateria-')),
+  '25.15 Busca Global (searchService) localiza perfeitamente aulas dos novos instrumentos por termos técnicos específicos'
+);
+
+// 12. Painel do Professor (teacherService) suporta métricas dos novos cursos
+const mockStudent = storageService.createDefaultProgress();
+mockStudent.completedLessons = ['baixo-l-0-1', 'teclado-l-0-1', 'bateria-l-0-1'];
+const bassFunnel = TeacherService.buildCourseFunnel('baixo' as any, [], []);
+assert(
+  bassFunnel.length === 18 && bassFunnel[0].courseTitle === 'Contrabaixo Elétrico',
+  '25.16 teacherService.buildCourseFunnel suporta o funil completo de 18 aulas do Contrabaixo Elétrico'
+);
+
+// 13. Resolução no LessonViewer e App.tsx
+const sampleBass = getLessonById('baixo-l-2-1');
+const sampleKeyboard = getLessonById('teclado-l-3-2');
+const sampleDrums = getLessonById('bateria-l-4-2');
+assert(
+  Boolean(sampleBass) && sampleBass?.id === 'baixo-l-2-1' &&
+  Boolean(sampleKeyboard) && sampleKeyboard?.id === 'teclado-l-3-2' &&
+  Boolean(sampleDrums) && sampleDrums?.id === 'bateria-l-4-2',
+  '25.17 getLessonById resolve perfeitamente aulas de qualquer um dos três novos cursos para exibição no LessonViewer'
 );
 
 console.log('\n===========================================================');

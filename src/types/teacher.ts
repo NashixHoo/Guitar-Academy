@@ -56,7 +56,7 @@ export interface EducationalEvent {
   studentName: string;
   studentEmail: string;
   classId: string;
-  courseId: 'violao' | 'canonical' | 'solo';
+  courseId: 'violao' | 'canonical' | 'solo' | 'baixo' | 'teclado' | 'bateria';
   moduleId?: string;
   lessonId?: string;
   exerciseId?: string;

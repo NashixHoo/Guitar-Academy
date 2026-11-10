@@ -5,6 +5,19 @@ import {
   recordSkillEvidence,
   LESSON_TO_SKILL_MAP,
 } from '../pedagogy/adaptiveEngine';
+import {
+  OfficialCourseId,
+  COURSE_METADATA_MAP,
+  getMandatoryLessonIdsForCourse,
+  calculateCourseProgress,
+  getPrimaryCourseId,
+  enrollPrimaryCourse,
+  isCourseUnlocked,
+  canAccessCourse,
+  getCatalogCoursesStatus,
+  CourseProgressDetail,
+  CatalogCourseStatus,
+} from '../academia/progress/unlockGate';
 import { fetchCloudProgress, syncProgressToCloud } from './firebase';
 import { TeacherService } from './teacherService';
 
@@ -93,10 +106,20 @@ export function mergeProgressStates(local: UserProgress, cloud: UserProgress): U
   (local.manualPracticeLogs || []).forEach((m) => manualMap.set(m.id, m));
   const manualPracticeLogs = Array.from(manualMap.values()).slice(0, 100);
 
-  // 9. Perfil pedagógico adaptativo
+  // 9. Perfil pedagógico adaptativo e matrícula de curso principal
+  const primaryCourseId = local.primaryCourseId || cloud.primaryCourseId || getPrimaryCourseId(local);
+  const unlockedElectives = Boolean(
+    local.unlockedElectives ||
+    cloud.unlockedElectives ||
+    isCourseUnlocked('canonical', local) ||
+    isCourseUnlocked('canonical', cloud)
+  );
+
   const baseMerged: UserProgress = {
     ...local,
     ...cloud,
+    primaryCourseId,
+    unlockedElectives,
     completedLessons,
     totalStudyTimeSeconds,
     practicedBpm,
@@ -116,9 +139,12 @@ export function mergeProgressStates(local: UserProgress, cloud: UserProgress): U
 /**
  * Retorna o identificador do curso a partir do ID da aula
  */
-export function getCourseIdFromLessonId(lessonId: string): 'violao' | 'canonical' | 'solo' {
+export function getCourseIdFromLessonId(lessonId: string): OfficialCourseId {
   if (lessonId.startsWith('violao-')) return 'violao';
   if (lessonId.startsWith('solo-')) return 'solo';
+  if (lessonId.startsWith('baixo-')) return 'baixo';
+  if (lessonId.startsWith('teclado-')) return 'teclado';
+  if (lessonId.startsWith('bateria-')) return 'bateria';
   return 'canonical';
 }
 
@@ -165,7 +191,7 @@ export interface ImportBackupResult {
 }
 
 export const INITIAL_PROGRESS: UserProgress = {
-  currentLessonId: 'lesson-1',
+  currentLessonId: 'violao-lesson-1',
   completedLessons: [],
   practiceLogs: {},
   exerciseRepetitions: {},
@@ -189,11 +215,16 @@ export const INITIAL_PROGRESS: UserProgress = {
   achievements: ['welcome-pioneer'],
   pedagogicalProfile: createInitialPedagogicalProfile(),
   manualPracticeLogs: [],
-  lastAccessedCourseId: 'canonical',
+  primaryCourseId: 'violao',
+  unlockedElectives: false,
+  lastAccessedCourseId: 'violao',
   courseLastLesson: {
     canonical: 'lesson-1',
     violao: 'violao-lesson-1',
     solo: 'solo-lesson-1',
+    baixo: 'baixo-l-0-1',
+    teclado: 'teclado-l-0-1',
+    bateria: 'bateria-l-0-1',
   },
 };
 
@@ -487,13 +518,19 @@ export const storageService = {
       }
 
       // Safe migration: ensure practiceLogs, exerciseRepetitions and studyPlan exist
+      const resolvedPrimary = getPrimaryCourseId(parsed);
+      const isElectivesUnlocked = Boolean(
+        parsed.unlockedElectives || isCourseUnlocked('canonical', { ...parsed, primaryCourseId: resolvedPrimary })
+      );
       const migrated: UserProgress = {
         ...createDefaultProgress(),
         ...parsed,
+        primaryCourseId: resolvedPrimary,
+        unlockedElectives: isElectivesUnlocked,
         practiceLogs: parsed.practiceLogs || {},
         exerciseRepetitions: parsed.exerciseRepetitions || {},
         manualPracticeLogs: parsed.manualPracticeLogs || [],
-        lastAccessedCourseId: parsed.lastAccessedCourseId || getCourseIdFromLessonId(parsed.currentLessonId || 'lesson-1'),
+        lastAccessedCourseId: parsed.lastAccessedCourseId || resolvedPrimary,
         courseLastLesson: {
           ...INITIAL_PROGRESS.courseLastLesson,
           ...(parsed.courseLastLesson || {}),
@@ -885,6 +922,40 @@ export const storageService = {
 
     this.saveProgress(updated);
     return updated;
+  },
+
+  getPrimaryCourse(progress?: UserProgress): OfficialCourseId {
+    const p = progress || this.loadProgress();
+    return getPrimaryCourseId(p);
+  },
+
+  setPrimaryCourse(targetCourseId: OfficialCourseId, uid?: string): { success: boolean; progress: UserProgress; message: string } {
+    const current = this.loadProgress(uid);
+    const result = enrollPrimaryCourse(current, targetCourseId);
+    if (result.success) {
+      this.saveProgress(result.progress, uid);
+    }
+    return result;
+  },
+
+  isCourseUnlocked(courseId: OfficialCourseId, progress?: UserProgress): boolean {
+    const p = progress || this.loadProgress();
+    return isCourseUnlocked(courseId, p);
+  },
+
+  canAccessCourse(courseId: OfficialCourseId, progress?: UserProgress): { allowed: boolean; reason?: string; progressDetail: CourseProgressDetail } {
+    const p = progress || this.loadProgress();
+    return canAccessCourse(courseId, p);
+  },
+
+  getCourseProgress(courseId: OfficialCourseId, progress?: UserProgress): CourseProgressDetail {
+    const p = progress || this.loadProgress();
+    return calculateCourseProgress(courseId, p);
+  },
+
+  getCatalogCoursesStatus(progress?: UserProgress): Record<OfficialCourseId, CatalogCourseStatus> {
+    const p = progress || this.loadProgress();
+    return getCatalogCoursesStatus(p);
   },
 
   saveProgress(progress: UserProgress, uid?: string): StorageSaveResult {

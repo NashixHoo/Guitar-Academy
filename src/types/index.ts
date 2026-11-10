@@ -64,16 +64,19 @@ export interface PracticalExercise {
   timeSignature: { beats: number; noteValue: number };
   pickingPattern: string; // e.g. '↓ ↑ ↓ ↑ ↓ ↑ (Down-Up estrito)'
   notesSequence: {
-    stringNumber: number; // 6, 5, 4, 3, 2, 1
-    noteCipher: NoteCipher;
-    notePt: NotePortuguese;
+    stringNumber: number; // 6, 5, 4, 3, 2, 1 (ou índice de peça/corda)
+    noteCipher: NoteCipher | string;
+    notePt: NotePortuguese | string;
     pickDirection: 'down' | 'up';
-    fret: number;
+    fret?: number;
   }[];
   tablatureText: string;
-  instructions: string[];
-  biomechanicTips: string[];
-  validationCriteria: string;
+  instructions?: string[];
+  biomechanicTips?: string[];
+  validationCriteria?: string;
+  precisionCriteria?: string[];
+  commonErrors?: string[];
+  targetExecutionSeconds?: number;
 }
 
 export interface Lesson {
@@ -198,6 +201,37 @@ export interface ViolaoCourseModule {
   lessons: ViolaoLesson[];
 }
 
+export interface BassLesson extends Lesson {
+  instrument?: 'baixo';
+  prerequisites?: string[];
+  tuning?: string;
+  stringsCount?: number;
+}
+
+export interface BassCourseLevel extends LevelInfo {
+  lessons: BassLesson[];
+}
+
+export interface KeyboardLesson extends Lesson {
+  instrument?: 'teclado';
+  prerequisites?: string[];
+  keyRange?: string;
+}
+
+export interface KeyboardCourseLevel extends LevelInfo {
+  lessons: KeyboardLesson[];
+}
+
+export interface DrumsLesson extends Lesson {
+  instrument?: 'bateria';
+  prerequisites?: string[];
+  rudimentsFocused?: string[];
+}
+
+export interface DrumsCourseLevel extends LevelInfo {
+  lessons: DrumsLesson[];
+}
+
 export interface LessonPracticeLog {
   lessonId: string;
   status: 'viewed' | 'practicing' | 'mastered';
@@ -256,7 +290,7 @@ export type PracticeActivityType =
   | 'escalas'
   | 'teoria'
   | 'livre';
-export type PracticeCourseRelation = 'violao' | 'canonical' | 'solo' | 'pratica_livre' | 'livre';
+export type PracticeCourseRelation = 'violao' | 'canonical' | 'solo' | 'baixo' | 'teclado' | 'bateria' | 'pratica_livre' | 'livre';
 export type PerceivedDifficulty = 'facil' | 'adequado' | 'confortavel' | 'desafiador' | 'dificil';
 
 export interface ManualPracticeLogEntry {
@@ -295,8 +329,10 @@ export interface UserProgress {
   pedagogicalProfile?: PedagogicalProfile;
   practiceSessions?: PracticeSessionRecord[];
   manualPracticeLogs?: ManualPracticeLogEntry[];
-  lastAccessedCourseId?: 'violao' | 'canonical' | 'solo';
+  lastAccessedCourseId?: 'violao' | 'canonical' | 'solo' | 'baixo' | 'teclado' | 'bateria';
   courseLastLesson?: Record<string, string>;
+  primaryCourseId?: 'violao' | 'canonical' | 'solo' | 'baixo' | 'teclado' | 'bateria';
+  unlockedElectives?: boolean;
 }
 
 export interface MetronomeConfig {

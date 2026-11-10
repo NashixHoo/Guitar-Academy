@@ -25,12 +25,18 @@ import {
 import { CURRICULUM_LEVELS } from '../data/curriculum';
 import { SOLO_LESSONS } from '../data/soloCourse';
 import { VIOLAO_LESSONS } from '../data/violaoCourse';
+import { BASS_LESSONS } from '../data/bassCourse';
+import { KEYBOARD_LESSONS } from '../data/keyboardCourse';
+import { DRUMS_LESSONS } from '../data/drumsCourse';
 
 export function getAllLessons() {
   return [
     ...CURRICULUM_LEVELS.flatMap((l) => l.lessons),
     ...SOLO_LESSONS,
     ...VIOLAO_LESSONS,
+    ...BASS_LESSONS,
+    ...KEYBOARD_LESSONS,
+    ...DRUMS_LESSONS,
   ];
 }
 import { storageService } from './storageService';
@@ -481,11 +487,11 @@ export class TeacherService {
    * Calcula funil e métricas de etapas dos cursos
    */
   static buildCourseFunnel(
-    enrolledOrCourseId: ClassEnrollment[] | 'violao' | 'canonical' | 'solo',
-    courseIdOrEnrollments?: 'violao' | 'canonical' | 'solo' | any,
+    enrolledOrCourseId: ClassEnrollment[] | 'violao' | 'canonical' | 'solo' | 'baixo' | 'teclado' | 'bateria' | string,
+    courseIdOrEnrollments?: 'violao' | 'canonical' | 'solo' | 'baixo' | 'teclado' | 'bateria' | string | any,
     _optionalEvents?: EducationalEvent[]
   ): CourseFunnelRow[] {
-    let courseId: 'violao' | 'canonical' | 'solo' = 'violao';
+    let courseId: 'violao' | 'canonical' | 'solo' | 'baixo' | 'teclado' | 'bateria' | string = 'violao';
     let enrolledStudents: ClassEnrollment[] = [];
 
     if (typeof enrolledOrCourseId === 'string') {
@@ -504,7 +510,10 @@ export class TeacherService {
     const allCourseLessons = getAllLessons().filter((l) => {
       if (courseId === 'violao') return l.id.startsWith('violao-');
       if (courseId === 'solo') return l.id.startsWith('solo-');
-      return !l.id.startsWith('violao-') && !l.id.startsWith('solo-');
+      if (courseId === 'baixo') return l.id.startsWith('baixo-');
+      if (courseId === 'teclado') return l.id.startsWith('teclado-');
+      if (courseId === 'bateria') return l.id.startsWith('bateria-');
+      return !l.id.startsWith('violao-') && !l.id.startsWith('solo-') && !l.id.startsWith('baixo-') && !l.id.startsWith('teclado-') && !l.id.startsWith('bateria-');
     });
 
     // Mapeia o progresso de cada aluno
@@ -524,7 +533,13 @@ export class TeacherService {
 
       return {
         courseId,
-        courseTitle: courseId === 'violao' ? 'Domínio Total do Violão' : courseId === 'solo' ? 'Guitarra Solo' : 'Conservatório Geral',
+        courseTitle:
+          courseId === 'violao' ? 'Domínio Total do Violão' :
+          courseId === 'solo' ? 'Guitarra Solo' :
+          courseId === 'baixo' ? 'Contrabaixo Elétrico' :
+          courseId === 'teclado' ? 'Teclado / Piano' :
+          courseId === 'bateria' ? 'Bateria e Prática Rítmica' :
+          'Conservatório Geral',
         moduleId: lesson.moduleTitle || 'Módulo Geral',
         moduleTitle: lesson.moduleTitle || 'Fundamentos',
         lessonId: lesson.id,

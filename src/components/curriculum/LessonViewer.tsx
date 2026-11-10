@@ -6,6 +6,9 @@ import { storageService } from '../../services/storageService';
 import { CURRICULUM_LEVELS } from '../../data/curriculum';
 import { SOLO_LESSONS } from '../../data/soloCourse';
 import { VIOLAO_LESSONS } from '../../data/violaoCourse';
+import { BASS_LESSONS } from '../../data/bassCourse';
+import { KEYBOARD_LESSONS } from '../../data/keyboardCourse';
+import { DRUMS_LESSONS } from '../../data/drumsCourse';
 import { 
   CheckCircle2, 
   HelpCircle, 
@@ -300,10 +303,20 @@ export const LessonViewer: React.FC<LessonViewerProps> = ({
     setQuizSubmitted(false);
   };
 
+  const isBassLesson = lesson.id.startsWith('baixo-');
+  const isKeyboardLesson = lesson.id.startsWith('teclado-');
+  const isDrumsLesson = lesson.id.startsWith('bateria-');
+
   const allLessons = isViolaoLesson
     ? VIOLAO_LESSONS
     : isSoloLesson
     ? SOLO_LESSONS
+    : isBassLesson
+    ? (BASS_LESSONS as Lesson[])
+    : isKeyboardLesson
+    ? (KEYBOARD_LESSONS as Lesson[])
+    : isDrumsLesson
+    ? (DRUMS_LESSONS as Lesson[])
     : CURRICULUM_LEVELS.flatMap((l) => l.lessons);
   const currentIndex = allLessons.findIndex((l) => l.id === lesson.id);
   const nextLesson = currentIndex >= 0 && currentIndex < allLessons.length - 1 ? allLessons[currentIndex + 1] : null;
@@ -851,10 +864,10 @@ export const LessonViewer: React.FC<LessonViewerProps> = ({
             {/* Step-by-step instructions */}
             <div className="bg-[#F8F7F4] p-5 rounded-2xl border border-[#D9D9D9] space-y-3">
               <span className="text-xs font-bold text-[#7B1E2B] uppercase tracking-wider block">
-                Instruções de Execução na Guitarra Real
+                Instruções de Execução Prática e Critérios de Precisão
               </span>
               <ul className="space-y-2 text-xs text-[#25252A]">
-                {exercise.instructions.map((inst, iIdx) => (
+                {(exercise.instructions || exercise.precisionCriteria || []).map((inst, iIdx) => (
                   <li key={iIdx} className="flex items-start gap-2">
                     <span className="w-4 h-4 rounded-full bg-[#F5E8EA] text-[#7B1E2B] font-bold text-[10px] flex items-center justify-center shrink-0 mt-0.5">
                       {iIdx + 1}
@@ -865,14 +878,14 @@ export const LessonViewer: React.FC<LessonViewerProps> = ({
               </ul>
             </div>
 
-            {/* Biomechanics Tips */}
+            {/* Biomechanics Tips / Common Errors */}
             <div className="bg-[#F8F7F4] p-5 rounded-2xl border border-[#D9D9D9] space-y-3">
               <span className="text-xs font-bold text-[#B52A3A] uppercase tracking-wider flex items-center gap-1.5">
                 <AlertCircle className="w-4 h-4" />
-                Dicas Biomecânicas Inegociáveis
+                Dicas Biomecânicas e Prevenção de Erros
               </span>
               <ul className="space-y-2 text-xs text-[#25252A]">
-                {exercise.biomechanicTips.map((tip, tIdx) => (
+                {(exercise.biomechanicTips || exercise.commonErrors || []).map((tip, tIdx) => (
                   <li key={tIdx} className="flex items-start gap-2">
                     <span className="text-[#B52A3A] font-bold mt-0.5">•</span>
                     <span className="font-medium leading-relaxed">{tip}</span>
@@ -885,7 +898,7 @@ export const LessonViewer: React.FC<LessonViewerProps> = ({
                   Critério de Avaliação:
                 </span>
                 <p className="text-xs text-[#25252A] font-medium mt-0.5">
-                  {exercise.validationCriteria}
+                  {exercise.validationCriteria || (exercise.precisionCriteria ? exercise.precisionCriteria.join('. ') : 'Execução limpa com metrônomo.')}
                 </p>
               </div>
             </div>
