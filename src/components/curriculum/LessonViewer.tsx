@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Lesson, UserProgress, SoloLesson, ViolaoLesson } from '../../types';
 import { InteractiveFretboard } from '../fretboard/InteractiveFretboard';
+import { ChordDiagram } from '../chords/ChordDiagram';
 import { audioEngine } from '../../audio/audioEngine';
 import { storageService } from '../../services/storageService';
 import { CURRICULUM_LEVELS } from '../../data/curriculum';
@@ -145,19 +146,48 @@ export const LessonViewer: React.FC<LessonViewerProps> = ({
     if (isPlayingAudioSequenceRef.current) return;
     isPlayingAudioSequenceRef.current = true;
 
-    // Frequencies for standard tuning: E2, A2, D3, G3, B3, E4
-    const notes = [
-      { freq: 82.41, name: '6ª: E (Mi)' },
-      { freq: 110.0, name: '5ª: A (Lá)' },
-      { freq: 146.83, name: '4ª: D (Ré)' },
-      { freq: 196.0, name: '3ª: G (Sol)' },
-      { freq: 246.94, name: '2ª: B (Si)' },
-      { freq: 329.63, name: '1ª: E (Mi)' },
-    ];
+    // Frequencies tailored to the active instrument
+    let notes: { freq: number; name: string }[] = [];
+
+    if (isBassLesson) {
+      // Contrabaixo 4 cordas: E1, A1, D2, G2
+      notes = [
+        { freq: 41.2, name: '4ª: E (Mi)' },
+        { freq: 55.0, name: '3ª: A (Lá)' },
+        { freq: 73.42, name: '2ª: D (Ré)' },
+        { freq: 97.99, name: '1ª: G (Sol)' },
+      ];
+    } else if (isKeyboardLesson) {
+      // Teclado: Tríade C4 - E4 - G4 - C5
+      notes = [
+        { freq: 261.63, name: 'C4 (Dó)' },
+        { freq: 329.63, name: 'E4 (Mi)' },
+        { freq: 392.0, name: 'G4 (Sol)' },
+        { freq: 523.25, name: 'C5 (Dó Oitava)' },
+      ];
+    } else if (isDrumsLesson) {
+      // Bateria: Guia percussivo de 4 pulsos (Acento no 1)
+      notes = [
+        { freq: 880.0, name: 'Tempo 1 (Acento)' },
+        { freq: 440.0, name: 'Tempo 2' },
+        { freq: 440.0, name: 'Tempo 3' },
+        { freq: 440.0, name: 'Tempo 4' },
+      ];
+    } else {
+      // Violão / Guitarra: 6 cordas E2, A2, D3, G3, B3, E4
+      notes = [
+        { freq: 82.41, name: '6ª: E (Mi)' },
+        { freq: 110.0, name: '5ª: A (Lá)' },
+        { freq: 146.83, name: '4ª: D (Ré)' },
+        { freq: 196.0, name: '3ª: G (Sol)' },
+        { freq: 246.94, name: '2ª: B (Si)' },
+        { freq: 329.63, name: '1ª: E (Mi)' },
+      ];
+    }
 
     notes.forEach((note, idx) => {
       setTimeout(() => {
-        audioEngine.playGuitarNote(note.freq, 1.2, 0.75);
+        audioEngine.playGuitarNote(note.freq, isDrumsLesson ? 0.3 : 1.2, 0.75);
         if (idx === notes.length - 1) {
           isPlayingAudioSequenceRef.current = false;
         }
@@ -710,7 +740,7 @@ export const LessonViewer: React.FC<LessonViewerProps> = ({
                 }`}
               >
                 {isMetronomeRunning ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current" />}
-                <span>{isMetronomeRunning ? 'Pausar Metrônomo (60 BPM)' : 'Ligar Metrônomo a 60 BPM'}</span>
+                <span>{isMetronomeRunning ? `Pausar Metrônomo (${exercise.targetBpm} BPM)` : `Ligar Metrônomo a ${exercise.targetBpm} BPM`}</span>
               </button>
 
               <button
@@ -718,7 +748,15 @@ export const LessonViewer: React.FC<LessonViewerProps> = ({
                 className="flex items-center gap-2 px-5 py-3 rounded-xl bg-white hover:bg-[#F5E8EA] text-xs font-bold text-[#25252A] transition border border-[#D9D9D9]"
               >
                 <Volume2 className="w-4 h-4 text-[#7B1E2B]" />
-                <span>Ouvir Demonstração das 6 Cordas (60 BPM)</span>
+                <span>
+                  {isBassLesson
+                    ? 'Ouvir 4 Cordas do Baixo (E-A-D-G)'
+                    : isKeyboardLesson
+                    ? 'Ouvir Guia Harmônico (Tríade Dó Maior)'
+                    : isDrumsLesson
+                    ? 'Ouvir Pulso Rítmico de Referência'
+                    : 'Ouvir Demonstração das 6 Cordas (60 BPM)'}
+                </span>
               </button>
 
               {onOpenMetronomeAtBpm && (
@@ -773,7 +811,7 @@ export const LessonViewer: React.FC<LessonViewerProps> = ({
                 className="flex-1 flex items-center justify-center gap-2.5 px-6 py-4 rounded-2xl bg-[#7B1E2B] hover:bg-[#B52A3A] active:scale-95 text-white font-black text-sm sm:text-base shadow-sm transition"
               >
                 <Check className="w-5 h-5 stroke-[3]" />
-                <span>+1 Repetição Concluída (6 Cordas a 60 BPM)</span>
+                <span>+1 Repetição Concluída ({exercise.targetBpm} BPM)</span>
               </button>
 
               <button
@@ -801,20 +839,26 @@ export const LessonViewer: React.FC<LessonViewerProps> = ({
                 <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
                 <div>
                   <strong className="font-bold block text-emerald-950">
-                    Excelente coordenação rítmica!
+                    Excelente coordenação e precisão musical!
                   </strong>
-                  Você concluiu as {exercise.targetRepetitions} repetições com palhetada alternada a 60 BPM. Os dados foram salvos no seu histórico de prática e o distintivo de palhetada inicial foi desbloqueado!
+                  Você concluiu as {exercise.targetRepetitions} repetições limpas a {exercise.targetBpm} BPM. Seu progresso foi salvo com sucesso no seu histórico acadêmico!
                 </div>
               </div>
             )}
           </div>
 
-          {/* Visual Sequence Guide: 6 Strings with Alternate Picking Directions */}
+          {/* Visual Sequence Guide: Multi-instrument tailored */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-[#7B1E2B] uppercase tracking-wider flex items-center gap-1.5">
                 <Guitar className="w-4 h-4 text-[#B52A3A]" />
-                Sequência das 6 Cordas e Sentido Obrigatório da Palheta
+                {isBassLesson
+                  ? 'Sequência de Execução no Contrabaixo (Cordas & Dedos)'
+                  : isKeyboardLesson
+                  ? 'Sequência de Execução no Teclado / Piano (Mãos & Dedos)'
+                  : isDrumsLesson
+                  ? 'Sequência de Peças & Coordenação Motora na Bateria'
+                  : 'Sequência das 6 Cordas e Sentido Obrigatório da Palheta'}
               </span>
               <span className="text-xs text-[#666672] font-semibold">
                 Padrão: {exercise.pickingPattern}
@@ -830,19 +874,38 @@ export const LessonViewer: React.FC<LessonViewerProps> = ({
                   <span className="text-[10px] text-[#666672] font-bold block uppercase">
                     Passo {idx + 1}
                   </span>
-                  <div className="text-lg font-black text-[#25252A]">
-                    {step.stringNumber}ª Corda
+                  <div className="text-base sm:text-lg font-black text-[#25252A]">
+                    {isBassLesson
+                      ? `${step.stringNumber}ª Corda`
+                      : isKeyboardLesson
+                      ? (step.stringNumber === 2 ? 'Mão Esquerda' : 'Mão Direita')
+                      : isDrumsLesson
+                      ? step.noteCipher
+                      : `${step.stringNumber}ª Corda`}
                   </div>
-                  <div className="text-xs font-bold text-[#7B1E2B]">
-                    {step.noteCipher} ({step.notePt})
+                  <div className="text-xs font-bold text-[#7B1E2B] line-clamp-1">
+                    {isDrumsLesson ? step.notePt : `${step.noteCipher} (${step.notePt})`}
                   </div>
                   <div className={`mt-1 inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-black ${
                     step.pickDirection === 'down'
                       ? 'bg-[#7B1E2B] text-white'
                       : 'bg-[#B52A3A] text-white'
                   }`}>
-                    <span className="text-sm">{step.pickDirection === 'down' ? '↓' : '↑'}</span>
-                    <span>{step.pickDirection === 'down' ? 'Para Baixo' : 'Para Cima'}</span>
+                    {isKeyboardLesson ? (
+                      <span>{step.pickDirection === 'down' ? 'Ataque Legato' : 'Sustentação'}</span>
+                    ) : isDrumsLesson ? (
+                      <span>{step.pickDirection === 'down' ? 'Toque Forte / Down' : 'Upstroke / Suave'}</span>
+                    ) : isBassLesson ? (
+                      <>
+                        <span className="text-sm">{step.pickDirection === 'down' ? '↓' : '↑'}</span>
+                        <span>{step.pickDirection === 'down' ? 'Indicador (i)' : 'Médio (m)'}</span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="text-sm">{step.pickDirection === 'down' ? '↓' : '↑'}</span>
+                        <span>{step.pickDirection === 'down' ? 'Para Baixo' : 'Para Cima'}</span>
+                      </>
+                    )}
                   </div>
                 </div>
               ))}
@@ -852,7 +915,13 @@ export const LessonViewer: React.FC<LessonViewerProps> = ({
           {/* Tablature Block */}
           <div className="space-y-2">
             <span className="text-xs font-bold text-[#25252A] block uppercase tracking-wider">
-              Tablatura Musical da Sequência
+              {isDrumsLesson
+                ? 'Grade Rítmica de Percussão & Notação do Kit'
+                : isKeyboardLesson
+                ? 'Diagrama Harmônico de Teclado & Notação Guia'
+                : isBassLesson
+                ? 'Tablatura de Contrabaixo de 4 Cordas (E-A-D-G)'
+                : 'Tablatura Musical da Sequência'}
             </span>
             <pre className="bg-[#1A1A20] p-4 rounded-2xl text-xs sm:text-sm font-mono-code text-[#F8F7F4] overflow-x-auto border border-[#33333E] whitespace-pre leading-relaxed">
               {exercise.tablatureText}
@@ -936,14 +1005,15 @@ export const LessonViewer: React.FC<LessonViewerProps> = ({
                       </span>
                     </div>
 
-                    <div className="font-mono-code text-xs text-[#25252A] dark:text-[#F8F7F4] space-y-1">
-                      <div className="text-[10px] text-[#666672] dark:text-[#B8B3C0]">
-                        Cordas: 6ª(E) 5ª(A) 4ª(D) 3ª(G) 2ª(B) 1ª(E)
-                      </div>
-                      <div className="bg-stone-50 dark:bg-stone-900/60 p-2 rounded border border-stone-200 dark:border-stone-800 space-y-0.5">
-                        <div>Casas: <strong className="text-[#7B1E2B] dark:text-[#FF6B81]">{chord.frets.map(f => f === -1 ? 'X' : f).join(' ')}</strong></div>
-                        <div>Dedos: <strong className="text-[#25252A] dark:text-white">{chord.fingers.join(' ')}</strong></div>
-                      </div>
+                    {/* Visual Cifra Club Standard Chord Diagram */}
+                    <div className="flex justify-center my-2">
+                      <ChordDiagram
+                        chord={chord}
+                        size="sm"
+                        showTitle={false}
+                        showDetails={false}
+                        showAudio={true}
+                      />
                     </div>
 
                     {chord.barre && (

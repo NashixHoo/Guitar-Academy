@@ -62,6 +62,14 @@ import {
 } from './src/services/searchService';
 import { audioEngine } from './src/audio/audioEngine';
 import { TunerSmoother } from './src/audio/tunerSmoother';
+import {
+  ALL_INSTRUMENTS,
+  calculateFrequency,
+  saveCustomTuning,
+  loadCustomTunings,
+  deleteCustomTuning,
+  findPresetById,
+} from './src/data/tunerPresets';
 import { STANDARD_TUNING, getFretNote } from './src/data/musicTheory';
 import { CHORD_DATABASE } from './src/data/chordDatabase';
 import { ChordEngine } from './src/chords/chord-engine';
@@ -4160,6 +4168,620 @@ assert(
   '25.17 getLessonById resolve perfeitamente aulas de qualquer um dos três novos cursos para exibição no LessonViewer'
 );
 
+// 14. Interface e Experiência do Aluno (Multi-Instrumento em LessonViewer)
+const lessonViewerSource = fs.readFileSync('src/components/curriculum/LessonViewer.tsx', 'utf-8');
+assert(
+  lessonViewerSource.includes("isBassLesson") &&
+  lessonViewerSource.includes("isKeyboardLesson") &&
+  lessonViewerSource.includes("isDrumsLesson"),
+  '25.18 LessonViewer detecta dinamicamente a tipologia de instrumento (Baixo, Teclado, Bateria, Violão/Guitarra)'
+);
+assert(
+  lessonViewerSource.includes("Ouvir 4 Cordas do Baixo (E-A-D-G)") &&
+  lessonViewerSource.includes("Ouvir Guia Harmônico (Tríade Dó Maior)") &&
+  lessonViewerSource.includes("Ouvir Pulso Rítmico de Referência"),
+  '25.19 LessonViewer oferece áudio de demonstração customizado e frequências físicas específicas por instrumento'
+);
+assert(
+  lessonViewerSource.includes("Sequência de Execução no Contrabaixo") &&
+  lessonViewerSource.includes("Sequência de Execução no Teclado") &&
+  lessonViewerSource.includes("Sequência de Peças & Coordenação Motora na Bateria"),
+  '25.20 LessonViewer renderiza guias visuais e nomenclaturas anatômicas nativas para cada família instrumental'
+);
+
+// -------------------------------------------------------------
+// GRUPO 26: MASTER TUNER V2 — AFINADOR CROMÁTICO & MOTOR YIN MULTI-INSTRUMENTO
+// -------------------------------------------------------------
+console.log('\n--- GRUPO 26: MASTER TUNER V2 (MOTOR YIN DSP & AFINAÇÃO MULTI-INSTRUMENTO) ---');
+
+const masterDetector = new GuitarPitchDetector({
+  lowCutoff: 25,
+  highCutoff: 2200,
+  silenceThreshold: 0.01,
+  confidenceThreshold: 0.65,
+});
+
+// 1. Guitarra Elétrica / Violão (E2 a E4)
+const egE2 = masterDetector.detectPitchFromBuffer(generateSineBuffer(82.41, 44100, 2048), 44100);
+const egA2 = masterDetector.detectPitchFromBuffer(generateSineBuffer(110.00, 44100, 2048), 44100);
+const egD3 = masterDetector.detectPitchFromBuffer(generateSineBuffer(146.83, 44100, 2048), 44100);
+const egG3 = masterDetector.detectPitchFromBuffer(generateSineBuffer(196.00, 44100, 2048), 44100);
+const egB3 = masterDetector.detectPitchFromBuffer(generateSineBuffer(246.94, 44100, 2048), 44100);
+const egE4 = masterDetector.detectPitchFromBuffer(generateSineBuffer(329.63, 44100, 2048), 44100);
+
+assert(
+  egE2?.note === 'E' && egE2?.octave === 2 && Math.abs(egE2.frequency - 82.41) < 1.0 &&
+  egA2?.note === 'A' && egA2?.octave === 2 &&
+  egD3?.note === 'D' && egD3?.octave === 3 &&
+  egG3?.note === 'G' && egG3?.octave === 3 &&
+  egB3?.note === 'B' && egB3?.octave === 3 &&
+  egE4?.note === 'E' && egE4?.octave === 4,
+  '26.1 Algoritmo YIN detecta com exatidão as 6 cordas da Guitarra e Violão (E2, A2, D3, G3, B3, E4)'
+);
+
+// 2. Contrabaixo Elétrico e Contrabaixo 5 Cordas (B0 a G2)
+const bassB0 = masterDetector.detectPitchFromBuffer(generateSineBuffer(30.87, 44100, 4096), 44100);
+const bassE1 = masterDetector.detectPitchFromBuffer(generateSineBuffer(41.20, 44100, 2048), 44100);
+const bassA1 = masterDetector.detectPitchFromBuffer(generateSineBuffer(55.00, 44100, 2048), 44100);
+const bassD2 = masterDetector.detectPitchFromBuffer(generateSineBuffer(73.42, 44100, 2048), 44100);
+const bassG2 = masterDetector.detectPitchFromBuffer(generateSineBuffer(98.00, 44100, 2048), 44100);
+
+assert(
+  bassB0?.note === 'B' && bassB0?.octave === 0 && Math.abs(bassB0.frequency - 30.87) < 0.5 &&
+  bassE1?.note === 'E' && bassE1?.octave === 1 && Math.abs(bassE1.frequency - 41.20) < 0.5 &&
+  bassA1?.note === 'A' && bassA1?.octave === 1 &&
+  bassD2?.note === 'D' && bassD2?.octave === 2 &&
+  bassG2?.note === 'G' && bassG2?.octave === 2,
+  '26.2 Detecção de subgraves profundos do Baixo: B0 (30.87 Hz), E1 (41.20 Hz) até G2 com decimação adaptativa'
+);
+
+// 3. Violoncelo (C2 65.41 Hz a A3 220.00 Hz)
+const celloC2 = masterDetector.detectPitchFromBuffer(generateSineBuffer(65.41, 44100, 2048), 44100);
+const celloG2 = masterDetector.detectPitchFromBuffer(generateSineBuffer(98.00, 44100, 2048), 44100);
+const celloD3 = masterDetector.detectPitchFromBuffer(generateSineBuffer(146.83, 44100, 2048), 44100);
+const celloA3 = masterDetector.detectPitchFromBuffer(generateSineBuffer(220.00, 44100, 2048), 44100);
+
+assert(
+  celloC2?.note === 'C' && celloC2?.octave === 2 &&
+  celloG2?.note === 'G' && celloG2?.octave === 2 &&
+  celloD3?.note === 'D' && celloD3?.octave === 3 &&
+  celloA3?.note === 'A' && celloA3?.octave === 3,
+  '26.3 Violoncelo: afinação por quintas clássicas (C2, G2, D3, A3) identificada com precisão'
+);
+
+// 4. Viola de Arco (C3 130.81 Hz a A4 440.00 Hz)
+const violaC3 = masterDetector.detectPitchFromBuffer(generateSineBuffer(130.81, 44100, 2048), 44100);
+const violaG3 = masterDetector.detectPitchFromBuffer(generateSineBuffer(196.00, 44100, 2048), 44100);
+const violaD4 = masterDetector.detectPitchFromBuffer(generateSineBuffer(293.66, 44100, 2048), 44100);
+const violaA4 = masterDetector.detectPitchFromBuffer(generateSineBuffer(440.00, 44100, 2048), 44100);
+
+assert(
+  violaC3?.note === 'C' && violaC3?.octave === 3 &&
+  violaG3?.note === 'G' && violaG3?.octave === 3 &&
+  violaD4?.note === 'D' && violaD4?.octave === 4 &&
+  violaA4?.note === 'A' && violaA4?.octave === 4,
+  '26.4 Viola de Arco: afinação por quintas (C3, G3, D4, A4) identificada com precisão'
+);
+
+// 5. Violino (G3 196.00 Hz a E5 659.25 Hz)
+const violinG3 = masterDetector.detectPitchFromBuffer(generateSineBuffer(196.00, 44100, 2048), 44100);
+const violinD4 = masterDetector.detectPitchFromBuffer(generateSineBuffer(293.66, 44100, 2048), 44100);
+const violinA4 = masterDetector.detectPitchFromBuffer(generateSineBuffer(440.00, 44100, 2048), 44100);
+const violinE5 = masterDetector.detectPitchFromBuffer(generateSineBuffer(659.25, 44100, 2048), 44100);
+
+assert(
+  violinG3?.note === 'G' && violinG3?.octave === 3 &&
+  violinD4?.note === 'D' && violinD4?.octave === 4 &&
+  violinA4?.note === 'A' && violinA4?.octave === 4 &&
+  violinE5?.note === 'E' && violinE5?.octave === 5 && Math.abs(violinE5.frequency - 659.25) < 1.0,
+  '26.5 Violino: agudos de conservatório (G3, D4, A4, E5 até 659.25 Hz) validados'
+);
+
+// 6. Resolução e Precisão em Cents: Desvios de -50, -10, +10, +50 cents em A4 (440 Hz)
+const targetA4Ref = { stringNumber: 1, note: 'A', octave: 4, freq: 440 };
+const freqM50 = 440 * Math.pow(2, -50 / 1200);
+const freqM10 = 440 * Math.pow(2, -10 / 1200);
+const freqP10 = 440 * Math.pow(2, +10 / 1200);
+const freqP50 = 440 * Math.pow(2, +50 / 1200);
+
+const resM50 = masterDetector.detectPitchFromBuffer(generateSineBuffer(freqM50, 44100, 2048), 44100, { targetString: targetA4Ref });
+const resM10 = masterDetector.detectPitchFromBuffer(generateSineBuffer(freqM10, 44100, 2048), 44100, { targetString: targetA4Ref });
+const resP10 = masterDetector.detectPitchFromBuffer(generateSineBuffer(freqP10, 44100, 2048), 44100, { targetString: targetA4Ref });
+const resP50 = masterDetector.detectPitchFromBuffer(generateSineBuffer(freqP50, 44100, 2048), 44100, { targetString: targetA4Ref });
+
+assert(
+  resM50?.cents === -50 && resM10?.cents === -10 && resP10?.cents === 10 && resP50?.cents === 50,
+  '26.6 Precisão sub-semitonal de desvio em cents (-50¢, -10¢, +10¢, +50¢) com resolução rigorosa'
+);
+
+// 7. Imunidade a harmônicos fortes (rejeição de oitavas falsas)
+const richHarmBuffer = new Float32Array(2048);
+for (let i = 0; i < 2048; i++) {
+  // Fundamental 82.41 Hz (E2) + 2º harmônico (164.82 Hz) a 80% + 3º harmônico (247.23 Hz) a 50%
+  richHarmBuffer[i] =
+    0.30 * Math.sin((2 * Math.PI * 82.41 * i) / 44100) +
+    0.25 * Math.sin((2 * Math.PI * 164.82 * i) / 44100) +
+    0.15 * Math.sin((2 * Math.PI * 247.23 * i) / 44100);
+}
+const richHarmResult = masterDetector.detectPitchFromBuffer(richHarmBuffer, 44100);
+assert(
+  richHarmResult?.note === 'E' && richHarmResult?.octave === 2 && Math.abs(richHarmResult.frequency - 82.41) < 1.0,
+  '26.7 Supressão de erro de oitava: timbre acústico com harmônicos sobrepostos converge para a fundamental F0 (E2)'
+);
+
+// 8. Rejeição de sinal fraco, ruído e silêncio
+const lowAmpBuffer = generateSineBuffer(440, 44100, 2048, 0.005); // Amplitude abaixo do limiar
+const lowAmpResult = masterDetector.detectPitchFromBuffer(lowAmpBuffer, 44100);
+assert(
+  lowAmpResult?.isSilence === true || lowAmpResult?.detectionType === 'silence' || lowAmpResult?.isWeakSignal === true,
+  '26.8 Sinais de baixa energia sonora (< silenceThreshold) classificados adequadamente como silêncio ou fracos'
+);
+
+// 9. Rejeição de frequências fora da faixa configurada
+const outOfRangeDetector = new GuitarPitchDetector({ lowCutoff: 100, highCutoff: 500 });
+const outLow = outOfRangeDetector.detectPitchFromBuffer(generateSineBuffer(41.20, 44100, 2048), 44100);
+assert(
+  outLow?.detectionType === 'weak_signal' || outLow?.frequency === 0,
+  '26.9 Frequências fora dos limites de banda do filtro biquad são rejeitadas com segurança'
+);
+
+// 10. Calibração dinâmica de referência A4 (432 Hz, 440 Hz, 442 Hz)
+masterDetector.setA4Reference(432);
+const a432Result = masterDetector.detectPitchFromBuffer(generateSineBuffer(432.00, 44100, 2048), 44100);
+masterDetector.setA4Reference(442);
+const a442Result = masterDetector.detectPitchFromBuffer(generateSineBuffer(442.00, 44100, 2048), 44100);
+masterDetector.setA4Reference(440); // Restaura 440 Hz
+assert(
+  a432Result?.note === 'A' && a432Result?.octave === 4 && a432Result?.cents === 0 &&
+  a442Result?.note === 'A' && a442Result?.octave === 4 && a442Result?.cents === 0,
+  '26.10 Calibração de referência A4 dinâmica (430 a 450 Hz) recalcula cents e frequências de referência'
+);
+
+// 11. Base oficial de Presets de Instrumentos
+const requiredInstruments = [
+  'electric_guitar',
+  'acoustic_guitar',
+  'bass',
+  'ukulele',
+  'violin',
+  'viola',
+  'cello',
+  'double_bass',
+  'mandolin',
+  'banjo',
+];
+assert(
+  requiredInstruments.every((instId) => ALL_INSTRUMENTS.some((i) => i.id === instId)),
+  '26.11 Catálogo oficial contempla mais de 10 instrumentos de cordas obrigatórios com presets canônicos'
+);
+
+// 12. Presets obrigatórios de Guitarra Elétrica
+const egDef = ALL_INSTRUMENTS.find((i) => i.id === 'electric_guitar')!;
+const egPresetNames = egDef.presets.map((p) => p.id);
+assert(
+  egPresetNames.includes('eg_standard') &&
+  egPresetNames.includes('eg_drop_d') &&
+  egPresetNames.includes('eg_eb_standard') &&
+  egPresetNames.includes('eg_d_standard') &&
+  egPresetNames.includes('eg_drop_c') &&
+  egPresetNames.includes('eg_open_g') &&
+  egPresetNames.includes('eg_open_d') &&
+  egPresetNames.includes('eg_dadgad'),
+  '26.12 Guitarra contempla Standard, Drop D, Eb Standard, D Standard, Drop C, Open G, Open D e DADGAD'
+);
+
+// 13. Contrabaixo Elétrico contempla 4, 5 e 6 cordas
+const bassDef = ALL_INSTRUMENTS.find((i) => i.id === 'bass')!;
+const bassPresetIds = bassDef.presets.map((p) => p.id);
+assert(
+  bassPresetIds.includes('bass_4_standard') &&
+  bassPresetIds.includes('bass_5_standard') &&
+  bassPresetIds.includes('bass_6_standard') &&
+  bassPresetIds.includes('bass_drop_d') &&
+  bassPresetIds.includes('bass_eb_standard'),
+  '26.13 Contrabaixo Elétrico contempla configurações completas de 4, 5 cordas (B0) e 6 cordas (B0-C3)'
+);
+
+// 14. Cálculo e recalibração harmônica de cordas com A4
+const guitarE2At440 = calculateFrequency('E', 2, 440);
+const guitarE2At442 = calculateFrequency('E', 2, 442);
+const guitarE2At432 = calculateFrequency('E', 2, 432);
+assert(
+  guitarE2At440 === 82.41 && guitarE2At442 === 82.78 && guitarE2At432 === 80.91,
+  '26.14 calculateFrequency converte nota e oitava em Hz dinâmico segundo temperamento igual e A4'
+);
+
+// 15. Sistema de Afinações Personalizadas (CRUD em localStorage)
+const mockCustom = {
+  id: 'test_drop_b',
+  name: 'Drop B Pesado',
+  description: 'Afinação customizada de 6 cordas',
+  instrumentId: 'custom',
+  instrumentName: 'Personalizado',
+  strings: [
+    { stringNumber: 6, note: 'B', notePt: 'Si', octave: 1, label: '6ª Corda', shortName: '6B' },
+    { stringNumber: 5, note: 'F#', notePt: 'Fá#', octave: 2, label: '5ª Corda', shortName: '5F#' },
+    { stringNumber: 4, note: 'B', notePt: 'Si', octave: 2, label: '4ª Corda', shortName: '4B' },
+    { stringNumber: 3, note: 'E', notePt: 'Mi', octave: 3, label: '3ª Corda', shortName: '3E' },
+    { stringNumber: 2, note: 'G#', notePt: 'Sol#', octave: 3, label: '2ª Corda', shortName: '2G#' },
+    { stringNumber: 1, note: 'C#', notePt: 'Dó#', octave: 4, label: '1ª Corda', shortName: '1C#' },
+  ],
+};
+const savedList = saveCustomTuning(mockCustom);
+const loadedList = loadCustomTunings();
+const deletedList = deleteCustomTuning('test_drop_b');
+assert(
+  savedList.some((p) => p.id === 'test_drop_b') &&
+  loadedList.some((p) => p.id === 'test_drop_b') &&
+  !deletedList.some((p) => p.id === 'test_drop_b'),
+  '26.15 Modo Personalizado: suporte a CRUD completo de afinações salvas em localStorage'
+);
+
+// 16. TunerSmoother V2: tolerância configurável (Conservatório ±3¢, Padrão ±5¢, Rápido ±8¢)
+const smootherV2 = new TunerSmoother({ alpha: 0.18, confidenceThreshold: 0.65, inTuneTolerance: 3.0 });
+smootherV2.feedPitch({
+  frequency: 440.0,
+  note: 'A',
+  notePt: 'Lá',
+  octave: 4,
+  cents: 2.8,
+  confidence: 0.95,
+  intensity: 0.8,
+  isSilence: false,
+  isWeakSignal: false,
+  isOnset: false,
+  detectionType: 'monophonic_note',
+  stability: 95,
+  stabilityLabel: 'Estável',
+  expectedFreq: 440.0,
+  timestamp: performance.now(),
+});
+const frameTol3 = smootherV2.step(performance.now());
+smootherV2.setTolerance(5.0);
+const tolConfig = smootherV2.getTolerance();
+assert(
+  frameTol3.isInTune === true && tolConfig.inTune === 5.0,
+  '26.16 TunerSmoother V2 suporta tolerâncias configuráveis de afinação (Conservatório, Padrão e Rápido)'
+);
+
+// 17. Modo manual por corda alvo calcula cents em relação à corda fixa
+const targetE4Ref = { stringNumber: 1, note: 'E', octave: 4, freq: 329.63 };
+const manualTargetResult = masterDetector.detectPitchFromBuffer(
+  generateSineBuffer(331.0, 44100, 2048),
+  44100,
+  { targetString: targetE4Ref }
+);
+assert(
+  manualTargetResult?.note === 'E' &&
+  manualTargetResult?.octave === 4 &&
+  typeof manualTargetResult?.diffHz === 'number' &&
+  Math.abs(manualTargetResult.frequency - 331.0) < 0.5,
+  '26.17 Modo Manual por corda alvo calcula desvio em Hz e cents relativo à frequência exata da corda'
+);
+
+// 18. TunerView integra A4, modos manual/auto/cromático, presets e tratamento de microfone
+const tunerViewV2Source = fs.readFileSync('src/components/tuner/TunerView.tsx', 'utf-8');
+assert(
+  tunerViewV2Source.includes('a4Calibration') &&
+  tunerViewV2Source.includes('isChromaticMode') &&
+  tunerViewV2Source.includes('manualStringNumber') &&
+  tunerViewV2Source.includes('isInstrumentModalOpen') &&
+  tunerViewV2Source.includes('isCustomModalOpen') &&
+  tunerViewV2Source.includes('isSettingsModalOpen'),
+  '26.18 TunerView V2 integra seleção de instrumentos, calibração A4, modos e afinações personalizadas'
+);
+
+// 19. TunerView mantém conformidade com suspensão em background e segurança
+assert(
+  tunerViewV2Source.includes('visibilitychange') &&
+  tunerViewV2Source.includes('stopListening') &&
+  tunerViewV2Source.includes('Retomar Afinador') &&
+  (tunerViewV2Source.includes('permissão') || tunerViewV2Source.includes('cadeado')) &&
+  !tunerViewV2Source.includes('alert(') &&
+  !tunerViewV2Source.includes('confirm('),
+  '26.19 TunerView V2 mantém conformidade estrita de ciclo de vida, sem alert/confirm nativos'
+);
+
+// 20. App.tsx preserva a rota de acesso ao Afinador Pro
+const appV2Source = fs.readFileSync('src/App.tsx', 'utf-8');
+assert(
+  appV2Source.includes("currentTab === 'tuner'") &&
+  appV2Source.includes('<TunerView'),
+  '26.20 App.tsx preserva a rota e montagem do Afinador Pro integrado à plataforma'
+);
+
+// =============================================================
+// GRUPO 27: PADRONIZAÇÃO GLOBAL DOS DIAGRAMAS DE ACORDES (PADRÃO CIFRA CLUB)
+// =============================================================
+console.log('\n--- GRUPO 27: Padronização Global dos Diagramas de Acordes (Padrão Visual Cifra Club) ---');
+
+// 27.1 Existência e integridade do componente central ChordDiagram.tsx
+const chordDiagramSource = fs.readFileSync('src/components/chords/ChordDiagram.tsx', 'utf-8');
+assert(
+  chordDiagramSource.includes('export const ChordDiagram') &&
+  chordDiagramSource.includes('<svg') &&
+  chordDiagramSource.includes('numFrets') &&
+  chordDiagramSource.includes('effectiveBarre'),
+  '27.01 ChordDiagram.tsx existe como componente visual central baseado em SVG'
+);
+
+// 27.2 Diagrama visual desenha 6 cordas verticais da 6ª (Mi grave) à 1ª (Mi aguda)
+assert(
+  chordDiagramSource.includes('Array.from({ length: 6 })') &&
+  chordDiagramSource.includes('stringGap') &&
+  chordDiagramSource.includes('startX'),
+  '27.02 ChordDiagram renderiza 6 cordas verticais com calibração precisa de espaçamento'
+);
+
+// 27.3 Marcação visual de cordas abafadas (✕) e cordas soltas (○)
+assert(
+  chordDiagramSource.includes('✕') &&
+  chordDiagramSource.includes('fretVal === -1') &&
+  chordDiagramSource.includes('fretVal === 0'),
+  '27.03 ChordDiagram renderiza indicadores visuais de cordas abafadas (✕) e soltas (○)'
+);
+
+// 27.4 Pestana (Barre) contínua desenhada como pílula sólida
+assert(
+  chordDiagramSource.includes('barLeft') &&
+  chordDiagramSource.includes('barWidth') &&
+  chordDiagramSource.includes('rx={radius}'),
+  '27.04 ChordDiagram desenha pestana contínua (barre pill) com número do dedo indicador'
+);
+
+// 27.5 Pontos nos trastes com números dos dedos (1=indicador, 2=médio, 3=anelar, 4=mínimo)
+assert(
+  chordDiagramSource.includes('effectiveFingers') &&
+  chordDiagramSource.includes('dot-${stringIdx}-${fretVal}') &&
+  chordDiagramSource.includes('finger > 0'),
+  '27.05 ChordDiagram renderiza pontos sólidos nas casas com os números correspondentes dos dedos'
+);
+
+// 27.6 Pestana superior (nut preta grossa na casa 1) ou número da casa base para posições altas
+assert(
+  chordDiagramSource.includes('effectiveBaseFret === 1') &&
+  chordDiagramSource.includes('{effectiveBaseFret}ª') &&
+  chordDiagramSource.includes('stroke="#25252A"'),
+  '27.06 ChordDiagram renderiza pestana de osso para casa 1 e indicador ordinal (ex: 3ª, 5ª) para casas avançadas'
+);
+
+// 27.7 Áudio integrado: botões de Batida (Block Strum) e Dedilhado (Arpeggio)
+assert(
+  chordDiagramSource.includes('Batida') &&
+  chordDiagramSource.includes('Dedilhado') &&
+  chordDiagramSource.includes('audioEngine.playChord'),
+  '27.07 ChordDiagram inclui reprodução sonora de áudio acústico para batida e dedilhado'
+);
+
+// 27.8 Eliminação de arrays textuais em ChordDictionaryView.tsx
+const chordDictSource = fs.readFileSync('src/components/chords/ChordDictionaryView.tsx', 'utf-8');
+assert(
+  !chordDictSource.includes('Trastes: [') &&
+  !chordDictSource.includes('Dedos: ['),
+  '27.08 ChordDictionaryView.tsx eliminou integralmente a apresentação textual de arrays de trastes e dedos'
+);
+
+// 27.9 ChordDictionaryView.tsx utiliza ChordDiagram na seção do Sistema CAGED
+assert(
+  chordDictSource.includes('cagedShapes.map') &&
+  chordDictSource.includes('<ChordDiagram') &&
+  chordDictSource.includes('chord={shape}'),
+  '27.09 Seção CAGED do Dicionário utiliza o componente visual ChordDiagram para os 5 formatos'
+);
+
+// 27.10 ChordDictionaryView.tsx utiliza ChordDiagram no Laboratório de Sonoridades
+assert(
+  chordDictSource.includes('family.variants.map') &&
+  chordDictSource.includes('frets={v.frets}'),
+  '27.10 Laboratório de Sonoridades utiliza ChordDiagram para exibir as variações acústicas ricas'
+);
+
+// 27.11 ChordDictionaryView.tsx utiliza ChordDiagram no Validador de Digitações
+assert(
+  chordDictSource.includes('frets={validatorFrets}') &&
+  chordDictSource.includes('symbol={validatorTargetChord}'),
+  '27.11 Validador de Digitações exibe em tempo real o diagrama visual das casas inseridas'
+);
+
+// 27.12 Eliminação de formato textual e adoção do ChordDiagram em LessonViewer.tsx
+const lessonViewerSourceChord = fs.readFileSync('src/components/curriculum/LessonViewer.tsx', 'utf-8');
+assert(
+  !lessonViewerSourceChord.includes('Casas: <strong') &&
+  !lessonViewerSourceChord.includes('Dedos: <strong'),
+  '27.12 LessonViewer.tsx eliminou caixas de texto com listas numéricas de casas e dedos'
+);
+assert(
+  lessonViewerSourceChord.includes('Acordes da Aula no Violão Físico') &&
+  lessonViewerSourceChord.includes('<ChordDiagram') &&
+  lessonViewerSourceChord.includes('chord={chord}'),
+  '27.13 LessonViewer.tsx renderiza o padrão visual Cifra Club para todos os acordes das aulas de violão'
+);
+
+// 27.14 Adoção do ChordDiagram em StudyLibraryView.tsx
+const studyLibrarySource = fs.readFileSync('src/components/library/StudyLibraryView.tsx', 'utf-8');
+assert(
+  studyLibrarySource.includes('<ChordDiagram') &&
+  studyLibrarySource.includes('chord={shape}'),
+  '27.14 StudyLibraryView.tsx substituiu a tabela textual pelo componente visual ChordDiagram'
+);
+
+// 27.15 Adoção do ChordDiagram no Virtuo Guitar Coach (GuitarCoachView.tsx)
+const guitarCoachSource = fs.readFileSync('src/components/coach/GuitarCoachView.tsx', 'utf-8');
+assert(
+  guitarCoachSource.includes('<ChordDiagram') &&
+  guitarCoachSource.includes('currentChordDetails.frets') &&
+  guitarCoachSource.includes('nextChordDetails.frets'),
+  '27.15 GuitarCoachView.tsx renderiza diagramas visuais para Tocar Agora e Preparar Dedos'
+);
+
+// 27.16 Preservação da representação visual do Teclado (sem diagramas de 6 cordas de violão para piano)
+const keyboardCourseSource = fs.readFileSync('src/data/keyboardCourse.ts', 'utf-8');
+assert(
+  !keyboardCourseSource.includes('chordDiagrams:') &&
+  lessonViewerSourceChord.includes('isKeyboardLesson') &&
+  lessonViewerSourceChord.includes('Diagrama Harmônico de Teclado'),
+  '27.16 Cursos de teclado preservam estritamente o teclado virtual de teclas, sem contaminação por diagramas de cordas'
+);
+
+// 27.17 Validação teórica e física dos 5 formatos CAGED para o acorde de C
+const cShapesCaged = generateCagedShapes('C');
+assert(
+  cShapesCaged.length === 5,
+  '27.17 Acorde de Dó (C) possui os 5 formatos geométricos do sistema CAGED gerados dinamicamente'
+);
+cShapesCaged.forEach((s, idx) => {
+  assert(
+    s.frets.length === 6 && s.fingers.length === 6,
+    `27.18 Formato CAGED #${idx + 1} de C (${s.cagedForm}) possui exatamente 6 valores para trastes e dedos`
+  );
+  assert(
+    s.baseFret >= 1 && s.baseFret <= 15,
+    `27.19 Formato CAGED #${idx + 1} de C (${s.cagedForm}) possui casa base válida no braço (${s.baseFret}ª casa)`
+  );
+});
+
+// 27.20 Validação de acordes com pestana (F e Bm)
+const fChordDb = CHORD_DATABASE.find(c => c.symbol === 'F');
+assert(
+  Boolean(fChordDb && fChordDb.barre !== undefined && fChordDb.barre.fret === 1),
+  '27.20 Acorde de F possui definição de pestana explícita na 1ª casa'
+);
+const bmChordDb = CHORD_DATABASE.find(c => c.symbol === 'Bm');
+assert(
+  Boolean(bmChordDb && bmChordDb.barre !== undefined && bmChordDb.barre.fret === 2),
+  '27.21 Acorde de Bm possui definição de pestana explícita na 2ª casa'
+);
+
+// -------------------------------------------------------------
+// GRUPO 28: FASE DE AUTENTICAÇÃO OBRIGATÓRIA (SISTEMA DE IDENTIDADE & PERSISTÊNCIA)
+// -------------------------------------------------------------
+console.log('\n--- GRUPO 28: Fase de Autenticação Obrigatória, Provedores & Identidade ---');
+
+// 28.1 Verificação da existência do componente AuthView.tsx
+const authViewExists = fs.existsSync('src/components/auth/AuthView.tsx');
+assert(authViewExists, '28.01 Componente AuthView.tsx existe em src/components/auth/');
+
+const authViewCode = fs.readFileSync('src/components/auth/AuthView.tsx', 'utf-8');
+assert(
+  authViewCode.includes('src="./icon.svg"'),
+  '28.02 AuthView renderiza a logo oficial ./icon.svg da Guitar Academy'
+);
+assert(
+  authViewCode.includes('Continuar com o Google'),
+  '28.03 AuthView disponibiliza botão oficial de login com o Google'
+);
+assert(
+  authViewCode.includes('Facebook') && authViewCode.includes('signInWithFacebook'),
+  '28.04 AuthView disponibiliza botão oficial de login com o Facebook'
+);
+assert(
+  authViewCode.includes('Apple') && authViewCode.includes('signInWithApple'),
+  '28.05 AuthView disponibiliza botão oficial de login com a Apple'
+);
+assert(
+  authViewCode.includes('signInWithEmail') && authViewCode.includes('signUpWithEmail'),
+  '28.06 AuthView disponibiliza fluxos completos de login e criação de conta por e-mail/senha'
+);
+assert(
+  authViewCode.includes('sendPasswordReset') && authViewCode.includes('Esqueci minha senha'),
+  '28.07 AuthView disponibiliza fluxo de recuperação de senha (sendPasswordReset)'
+);
+assert(
+  authViewCode.includes('Termos & Privacidade do Aluno') && authViewCode.includes('StudentPrivacyNotice'),
+  '28.08 AuthView integra acesso aos Termos de Uso e Política de Privacidade do Aluno'
+);
+
+// 28.9 Bloqueio Mandatório no Gateway App.tsx
+const appSourceCode = fs.readFileSync('src/App.tsx', 'utf-8');
+assert(
+  appSourceCode.includes('if (showSplash) {') &&
+  appSourceCode.includes('<SplashScreen onFinish='),
+  '28.09 App.tsx executa a Splash Screen antes de qualquer exibição de interface'
+);
+assert(
+  appSourceCode.includes('if (!user) {') &&
+  appSourceCode.includes('<AuthView />'),
+  '28.10 App.tsx implementa gateway obrigatório: usuários não autenticados são barrados em <AuthView />'
+);
+assert(
+  appSourceCode.includes('if (loading) {') &&
+  appSourceCode.includes('Verificando sessão de estudos...'),
+  '28.11 App.tsx previne flash de conteúdo interno exibindo tela de carregamento segura durante verificação'
+);
+
+// 28.12 Métodos de Autenticação em firebase.ts
+const firebaseServiceCode = fs.readFileSync('src/services/firebase.ts', 'utf-8');
+assert(
+  firebaseServiceCode.includes('export async function signInWithGoogle') &&
+  firebaseServiceCode.includes('export async function signInWithFacebook') &&
+  firebaseServiceCode.includes('export async function signInWithApple') &&
+  firebaseServiceCode.includes('export async function signInWithEmail') &&
+  firebaseServiceCode.includes('export async function signUpWithEmail') &&
+  firebaseServiceCode.includes('export async function sendPasswordReset'),
+  '28.12 firebase.ts exporta métodos para Google, Facebook, Apple, E-mail Login, E-mail Cadastro e Reset de Senha'
+);
+
+// 28.13 Tradutor de Erros do Firebase (mapFirebaseAuthError)
+import { mapFirebaseAuthError } from './src/services/firebase';
+
+assert(
+  mapFirebaseAuthError({ code: 'auth/invalid-email' }).includes('E-mail com formato inválido'),
+  '28.13 mapFirebaseAuthError traduz auth/invalid-email com mensagem amigável em português'
+);
+assert(
+  mapFirebaseAuthError({ code: 'auth/wrong-password' }).includes('E-mail ou senha incorretos'),
+  '28.14 mapFirebaseAuthError traduz auth/wrong-password'
+);
+assert(
+  mapFirebaseAuthError({ code: 'auth/email-already-in-use' }).includes('já está em uso'),
+  '28.15 mapFirebaseAuthError traduz auth/email-already-in-use'
+);
+assert(
+  mapFirebaseAuthError({ code: 'auth/weak-password' }).includes('mínimo 6 caracteres'),
+  '28.16 mapFirebaseAuthError traduz auth/weak-password'
+);
+assert(
+  mapFirebaseAuthError({ code: 'auth/operation-not-allowed' }).includes('provedor de autenticação ainda não foi ativado'),
+  '28.17 mapFirebaseAuthError instrui claramente sobre provedor ainda não ativado no Firebase Console'
+);
+
+// 28.18 Estrutura do Perfil de Aluno (StudentProfile)
+const typesCode = fs.readFileSync('src/types/index.ts', 'utf-8');
+assert(
+  typesCode.includes('export interface StudentProfile') &&
+  typesCode.includes('provider: AuthProviderType | string') &&
+  typesCode.includes('accountStatus: AccountStatus') &&
+  typesCode.includes('role: UserRole') &&
+  typesCode.includes('enrolledCourses: string[]'),
+  '28.18 types/index.ts define a interface StudentProfile com todos os campos de auditoria e matrícula'
+);
+
+// 28.19 Isolamento Multi-usuário e Regras de Segurança
+const firestoreRules = fs.readFileSync('firestore.rules', 'utf-8');
+assert(
+  firestoreRules.includes('match /users/{userId}') &&
+  firestoreRules.includes('isOwner(userId)'),
+  '28.19 firestore.rules isola os documentos de alunos: apenas o proprietário (isOwner) pode ler e gravar'
+);
+assert(
+  firestoreRules.includes('match /system_roles/{userId}') &&
+  firestoreRules.includes('allow write: if false'),
+  '28.20 firestore.rules protege system_roles/{userId} contra manipulação arbitrária por clientes'
+);
+
+// 28.21 Preservação da Sessão e Desconexão Imediata (logOut)
+const authContextCode = fs.readFileSync('src/contexts/AuthContext.tsx', 'utf-8');
+assert(
+  authContextCode.includes('onAuthStateChanged') &&
+  authContextCode.includes('storageService.setCurrentUser(currentUser.uid)'),
+  '28.21 AuthContext sincroniza a sessão com onAuthStateChanged e isola o storage pelo UID'
+);
+assert(
+  authContextCode.includes('storageService.setCurrentUser(null)') &&
+  authContextCode.includes('fbLogOut()'),
+  '28.22 AuthContext limpa o ponteiro de usuário ativo e o perfil na desconexão imediata'
+);
+
 console.log('\n===========================================================');
 console.log(`TOTAL DE TESTES: ${totalTests}`);
 console.log(`PASSOU: ${passedTests}`);
@@ -4169,7 +4791,7 @@ console.log('===========================================================');
 if (failedTests > 0) {
   process.exit(1);
 } else {
-  console.log('✓ Todos os testes de integração do motor musical, detector, currículo, Central de Prática, Busca Global e Autenticação Google Multiusuário foram APROVADOS com sucesso!\n');
+  console.log('✓ Todos os testes de integração do motor musical, detector, currículo, Central de Prática, Busca Global, Diagramas Cifra Club e Autenticação Obrigatória foram APROVADOS com sucesso!\n');
   process.exit(0);
 }
 

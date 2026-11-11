@@ -40,6 +40,7 @@ import { DiagnosticsView } from './components/diagnostics/DiagnosticsView';
 import { OfflineIndicator } from './components/common/OfflineIndicator';
 import { SplashScreen } from './components/common/SplashScreen';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { AuthView } from './components/auth/AuthView';
 import { LoginModal } from './components/auth/LoginModal';
 import { LegacyDataModal } from './components/auth/LegacyDataModal';
 import { UserProfileModal } from './components/profile/UserProfileModal';
@@ -48,7 +49,7 @@ import { StudentJoinClassModal } from './components/teacher/StudentJoinClassModa
 import { StudentPrivacyNotice } from './components/teacher/StudentPrivacyNotice';
 
 function MainAppContent() {
-  const { user, showLegacyModal } = useAuth();
+  const { user, loading, showLegacyModal } = useAuth();
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showJoinClassModal, setShowJoinClassModal] = useState(false);
@@ -294,6 +295,34 @@ function MainAppContent() {
     ? allLessons.find((l) => l.id === selectedLessonId)
     : undefined;
 
+  // FLUXO DE ENTRADA OBRIGATÓRIA:
+  // 1. Apresentação da Splash Screen de abertura
+  if (showSplash) {
+    return (
+      <>
+        {showSplash && <SplashScreen onFinish={() => setShowSplash(false)} />}
+      </>
+    );
+  }
+
+  // 2. Verificação do estado de autenticação (sem flash de conteúdo interno)
+  if (loading) {
+    return (
+      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#F8F7F4] text-[#25252A]">
+        <div className="w-16 h-16 rounded-2xl bg-white border border-[#D9D9D9] shadow-md flex items-center justify-center p-2.5 mb-4 ring-4 ring-[#7B1E2B]/5">
+          <img src="./icon.svg" alt="Guitar Academy" className="w-full h-full object-contain" />
+        </div>
+        <div className="w-6 h-6 border-2 border-[#7B1E2B] border-t-transparent rounded-full animate-spin" />
+        <span className="text-xs text-[#666672] font-mono-code mt-3">Verificando sessão de estudos...</span>
+      </div>
+    );
+  }
+
+  // 3. Se não autenticado: bloqueio total e exibição da tela de autenticação
+  if (!user) {
+    return <AuthView />;
+  }
+
   return (
     <div className="relative h-screen h-[100dvh] max-h-screen max-h-[100dvh] text-[#25252A] flex flex-col font-sans bg-transparent overflow-hidden">
       {/* 1. PAPEL DE PAREDE FIXO GLOBAL (Estúdio Cinematográfico com Guitarra Elétrica e Bateria) */}
@@ -513,9 +542,6 @@ function MainAppContent() {
         {/* Floating Offline Notification Status */}
         <OfflineIndicator />
       </div>
-
-      {/* Abertura Premium (Splash Screen Fase 5.2) */}
-      {showSplash && <SplashScreen onFinish={() => setShowSplash(false)} />}
 
       {/* Modais de Autenticação Google, Perfil do Aluno e Migração Segura */}
       <LoginModal 

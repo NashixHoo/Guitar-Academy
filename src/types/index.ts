@@ -513,4 +513,31 @@ export * from './teacher';
 export * from '../academia/core/types';
 export * from '../academia/curriculum/masterCurriculumRegistry';
 
+// =============================================================
+// IDENTIDADE DE ALUNOS & AUTENTICAÇÃO (FASE DE AUTENTICAÇÃO OBRIGATÓRIA)
+// =============================================================
+export type AuthProviderType = 'google.com' | 'facebook.com' | 'apple.com' | 'password';
+export type UserRole = 'student' | 'admin' | 'teacher';
+export type AccountStatus = 'active' | 'inactive' | 'suspended';
+
+export interface StudentProfile {
+  uid: string;
+  displayName: string;
+  email: string;
+  photoURL?: string | null;
+  provider: AuthProviderType | string;
+  createdAt: string;
+  lastLoginAt: string;
+  lastSeenAt: string;
+  accountStatus: AccountStatus;
+  role: UserRole;
+  enrolledCourses: string[];
+  preferences?: {
+    theme?: 'light' | 'dark' | 'system';
+    metronomeSound?: string;
+    preferredInstrument?: string;
+  };
+}
+
+
 

@@ -1,72 +1,223 @@
 import React, { useState } from 'react';
 import { ChordShape } from '../../types';
+import { ChordShapeDef } from '../../chords/shapes';
 import { audioEngine } from '../../audio/audioEngine';
-import { getChordFrequencies } from '../../data/chordDatabase';
-import { Play, Music } from 'lucide-react';
+import { getChordFrequencies, CHORD_DATABASE } from '../../data/chordDatabase';
+import { STANDARD_TUNING, getFretNote } from '../../data/musicTheory';
+import { Play, Music, Sparkles } from 'lucide-react';
 
-interface ChordDiagramProps {
-  chord: ChordShape;
-  size?: 'sm' | 'md' | 'lg';
+export interface ChordDiagramData {
+  symbol?: string;
+  namePt?: string;
+  category?: string;
+  formula?: string;
+  frets: number[]; // 6 cordas: index 0 (6ª Mi grave) até index 5 (1ª Mi aguda). -1 = X, 0 = O
+  fingers?: number[]; // Dedos: 0 = solta/nenhum, 1=indicador, 2=médio, 3=anelar, 4=mínimo
+  baseFret?: number; // Casa inicial se > 1
+  barre?: { fret: number; fromString: number; toString: number };
+  notes?: string[];
+  notesPt?: string[];
+  tips?: string;
+  cagedForm?: string | null;
+  position?: string;
+}
+
+export interface ChordDiagramProps {
+  chord?: ChordShape | ChordShapeDef | ChordDiagramData | null;
+  frets?: number[];
+  fingers?: number[];
+  symbol?: string;
+  namePt?: string;
+  baseFret?: number;
+  barre?: { fret: number; fromString: number; toString: number };
+  notes?: string[];
+  notesPt?: string[];
+  formula?: string;
+  category?: string;
+  cagedForm?: string | null;
+  size?: 'xs' | 'sm' | 'md' | 'lg';
   showDetails?: boolean;
+  showAudio?: boolean;
+  showTitle?: boolean;
+  compact?: boolean;
+  className?: string;
 }
 
 export const ChordDiagram: React.FC<ChordDiagramProps> = ({
   chord,
+  frets: propFrets,
+  fingers: propFingers,
+  symbol: propSymbol,
+  namePt: propNamePt,
+  baseFret: propBaseFret,
+  barre: propBarre,
+  notes: propNotes,
+  notesPt: propNotesPt,
+  formula: propFormula,
+  category: propCategory,
+  cagedForm: propCagedForm,
   size = 'md',
   showDetails = true,
+  showAudio = true,
+  showTitle = true,
+  compact = false,
+  className = '',
 }) => {
   const [isPlaying, setIsPlaying] = useState(false);
 
+  // Unificação dos dados do acorde (props diretas ou objeto chord)
+  const effectiveFrets = propFrets || chord?.frets || [-1, 3, 2, 0, 1, 0];
+  const effectiveFingers = propFingers || chord?.fingers || [0, 3, 2, 0, 1, 0];
+  const effectiveSymbol = propSymbol || (chord as any)?.symbol || (chord as any)?.chord || 'Acorde';
+  const effectiveNamePt = propNamePt || (chord as any)?.namePt || '';
+  const effectiveCategory = propCategory || (chord as any)?.category || (chord as any)?.position || '';
+  const effectiveFormula = propFormula || (chord as any)?.formula || '';
+  const effectiveNotes = propNotes || (chord as any)?.notes || [];
+  const effectiveNotesPt = propNotesPt || (chord as any)?.notesPt || [];
+  const effectiveCagedForm = propCagedForm || (chord as any)?.cagedForm || null;
+
+  // Cálculo da casa base (baseFret)
+  // Se não foi explicitamente fornecido, calcula a menor casa pressionada (> 0)
+  const pressedFrets = effectiveFrets.filter((f) => f > 0);
+  const minFret = pressedFrets.length > 0 ? Math.min(...pressedFrets) : 1;
+  const maxFret = pressedFrets.length > 0 ? Math.max(...pressedFrets) : 1;
+  const rawBaseFret = propBaseFret !== undefined ? propBaseFret : (chord as any)?.baseFret;
+  const effectiveBaseFret = rawBaseFret !== undefined ? rawBaseFret : maxFret > 4 ? minFret : 1;
+
+  // Detecção automática de pestana (barre) caso não esteja explicitada no objeto
+  const effectiveBarre = React.useMemo(() => {
+    if (propBarre) return propBarre;
+    if ((chord as any)?.barre) return (chord as any).barre;
+
+    // Detecta se dedo 1 é usado em 2 ou mais cordas na mesma casa
+    const fretOccurrences: Record<number, number[]> = {};
+    effectiveFrets.forEach((f, stringIdx) => {
+      if (f > 0) {
+        const finger = effectiveFingers[stringIdx];
+        if (finger === 1 || (finger === 0 && f === effectiveBaseFret)) {
+          if (!fretOccurrences[f]) fretOccurrences[f] = [];
+          fretOccurrences[f].push(stringIdx);
+        }
+      }
+    });
+
+    for (const fretStr of Object.keys(fretOccurrences)) {
+      const f = parseInt(fretStr, 10);
+      const stringsWithFret = fretOccurrences[f];
+      if (stringsWithFret.length >= 2) {
+        // Encontra a corda mais grave (menor index = maior corda, ex: 0 = 6ª corda)
+        // e a corda mais aguda (maior index = menor corda, ex: 5 = 1ª corda)
+        const minStringIdx = Math.min(...stringsWithFret);
+        const maxStringIdx = Math.max(...stringsWithFret);
+        if (maxStringIdx - minStringIdx >= 1) {
+          return {
+            fret: f,
+            fromString: 6 - minStringIdx, // 6ª corda
+            toString: 6 - maxStringIdx   // 1ª corda
+          };
+        }
+      }
+    }
+    return undefined;
+  }, [propBarre, chord, effectiveFrets, effectiveFingers, effectiveBaseFret]);
+
+  // Reprodução de áudio do acorde
   const handlePlayChord = (arpeggio: boolean = false) => {
     setIsPlaying(true);
-    const freqs = getChordFrequencies(chord);
-    audioEngine.playChord(freqs, arpeggio, 25);
+    let freqs: number[] = [];
+
+    // Tenta encontrar o acorde no banco oficial para frequências ricas
+    const fromDb = CHORD_DATABASE.find((c) => c.symbol === effectiveSymbol);
+    if (fromDb) {
+      freqs = getChordFrequencies(fromDb);
+    } else {
+      // Calcula frequências físicas baseadas nas casas pressionadas na afinação padrão EADGBE
+      effectiveFrets.forEach((fret, stringIdx) => {
+        if (fret >= 0) {
+          const stringNumber = 6 - stringIdx;
+          const strDef = STANDARD_TUNING.find((s) => s.stringNumber === stringNumber);
+          if (strDef) {
+            const note = getFretNote(strDef, fret);
+            freqs.push(note.frequencyHz);
+          }
+        }
+      });
+    }
+
+    if (freqs.length > 0) {
+      audioEngine.playChord(freqs, arpeggio, 25);
+    }
     setTimeout(() => setIsPlaying(false), arpeggio ? 1200 : 800);
   };
 
+  // Dimensões do diagrama SVG responsivo
   const dimensions = {
-    sm: { width: 140, height: 170, startX: 20, startY: 35, stringGap: 20, fretGap: 24, radius: 7 },
-    md: { width: 180, height: 215, startX: 25, startY: 42, stringGap: 26, fretGap: 30, radius: 9 },
-    lg: { width: 220, height: 260, startX: 30, startY: 50, stringGap: 32, fretGap: 36, radius: 11 },
+    xs: { width: 110, height: 130, startX: 16, startY: 26, stringGap: 15, fretGap: 18, radius: 5.5, fontSize: 8 },
+    sm: { width: 135, height: 160, startX: 20, startY: 32, stringGap: 19, fretGap: 22, radius: 7, fontSize: 9 },
+    md: { width: 175, height: 210, startX: 25, startY: 40, stringGap: 25, fretGap: 29, radius: 8.5, fontSize: 10 },
+    lg: { width: 220, height: 260, startX: 30, startY: 48, stringGap: 32, fretGap: 36, radius: 11, fontSize: 12 },
   }[size];
 
-  const { width, height, startX, startY, stringGap, fretGap, radius } = dimensions;
-  const numFrets = 4;
-  const baseFret = chord.baseFret || 1;
+  const { width, height, startX, startY, stringGap, fretGap, radius, fontSize } = dimensions;
+  const numFrets = 4; // 4 casas visíveis (padrão conservatório / Cifra Club)
 
   return (
-    <div className="flex flex-col items-center bg-white border border-[#D9D9D9] rounded-2xl p-4 shadow-xs hover:border-[#7B1E2B] transition-all group">
+    <div
+      className={`flex flex-col items-center bg-white border border-[#D9D9D9] rounded-2xl p-3 sm:p-4 shadow-xs hover:border-[#7B1E2B] transition-all group ${className}`}
+    >
       {/* Chord Header */}
-      <div className="text-center w-full mb-2">
-        <div className="flex items-center justify-between">
-          <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-[#F5E8EA] text-[#7B1E2B] border border-[#E8D3D6]">
-            {chord.category}
-          </span>
-          <span className="text-xs font-mono-code font-bold text-[#B52A3A]">
-            {chord.formula}
-          </span>
-        </div>
-        <h3 className="text-2xl font-black text-[#25252A] mt-1 group-hover:text-[#7B1E2B] transition-colors">
-          {chord.symbol}
-        </h3>
-        <p className="text-xs text-[#666672] font-medium">{chord.namePt}</p>
-      </div>
+      {showTitle && (
+        <div className="text-center w-full mb-1.5">
+          <div className="flex items-center justify-between gap-1">
+            {effectiveCagedForm ? (
+              <span className="text-[10px] font-mono-code font-bold px-2 py-0.5 rounded-md bg-[#F5E8EA] text-[#7B1E2B] border border-[#E8D3D6]">
+                Forma {effectiveCagedForm}
+              </span>
+            ) : effectiveCategory ? (
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-[#F8F7F4] text-[#666672] border border-[#D9D9D9]">
+                {effectiveCategory}
+              </span>
+            ) : <span />}
 
-      {/* SVG Chord Box */}
-      <div className="relative my-1">
-        <svg width={width} height={height} className="select-none">
-          {/* Top Nut or Base Fret Number */}
-          {baseFret === 1 ? (
+            {effectiveFormula && (
+              <span className="text-[11px] font-mono-code font-bold text-[#B52A3A]">
+                {effectiveFormula}
+              </span>
+            )}
+          </div>
+
+          <h3 className={`${size === 'xs' ? 'text-lg' : size === 'sm' ? 'text-xl' : 'text-2xl'} font-black text-[#25252A] mt-0.5 group-hover:text-[#7B1E2B] transition-colors font-mono-code`}>
+            {effectiveSymbol}
+          </h3>
+
+          {effectiveNamePt && !compact && (
+            <p className="text-[11px] text-[#666672] font-medium truncate">{effectiveNamePt}</p>
+          )}
+        </div>
+      )}
+
+      {/* SVG Chord Box Inspired by Cifra Club Vertical Standard */}
+      <div className="relative my-1 select-none flex justify-center">
+        <svg
+          width={width}
+          height={height}
+          viewBox={`0 0 ${width} ${height}`}
+          className="overflow-visible"
+        >
+          {/* Top Nut or Base Fret Marker */}
+          {effectiveBaseFret === 1 ? (
+            // Pestana superior (Nut grossa preta para casa 1)
             <line
               x1={startX}
               y1={startY}
               x2={startX + 5 * stringGap}
               y2={startY}
               stroke="#25252A"
-              strokeWidth="5"
+              strokeWidth={size === 'xs' ? '4' : '5'}
               strokeLinecap="round"
             />
           ) : (
+            // Traste superior simples com indicação da casa ao lado
             <>
               <line
                 x1={startX}
@@ -77,20 +228,20 @@ export const ChordDiagram: React.FC<ChordDiagramProps> = ({
                 strokeWidth="2"
               />
               <text
-                x={startX - 14}
+                x={startX - (size === 'xs' ? 10 : 14)}
                 y={startY + fretGap / 1.5}
                 fill="#7B1E2B"
-                fontSize="11"
-                fontWeight="bold"
+                fontSize={fontSize}
+                fontWeight="900"
                 fontFamily="JetBrains Mono, monospace"
                 textAnchor="middle"
               >
-                {baseFret}ª
+                {effectiveBaseFret}ª
               </text>
             </>
           )}
 
-          {/* Horizontal Fret Lines (Silver) */}
+          {/* Horizontal Fret Lines (Trastes Prateados) */}
           {Array.from({ length: numFrets + 1 }).map((_, f) => (
             <line
               key={`fret-${f}`}
@@ -103,7 +254,7 @@ export const ChordDiagram: React.FC<ChordDiagramProps> = ({
             />
           ))}
 
-          {/* Vertical String Lines (Chrome graphite) */}
+          {/* Vertical String Lines (6 cordas: 6ª à esquerda, 1ª à direita) */}
           {Array.from({ length: 6 }).map((_, s) => (
             <line
               key={`string-${s}`}
@@ -112,27 +263,55 @@ export const ChordDiagram: React.FC<ChordDiagramProps> = ({
               x2={startX + s * stringGap}
               y2={startY + numFrets * fretGap}
               stroke="#666672"
-              strokeWidth={s === 0 ? '2.5' : s === 5 ? '1' : '1.8'}
+              strokeWidth={s === 0 ? '2.5' : s === 5 ? '1' : s === 1 ? '2.2' : s === 2 ? '1.8' : '1.4'}
             />
           ))}
 
-          {/* Barre Indicator if exists (Wine Red) */}
-          {chord.barre && (
-            <rect
-              x={startX + (6 - chord.barre.fromString) * stringGap - radius}
-              y={startY + (chord.barre.fret - baseFret + 0.5) * fretGap - radius}
-              width={(chord.barre.fromString - chord.barre.toString) * stringGap + 2 * radius}
-              height={2 * radius}
-              rx={radius}
-              fill="#7B1E2B"
-              fillOpacity="0.9"
-            />
+          {/* Pestana (Barre) contínua desenhada como pílula sólida */}
+          {effectiveBarre && effectiveBarre.fret >= effectiveBaseFret && (
+            (() => {
+              const fromIdx = 6 - effectiveBarre.fromString; // 6ª corda = index 0
+              const toIdx = 6 - effectiveBarre.toString;     // 1ª corda = index 5
+              const relFret = effectiveBarre.fret - effectiveBaseFret + 1;
+              const y = startY + (relFret - 0.5) * fretGap;
+              const x1 = startX + fromIdx * stringGap;
+              const x2 = startX + toIdx * stringGap;
+              const barLeft = Math.min(x1, x2) - radius * 0.9;
+              const barWidth = Math.abs(x2 - x1) + radius * 1.8;
+
+              return (
+                <g key={`barre-${effectiveBarre.fret}`}>
+                  <rect
+                    x={barLeft}
+                    y={y - radius}
+                    width={barWidth}
+                    height={radius * 2}
+                    rx={radius}
+                    fill="#7B1E2B"
+                    stroke="#FFFFFF"
+                    strokeWidth="1.2"
+                  />
+                  {/* Número do dedo indicador na pestana */}
+                  <text
+                    x={barLeft + radius * 0.9}
+                    y={y + (fontSize * 0.35)}
+                    textAnchor="middle"
+                    fill="#FFFFFF"
+                    fontSize={fontSize}
+                    fontWeight="bold"
+                    fontFamily="JetBrains Mono, monospace"
+                  >
+                    1
+                  </text>
+                </g>
+              );
+            })()
           )}
 
-          {/* Open / Muted string markers above nut */}
-          {chord.frets.map((fretVal, stringIdx) => {
+          {/* Open / Muted string markers above nut (✕ para abafada, ○ para solta) */}
+          {effectiveFrets.map((fretVal, stringIdx) => {
             const x = startX + stringIdx * stringGap;
-            const y = startY - 12;
+            const y = startY - (size === 'xs' ? 7 : 10);
 
             if (fretVal === -1) {
               return (
@@ -142,8 +321,8 @@ export const ChordDiagram: React.FC<ChordDiagramProps> = ({
                   y={y}
                   textAnchor="middle"
                   fill="#B52A3A"
-                  fontSize="12"
-                  fontWeight="bold"
+                  fontSize={fontSize + 1}
+                  fontWeight="900"
                   fontFamily="sans-serif"
                 >
                   ✕
@@ -155,24 +334,36 @@ export const ChordDiagram: React.FC<ChordDiagramProps> = ({
                 <circle
                   key={`open-${stringIdx}`}
                   cx={x}
-                  cy={y - 4}
-                  r="4"
+                  cy={y - 3}
+                  r={radius * 0.45}
                   fill="none"
                   stroke="#7B1E2B"
-                  strokeWidth="1.8"
+                  strokeWidth="1.6"
                 />
               );
             }
             return null;
           })}
 
-          {/* Finger / Dot Markers on frets (Wine Red with White number) */}
-          {chord.frets.map((fretVal, stringIdx) => {
+          {/* Pontos de Digitação nos Trastes (Finger Dots) */}
+          {effectiveFrets.map((fretVal, stringIdx) => {
             if (fretVal > 0) {
               const x = startX + stringIdx * stringGap;
-              const relativeFret = fretVal - baseFret + 1;
+              const relativeFret = fretVal - effectiveBaseFret + 1;
+              if (relativeFret < 1 || relativeFret > numFrets) return null;
+
               const y = startY + (relativeFret - 0.5) * fretGap;
-              const finger = chord.fingers[stringIdx];
+              const finger = effectiveFingers[stringIdx] || 0;
+
+              // Se a nota estiver coberta pela pestana desenhada na mesma casa com dedo 1, pula para não sobrepor
+              const isCoveredByBarre =
+                effectiveBarre &&
+                effectiveBarre.fret === fretVal &&
+                finger === 1 &&
+                stringIdx > (6 - effectiveBarre.fromString) &&
+                stringIdx <= (6 - effectiveBarre.toString);
+
+              if (isCoveredByBarre) return null;
 
               return (
                 <g key={`dot-${stringIdx}-${fretVal}`}>
@@ -187,10 +378,10 @@ export const ChordDiagram: React.FC<ChordDiagramProps> = ({
                   {finger > 0 && (
                     <text
                       x={x}
-                      y={y + 3.5}
+                      y={y + (fontSize * 0.35)}
                       textAnchor="middle"
                       fill="#FFFFFF"
-                      fontSize={radius > 8 ? '10' : '9'}
+                      fontSize={fontSize}
                       fontWeight="bold"
                       fontFamily="JetBrains Mono, monospace"
                     >
@@ -205,42 +396,43 @@ export const ChordDiagram: React.FC<ChordDiagramProps> = ({
         </svg>
       </div>
 
-      {/* Notes Breakdown */}
-      {showDetails && (
+      {/* Breakdown de Notas Teóricas */}
+      {showDetails && effectiveNotes.length > 0 && !compact && (
         <div className="w-full mt-2 pt-2 border-t border-[#D9D9D9] text-center">
-          <div className="text-[11px] text-[#666672] flex justify-center items-center gap-1">
-            <span>Notas:</span>
-            <span className="font-bold text-[#25252A] font-mono-code">
-              {chord.notes.join(' - ')}
-            </span>
+          <div className="text-[11px] text-[#666672] flex justify-center items-center gap-1 font-mono-code font-bold">
+            <span className="text-[#25252A]">{effectiveNotes.join(' - ')}</span>
           </div>
-          <div className="text-[10px] text-[#666672]">
-            ({chord.notesPt.join(', ')})
-          </div>
+          {effectiveNotesPt.length > 0 && (
+            <div className="text-[10px] text-[#666672]">
+              ({effectiveNotesPt.join(', ')})
+            </div>
+          )}
         </div>
       )}
 
-      {/* Audio Playback Buttons */}
-      <div className="flex items-center gap-2 mt-3 w-full">
-        <button
-          onClick={() => handlePlayChord(false)}
-          disabled={isPlaying}
-          className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 bg-[#7B1E2B] hover:bg-[#B52A3A] text-white rounded-xl text-xs font-bold transition shadow-xs"
-          title="Tocar acorde batido"
-        >
-          <Play className="w-3.5 h-3.5 fill-current" />
-          <span>Batida</span>
-        </button>
-        <button
-          onClick={() => handlePlayChord(true)}
-          disabled={isPlaying}
-          className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 bg-[#F8F7F4] hover:bg-[#F5E8EA] text-[#7B1E2B] border border-[#D9D9D9] rounded-xl text-xs font-bold transition"
-          title="Tocar arpejo corda a corda"
-        >
-          <Music className="w-3.5 h-3.5 text-[#7B1E2B]" />
-          <span>Dedilhado</span>
-        </button>
-      </div>
+      {/* Áudio Playback Buttons */}
+      {showAudio && (
+        <div className="flex items-center gap-1.5 mt-2.5 w-full">
+          <button
+            onClick={() => handlePlayChord(false)}
+            disabled={isPlaying}
+            className="flex-1 flex items-center justify-center gap-1 py-1 px-2 bg-[#7B1E2B] hover:bg-[#B52A3A] text-white rounded-xl text-[11px] font-bold transition shadow-xs disabled:opacity-50"
+            title="Tocar acorde batido"
+          >
+            <Play className="w-3 h-3 fill-current" />
+            <span>Batida</span>
+          </button>
+          <button
+            onClick={() => handlePlayChord(true)}
+            disabled={isPlaying}
+            className="flex-1 flex items-center justify-center gap-1 py-1 px-2 bg-[#F8F7F4] hover:bg-[#F5E8EA] text-[#7B1E2B] border border-[#D9D9D9] rounded-xl text-[11px] font-bold transition disabled:opacity-50"
+            title="Tocar arpejo corda a corda"
+          >
+            <Music className="w-3 h-3 text-[#7B1E2B]" />
+            <span>Dedilhado</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 };

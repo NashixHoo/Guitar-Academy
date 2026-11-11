@@ -1,43 +1,72 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { 
   User, 
-  signInWithGoogle as fbSignIn, 
+  signInWithGoogle as fbSignInGoogle, 
+  signInWithFacebook as fbSignInFacebook,
+  signInWithApple as fbSignInApple,
+  signInWithEmail as fbSignInEmail,
+  signUpWithEmail as fbSignUpEmail,
+  sendPasswordReset as fbSendPasswordReset,
   logOut as fbLogOut, 
+  fetchUserProfile,
+  updateUserLastSeen,
+  mapFirebaseAuthError,
   onAuthStateChanged,
   auth
 } from '../services/firebase';
 import { storageService } from '../services/storageService';
-import { UserProgress } from '../types';
+import { UserProgress, StudentProfile } from '../types';
 
 export type SyncStatus = 'synced' | 'syncing' | 'offline' | 'error';
 
 interface AuthContextType {
   user: User | null;
+  studentProfile: StudentProfile | null;
+  isAdmin: boolean;
   loading: boolean;
   syncStatus: SyncStatus;
   lastSyncedAt: Date | null;
   authError: string | null;
+  authSuccessMessage: string | null;
   showLegacyModal: boolean;
   signInWithGoogle: () => Promise<void>;
+  signInWithFacebook: () => Promise<void>;
+  signInWithApple: () => Promise<void>;
+  signInWithEmail: (email: string, pass: string) => Promise<void>;
+  signUpWithEmail: (name: string, email: string, pass: string) => Promise<void>;
+  sendPasswordReset: (email: string) => Promise<void>;
   logOut: () => Promise<void>;
   clearAuthError: () => void;
+  clearAuthSuccess: () => void;
   syncNow: () => Promise<void>;
   handleLegacyChoice: (choice: 'import' | 'fresh') => Promise<void>;
   dismissLegacyModal: () => void;
   refreshProgress: () => UserProgress;
+  refreshUserProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [studentProfile, setStudentProfile] = useState<StudentProfile | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('synced');
   const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [authSuccessMessage, setAuthSuccessMessage] = useState<string | null>(null);
   const [showLegacyModal, setShowLegacyModal] = useState<boolean>(false);
 
-  // Inicialização preventiva de arquivamento de dados legados
+  const refreshUserProfile = useCallback(async () => {
+    if (!auth.currentUser) {
+      setStudentProfile(null);
+      return;
+    }
+    const profile = await fetchUserProfile(auth.currentUser.uid);
+    setStudentProfile(profile);
+  }, []);
+
+  // Inicialização preventiva de arquivamento de dados legados e listener de autenticação
   useEffect(() => {
     storageService.archiveLegacyData();
 
@@ -45,6 +74,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setUser(currentUser);
       if (currentUser) {
         storageService.setCurrentUser(currentUser.uid);
+
+        // Carrega o perfil do estudante do Firestore
+        try {
+          const profile = await fetchUserProfile(currentUser.uid);
+          setStudentProfile(profile);
+          updateUserLastSeen(currentUser.uid);
+        } catch {
+          // offline fallback
+        }
 
         // Verifica se há dados legados anteriores e se este usuário ainda não possui histórico isolado
         const userHasLocal = storageService.hasUserLocalData(currentUser.uid);
@@ -69,6 +107,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
       } else {
         // Sessão desconectada: limpa ponteiro do usuário ativo
+        setStudentProfile(null);
         storageService.setCurrentUser(null);
         setShowLegacyModal(false);
         setSyncStatus('synced');
@@ -79,23 +118,95 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return () => unsubscribe();
   }, []);
 
+  const clearAuthError = useCallback(() => {
+    setAuthError(null);
+  }, []);
+
+  const clearAuthSuccess = useCallback(() => {
+    setAuthSuccessMessage(null);
+  }, []);
+
   const signInWithGoogle = useCallback(async () => {
     setAuthError(null);
+    setAuthSuccessMessage(null);
     try {
-      await fbSignIn();
+      await fbSignInGoogle();
+      await refreshUserProfile();
     } catch (err: any) {
       console.error('Falha no login com Google:', err);
-      let userFriendlyMsg = 'Não foi possível concluir o login com o Google. Tente novamente.';
-      if (err?.code === 'auth/popup-closed-by-user') {
-        userFriendlyMsg = 'A janela de autenticação com o Google foi fechada antes da conclusão.';
-      } else if (err?.code === 'auth/popup-blocked') {
-        userFriendlyMsg = 'O pop-up de login foi bloqueado pelo navegador. Por favor, autorize pop-ups para esta página.';
-      } else if (err?.code === 'auth/network-request-failed') {
-        userFriendlyMsg = 'Falha de conexão com a internet. Verifique sua rede e tente novamente.';
-      } else if (err?.code === 'auth/cancelled-popup-request') {
-        userFriendlyMsg = 'A solicitação de login anterior foi cancelada.';
-      }
-      setAuthError(userFriendlyMsg);
+      const friendly = mapFirebaseAuthError(err);
+      setAuthError(friendly);
+      throw err;
+    }
+  }, [refreshUserProfile]);
+
+  const signInWithFacebook = useCallback(async () => {
+    setAuthError(null);
+    setAuthSuccessMessage(null);
+    try {
+      await fbSignInFacebook();
+      await refreshUserProfile();
+    } catch (err: any) {
+      console.error('Falha no login com Facebook:', err);
+      const friendly = mapFirebaseAuthError(err);
+      setAuthError(friendly);
+      throw err;
+    }
+  }, [refreshUserProfile]);
+
+  const signInWithApple = useCallback(async () => {
+    setAuthError(null);
+    setAuthSuccessMessage(null);
+    try {
+      await fbSignInApple();
+      await refreshUserProfile();
+    } catch (err: any) {
+      console.error('Falha no login com Apple:', err);
+      const friendly = mapFirebaseAuthError(err);
+      setAuthError(friendly);
+      throw err;
+    }
+  }, [refreshUserProfile]);
+
+  const signInWithEmail = useCallback(async (email: string, pass: string) => {
+    setAuthError(null);
+    setAuthSuccessMessage(null);
+    try {
+      await fbSignInEmail(email, pass);
+      await refreshUserProfile();
+    } catch (err: any) {
+      console.error('Falha no login com e-mail/senha:', err);
+      const friendly = mapFirebaseAuthError(err);
+      setAuthError(friendly);
+      throw err;
+    }
+  }, [refreshUserProfile]);
+
+  const signUpWithEmail = useCallback(async (name: string, email: string, pass: string) => {
+    setAuthError(null);
+    setAuthSuccessMessage(null);
+    try {
+      await fbSignUpEmail(name, email, pass);
+      await refreshUserProfile();
+      setAuthSuccessMessage('Conta criada com sucesso! Seja bem-vindo à Guitar Academy.');
+    } catch (err: any) {
+      console.error('Falha no cadastro com e-mail/senha:', err);
+      const friendly = mapFirebaseAuthError(err);
+      setAuthError(friendly);
+      throw err;
+    }
+  }, [refreshUserProfile]);
+
+  const sendPasswordReset = useCallback(async (email: string) => {
+    setAuthError(null);
+    setAuthSuccessMessage(null);
+    try {
+      await fbSendPasswordReset(email);
+      setAuthSuccessMessage('E-mail de recuperação enviado com sucesso! Verifique sua caixa de entrada.');
+    } catch (err: any) {
+      console.error('Falha na recuperação de senha:', err);
+      const friendly = mapFirebaseAuthError(err);
+      setAuthError(friendly);
       throw err;
     }
   }, []);
@@ -104,14 +215,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       await fbLogOut();
       storageService.setCurrentUser(null);
+      setStudentProfile(null);
+      setAuthError(null);
+      setAuthSuccessMessage(null);
     } catch (err: any) {
       console.error('Erro ao efetuar logout:', err);
       setAuthError('Erro ao desconectar sua conta.');
     }
-  }, []);
-
-  const clearAuthError = useCallback(() => {
-    setAuthError(null);
   }, []);
 
   const syncNow = useCallback(async () => {
@@ -149,22 +259,37 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return storageService.loadProgress(user?.uid);
   }, [user]);
 
+  const isAdmin = Boolean(
+    (user?.email && user.email.toLowerCase() === 'dramosdasilva7@gmail.com') ||
+    studentProfile?.role === 'admin'
+  );
+
   return (
     <AuthContext.Provider
       value={{
         user,
+        studentProfile,
+        isAdmin,
         loading,
         syncStatus,
         lastSyncedAt,
         authError,
+        authSuccessMessage,
         showLegacyModal,
         signInWithGoogle,
+        signInWithFacebook,
+        signInWithApple,
+        signInWithEmail,
+        signUpWithEmail,
+        sendPasswordReset,
         logOut,
         clearAuthError,
+        clearAuthSuccess,
         syncNow,
         handleLegacyChoice,
         dismissLegacyModal,
         refreshProgress,
+        refreshUserProfile,
       }}
     >
       {children}
@@ -179,3 +304,4 @@ export const useAuth = () => {
   }
   return context;
 };
+

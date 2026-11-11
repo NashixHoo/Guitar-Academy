@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { STUDY_LIBRARY } from '../../data/studyLibrary';
+import { ChordDiagram } from '../chords/ChordDiagram';
 import { ChordEngine } from '../../chords/chord-engine';
 import { MusicIntelligence } from '../../music/music-intelligence';
 import { calculateKey, transposeChord } from '../../music/transposer';
@@ -424,19 +425,13 @@ export const StudyLibraryView: React.FC<StudyLibraryViewProps> = ({ onOpenMetron
                             Casa Base: {shape.baseFret}ª casa
                           </span>
                         </div>
-                        <div className="flex items-center justify-between gap-1 font-mono-code text-[11px] bg-[#F8F7F4] p-2 rounded-lg border border-[#E5E5E5]">
-                          {shape.frets.map((fret, fIdx) => (
-                            <div key={fIdx} className="text-center">
-                              <span className="text-[9px] text-[#666672] block">{6 - fIdx}ª</span>
-                              <span
-                                className={`font-bold block ${
-                                  fret === -1 ? 'text-rose-600' : fret === 0 ? 'text-emerald-600' : 'text-[#25252A]'
-                                }`}
-                              >
-                                {fret === -1 ? 'X' : fret === 0 ? 'O' : fret}
-                              </span>
-                            </div>
-                          ))}
+                        <div className="flex justify-center my-2">
+                          <ChordDiagram
+                            chord={shape}
+                            size="xs"
+                            showAudio={true}
+                            showTitle={false}
+                          />
                         </div>
                       </div>
                     ))}

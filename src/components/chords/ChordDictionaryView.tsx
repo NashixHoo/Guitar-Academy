@@ -620,6 +620,16 @@ export const ChordDictionaryView: React.FC<ChordDictionaryViewProps> = ({
                           <span className="text-xs font-bold text-[#25252A] block mt-1">{v.namePt}</span>
                           <span className="text-[11px] font-mono-code text-[#666672] block">Fórmula: {v.formula} ({v.notes})</span>
                           <p className="text-xs text-[#666672] mt-2 italic">"{v.vibe}"</p>
+
+                          <div className="flex justify-center my-2">
+                            <ChordDiagram
+                              frets={v.frets}
+                              symbol={v.symbol}
+                              size="xs"
+                              showAudio={false}
+                              showTitle={false}
+                            />
+                          </div>
                         </div>
 
                         <button
@@ -902,9 +912,13 @@ export const ChordDictionaryView: React.FC<ChordDictionaryViewProps> = ({
                     </span>
                   </div>
                   <h3 className="text-lg font-black text-[#25252A] font-mono-code mt-1">{shape.chord} (Formato {shape.cagedForm})</h3>
-                  <div className="text-[11px] font-mono-code text-[#666672] space-y-0.5 mt-2">
-                    <p>Trastes: [{shape.frets.join(', ')}]</p>
-                    <p>Dedos: [{shape.fingers.join(', ')}]</p>
+                  <div className="flex justify-center my-2">
+                    <ChordDiagram
+                      chord={shape}
+                      size="xs"
+                      showAudio={false}
+                      showTitle={false}
+                    />
                   </div>
                 </div>
 
@@ -998,6 +1012,18 @@ export const ChordDictionaryView: React.FC<ChordDictionaryViewProps> = ({
                 {validationResult.bassNote && (
                   <p>Baixo resultante: <strong className="text-[#7B1E2B] font-mono-code">{validationResult.bassNote}</strong></p>
                 )}
+              </div>
+
+              {/* Diagrama Visual em Tempo Real */}
+              <div className="pt-3 border-t border-[#D9D9D9] flex flex-col items-center">
+                <span className="text-[10px] font-bold text-[#666672] uppercase mb-1">Visualização no Braço:</span>
+                <ChordDiagram
+                  frets={validatorFrets}
+                  symbol={validatorTargetChord}
+                  size="sm"
+                  showAudio={true}
+                  showTitle={false}
+                />
               </div>
             </div>
           </div>

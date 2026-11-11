@@ -11,6 +11,7 @@ import { UserProgress, NavigationTab } from '../../types';
 import { audioEngine } from '../../audio/audioEngine';
 import { guitarPitchDetector, PitchDetectionResult, NOTE_NAMES_PT } from '../../audio/guitarPitchDetector';
 import { CHORD_DATABASE } from '../../data/chordDatabase';
+import { ChordDiagram } from '../chords/ChordDiagram';
 import { getChordShapes } from '../../chords/shapes';
 import { parseChordSymbol } from '../../chords/chord-builder';
 import { storageService } from '../../services/storageService';
@@ -186,12 +187,16 @@ export const GuitarCoachView: React.FC<GuitarCoachViewProps> = ({
     const fromDb = CHORD_DATABASE.find(c => c.symbol === currentChordSymbol);
     const parsed = parseChordSymbol(currentChordSymbol);
     const shapes = getChordShapes(currentChordSymbol);
+    const activeShape = shapes[0] || fromDb;
     return {
       symbol: currentChordSymbol,
       namePt: fromDb?.namePt || `${currentChordSymbol}`,
       root: parsed?.root || currentChordSymbol.replace(/[^A-G#b]/g, ''),
       notes: fromDb?.notes || parsed?.notes || [],
-      frets: shapes[0]?.frets || fromDb?.frets || [-1, -1, -1, -1, -1, -1],
+      frets: activeShape?.frets || [-1, -1, -1, -1, -1, -1],
+      fingers: activeShape?.fingers || [0, 0, 0, 0, 0, 0],
+      baseFret: activeShape?.baseFret || 1,
+      barre: (activeShape as any)?.barre || fromDb?.barre,
       description: fromDb?.description || 'Toque as cordas com clareza e ritmo firme.'
     };
   }, [currentChordSymbol]);
@@ -200,10 +205,14 @@ export const GuitarCoachView: React.FC<GuitarCoachViewProps> = ({
   const nextChordDetails = useMemo(() => {
     const fromDb = CHORD_DATABASE.find(c => c.symbol === nextChordSymbol);
     const shapes = getChordShapes(nextChordSymbol);
+    const activeShape = shapes[0] || fromDb;
     return {
       symbol: nextChordSymbol,
       namePt: fromDb?.namePt || `${nextChordSymbol}`,
-      frets: shapes[0]?.frets || fromDb?.frets || [-1, -1, -1, -1, -1, -1]
+      frets: activeShape?.frets || [-1, -1, -1, -1, -1, -1],
+      fingers: activeShape?.fingers || [0, 0, 0, 0, 0, 0],
+      baseFret: activeShape?.baseFret || 1,
+      barre: (activeShape as any)?.barre || fromDb?.barre
     };
   }, [nextChordSymbol]);
 
@@ -742,12 +751,12 @@ export const GuitarCoachView: React.FC<GuitarCoachViewProps> = ({
 
         {/* Acordes em Destaque: TOCAR AGORA vs PREPARAR DEDOS */}
         <div className="grid grid-cols-1 md:grid-cols-5 items-center gap-6 max-w-3xl mx-auto py-2">
-          {/* Acorde Atual (Gigante) */}
-          <div className="md:col-span-2 space-y-2">
+          {/* Acorde Atual (Gigante com Diagrama Visual) */}
+          <div className="md:col-span-2 space-y-2 flex flex-col items-center">
             <span className="text-xs uppercase font-extrabold tracking-widest text-[#B52A3A]">
               Tocar Agora
             </span>
-            <div className="text-7xl sm:text-8xl font-black text-white tracking-tighter drop-shadow-[0_0_25px_rgba(255,255,255,0.25)]">
+            <div className="text-6xl sm:text-7xl font-black text-white tracking-tighter drop-shadow-[0_0_25px_rgba(255,255,255,0.25)]">
               {currentChordDetails.symbol}
             </div>
             <div className="text-sm font-semibold text-[#D9D9D9]">
@@ -755,6 +764,20 @@ export const GuitarCoachView: React.FC<GuitarCoachViewProps> = ({
             </div>
             <div className="text-[11px] text-[#A6A6B2]">
               Notas: {currentChordDetails.notes.join(' - ')}
+            </div>
+
+            <div className="mt-2 bg-black/30 p-2 rounded-2xl border border-white/10">
+              <ChordDiagram
+                frets={currentChordDetails.frets}
+                fingers={currentChordDetails.fingers}
+                baseFret={currentChordDetails.baseFret}
+                barre={currentChordDetails.barre}
+                symbol={currentChordDetails.symbol}
+                size="sm"
+                showAudio={false}
+                showTitle={false}
+                showDetails={false}
+              />
             </div>
           </div>
 
@@ -766,12 +789,12 @@ export const GuitarCoachView: React.FC<GuitarCoachViewProps> = ({
             </span>
           </div>
 
-          {/* Próximo Acorde (Preparação) */}
-          <div className="md:col-span-2 space-y-2 opacity-90">
+          {/* Próximo Acorde (Preparação com Diagrama Visual) */}
+          <div className="md:col-span-2 space-y-2 opacity-90 flex flex-col items-center">
             <span className="text-xs uppercase font-extrabold tracking-widest text-[#A6A6B2]">
               Preparar Dedos
             </span>
-            <div className="text-5xl sm:text-6xl font-black text-[#E8D3D6] tracking-tight">
+            <div className="text-4xl sm:text-5xl font-black text-[#E8D3D6] tracking-tight">
               {nextChordDetails.symbol}
             </div>
             <div className="text-sm font-semibold text-[#A6A6B2]">
@@ -779,6 +802,20 @@ export const GuitarCoachView: React.FC<GuitarCoachViewProps> = ({
             </div>
             <div className="text-[11px] text-[#8C8C9A]">
               Antecipe o posicionamento
+            </div>
+
+            <div className="mt-2 bg-black/30 p-2 rounded-2xl border border-white/10">
+              <ChordDiagram
+                frets={nextChordDetails.frets}
+                fingers={nextChordDetails.fingers}
+                baseFret={nextChordDetails.baseFret}
+                barre={nextChordDetails.barre}
+                symbol={nextChordDetails.symbol}
+                size="xs"
+                showAudio={false}
+                showTitle={false}
+                showDetails={false}
+              />
             </div>
           </div>
         </div>
