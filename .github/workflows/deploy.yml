@@ -44,6 +44,8 @@ jobs:
         run: npm test
 
       - name: Build production for GitHub Pages
+        env:
+          BASE_URL: '/Guitar-Academy/'
         run: npm run build:gh-pages
 
       - name: Verify production output
