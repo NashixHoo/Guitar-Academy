@@ -1,4 +1,5 @@
-name: Deploy to GitHub Pages
+
+name: Deploy Guitar Academy to GitHub Pages
 
 on:
   push:
@@ -6,21 +7,20 @@ on:
       - main
   workflow_dispatch:
 
-# Permissões necessárias para publicar no GitHub Pages via GitHub Actions
 permissions:
   contents: read
   pages: write
   id-token: write
 
-# Permite apenas um deploy simultâneo, enfileirando execuções pendentes
 concurrency:
-  group: 'pages'
-  cancel-in-progress: false
+  group: pages
+  cancel-in-progress: true
 
 jobs:
   build:
-    name: Build & Test
+    name: Build and Test
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -28,40 +28,48 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: 'npm'
+          node-version: 24
+          cache: npm
+
+      - name: Synchronize dependency lock
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --no-audit --no-fund
 
-      - name: Run Linting & Typecheck
+      - name: Run TypeScript validation
         run: npm run lint
 
-      - name: Run Integration Tests
+      - name: Run integration tests
         run: npm test
 
-      - name: Build production bundle for GitHub Pages
-        run: npm run build
-        env:
-          GITHUB_ACTIONS: 'true'
-          BASE_URL: '/Guitar-Academy/'
+      - name: Build production for GitHub Pages
+        run: npm run build:gh-pages
 
-      - name: Setup GitHub Pages
+      - name: Verify production output
+        run: |
+          test -f dist/index.html
+          test -d dist/assets
+          echo "Build output validated."
+
+      - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
 
-      - name: Upload dist artifact
+      - name: Upload production artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: './dist'
+          path: ./dist
 
   deploy:
-    name: Deploy to GitHub Pages
+    name: Publish GitHub Pages
+    runs-on: ubuntu-latest
+    needs: build
+
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
-    needs: build
+
     steps:
-      - name: Deploy to GitHub Pages
+      - name: Deploy production
         id: deployment
         uses: actions/deploy-pages@v4
