@@ -321,6 +321,15 @@ export const MetronomeView: React.FC = () => {
             <Zap className="w-4 h-4 text-[#B52A3A]" />
             <span>Tap Tempo</span>
           </button>
+
+          <button
+            onClick={() => audioEngine.testMetronomeSound()}
+            className="flex items-center gap-2 bg-[#F8F7F4] hover:bg-[#F5E8EA] hover:text-[#7B1E2B] active:scale-95 text-[#25252A] border border-[#D9D9D9] px-4 py-3.5 rounded-2xl font-bold text-sm transition shadow-xs"
+            title="Testar clique do metrônomo imediatamente"
+          >
+            <Volume2 className="w-4 h-4 text-[#7B1E2B]" />
+            <span>Testar som</span>
+          </button>
         </div>
 
         {/* Measure Count & Training Timer Banner */}

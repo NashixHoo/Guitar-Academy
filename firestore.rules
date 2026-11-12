@@ -10,56 +10,83 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
-    function isTeacher() {
-      return isAuthenticated() && (
-        request.auth.token.email == 'dramosdasilva7@gmail.com' ||
-        exists(/databases/$(database)/documents/system_roles/$(request.auth.uid))
-      );
-    }
-
     function isValidId(id) {
       return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-\\.:]+$');
     }
 
-    // 1. Dados dos Estudantes: Leitura pelo aluno e professor autorizado; Escrita estrita pelo aluno
-    match /users/{userId} {
-      allow read: if (isOwner(userId) || isTeacher()) && isValidId(userId);
-      allow write: if isOwner(userId) && isValidId(userId);
+    // Validação de papéis baseada estritamente no CONTEÚDO de system_roles (imutável pelo cliente)
+    function isAdmin() {
+      return isAuthenticated() &&
+        exists(/databases/$(database)/documents/system_roles/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/system_roles/$(request.auth.uid)).data.role == 'admin';
+    }
 
+    function isTeacher() {
+      return isAuthenticated() &&
+        exists(/databases/$(database)/documents/system_roles/$(request.auth.uid)) &&
+        (get(/databases/$(database)/documents/system_roles/$(request.auth.uid)).data.role == 'teacher' ||
+         get(/databases/$(database)/documents/system_roles/$(request.auth.uid)).data.role == 'admin');
+    }
+
+    // 1. Dados dos Estudantes
+    // Leitura: somente o próprio estudante ou administrador autorizado.
+    // Alunos comuns NUNCA podem consultar dados de outros alunos ou listar a coleção.
+    // Escrita: Aluno grava seus dados, mas NUNCA pode atribuir ou alterar privilégios (role).
+    match /users/{userId} {
+      allow get: if (isOwner(userId) || isAdmin()) && isValidId(userId);
+      allow list: if isAdmin();
+      allow create: if isOwner(userId) && isValidId(userId) &&
+        (!('role' in request.resource.data) || request.resource.data.role == 'student') &&
+        (!('isAdmin' in request.resource.data) || request.resource.data.isAdmin == false) &&
+        (!('isTeacher' in request.resource.data) || request.resource.data.isTeacher == false);
+      allow update: if isOwner(userId) && isValidId(userId) &&
+        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'isTeacher', 'isAdmin', 'permissions']));
+      allow delete: if isAdmin() && isValidId(userId);
+
+      // Subcoleções isoladas (ex: progresso /users/{userId}/data/progress)
       match /{allSubcollections=**} {
-        allow read: if (isOwner(userId) || isTeacher()) && isValidId(userId);
-        // O professor NÃO pode alterar arbitrariamente o progresso do estudante
+        allow read: if (isOwner(userId) || isAdmin()) && isValidId(userId);
         allow write: if isOwner(userId) && isValidId(userId);
       }
     }
 
-    // 2. Turmas Pedagógicas (Classes): Gerenciadas pelo professor; consulta por alunos autenticados
+    // 2. Turmas Pedagógicas (Classes):
+    // Professores e administradores gerenciam suas turmas;
+    // Alunos somente podem consultar a turma se forem matriculados nela.
     match /classes/{classId} {
-      allow read: if isAuthenticated() && isValidId(classId);
+      allow get: if isAuthenticated() && isValidId(classId) && (
+        isTeacher() || exists(/databases/$(database)/documents/classes/$(classId)/students/$(request.auth.uid))
+      );
+      allow list: if isTeacher();
       allow create, update, delete: if isTeacher() && isValidId(classId);
 
-      // Matrículas de Alunos na Turma
+      // Matrículas de Alunos na Turma:
+      // O aluno somente pode ver sua própria matrícula; professor vê as da turma.
       match /students/{studentId} {
         allow read: if (isOwner(studentId) || isTeacher()) && isValidId(studentId);
         allow create: if (isOwner(studentId) || isTeacher()) && isValidId(studentId);
         allow update, delete: if isTeacher() && isValidId(studentId);
       }
 
-      // Eventos Analíticos Educacionais da Turma
+      // Eventos Analíticos Educacionais da Turma:
+      // O aluno NÃO pode registrar eventos em nome de terceiros.
       match /events/{eventId} {
         allow read: if isTeacher() && isValidId(eventId);
-        allow create: if isAuthenticated() && isValidId(eventId);
+        allow create: if isAuthenticated() && isValidId(eventId) &&
+          request.resource.data.studentUid == request.auth.uid;
         allow update, delete: if false;
       }
     }
 
-    // 3. Papéis do Sistema: Imutáveis pelo cliente para impedir auto-atribuição de permissões
+    // 3. Papéis do Sistema (system_roles):
+    // Imutável pelo cliente para impedir qualquer auto-atribuição de permissões.
+    // Escrita estritamente bloqueada (somente via Firebase Admin SDK no servidor).
     match /system_roles/{userId} {
-      allow read: if (isOwner(userId) || isTeacher()) && isValidId(userId);
+      allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin()) && isValidId(userId);
       allow write: if false;
     }
 
-    // Bloqueio explícito por padrão contra acessos não autorizados
+    // Bloqueio padrão para qualquer caminho não explicitamente autorizado
     match /{document=**} {
       allow read, write: if false;
     }

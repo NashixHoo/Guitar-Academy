@@ -94,6 +94,8 @@ export function mapFirebaseAuthError(error: any): string {
       return 'Falha na conexão com a internet. Verifique sua rede e tente novamente.';
     case 'auth/too-many-requests':
       return 'Muitas tentativas sem sucesso. Por favor, aguarde alguns minutos e tente novamente.';
+    case 'auth/unauthorized-domain':
+      return 'Domínio da aplicação não autorizado no Firebase Console. Para que o login funcione, adicione o domínio atual em: Console Firebase > Authentication > Settings > Authorized Domains.';
     case 'auth/operation-not-allowed':
       return 'Este provedor de autenticação ainda não foi ativado no console administrativo do Firebase.';
     case 'auth/configuration-not-found':
@@ -215,7 +217,53 @@ export async function logOut(): Promise<void> {
 }
 
 /**
- * Salva ou atualiza os metadados do estudante no Firestore (users/{uid})
+ * Valida o documento de papel do sistema recuperado de system_roles/{uid}.
+ * Documentos sem campo role, com role inválido ou com role 'student' NUNCA concedem privilégios.
+ */
+export function parseSystemRoleDoc(data: any): UserRole {
+  if (!data || typeof data !== 'object') return 'student';
+  if (data.role === 'admin') return 'admin';
+  if (data.role === 'teacher') return 'teacher';
+  return 'student';
+}
+
+/**
+ * Consulta a fonte autoritativa única de papéis em system_roles/{uid}.
+ * Somente o servidor administrativo com Admin SDK pode alterar este documento.
+ * Qualquer erro de leitura, ausência de documento ou ausência do campo role resulta em 'student'.
+ */
+export async function fetchSystemRole(
+  uid: string,
+  testDocProvider?: (uid: string) => Promise<any>
+): Promise<UserRole> {
+  if (!uid || typeof uid !== 'string') return 'student';
+
+  // Suporte a injeção determinística de provedor de documento em suítes de testes unitários
+  if (testDocProvider) {
+    try {
+      const data = await testDocProvider(uid);
+      return parseSystemRoleDoc(data);
+    } catch {
+      return 'student';
+    }
+  }
+
+  try {
+    const roleRef = doc(db, 'system_roles', uid);
+    const snap = await getDoc(roleRef);
+    if (snap.exists()) {
+      return parseSystemRoleDoc(snap.data());
+    }
+    return 'student';
+  } catch (err) {
+    console.warn('Não foi possível consultar system_roles (fail-closed Zero-Trust):', err);
+    return 'student';
+  }
+}
+
+/**
+ * Salva ou atualiza os metadados do estudante no Firestore (users/{uid}).
+ * SEGURANÇA: Não permite que o cliente defina o campo `role` ou privilégios administrativos.
  */
 export async function saveUserProfile(user: User): Promise<StudentProfile | null> {
   try {
@@ -226,11 +274,10 @@ export async function saveUserProfile(user: User): Promise<StudentProfile | null
     // Detecta provedor
     const providerId = (user.providerData[0]?.providerId as AuthProviderType) || 'password';
 
-    // Determina papel (superadmin pré-definido ou existente)
-    const isAdminEmail = user.email?.toLowerCase() === 'dramosdasilva7@gmail.com';
-    const role: UserRole = isAdminEmail ? 'admin' : (existingData?.role || 'student');
+    // O papel confiável é consultado em system_roles/{uid}, NUNCA atribuído pelo cliente
+    const authoritativeRole = await fetchSystemRole(user.uid);
 
-    const profileData: StudentProfile = {
+    const profileData = {
       uid: user.uid,
       displayName: user.displayName || existingData?.displayName || 'Estudante Guitar Academy',
       email: user.email || '',
@@ -240,7 +287,6 @@ export async function saveUserProfile(user: User): Promise<StudentProfile | null
       lastLoginAt: user.metadata.lastSignInTime || new Date().toISOString(),
       lastSeenAt: new Date().toISOString(),
       accountStatus: existingData?.accountStatus || 'active',
-      role,
       enrolledCourses: existingData?.enrolledCourses || ['violao'],
       preferences: existingData?.preferences || {
         theme: 'light',
@@ -257,7 +303,10 @@ export async function saveUserProfile(user: User): Promise<StudentProfile | null
       { merge: true }
     );
 
-    return profileData;
+    return {
+      ...profileData,
+      role: authoritativeRole,
+    };
   } catch (err) {
     console.warn('Não foi possível sincronizar o perfil no Firestore (modo offline):', err);
     return null;
@@ -265,14 +314,22 @@ export async function saveUserProfile(user: User): Promise<StudentProfile | null
 }
 
 /**
- * Recupera o perfil do estudante no Firestore
+ * Recupera o perfil do estudante no Firestore combinando dados de perfil com o papel confiável
  */
 export async function fetchUserProfile(uid: string): Promise<StudentProfile | null> {
   try {
     const userRef = doc(db, 'users', uid);
-    const snapshot = await getDoc(userRef);
+    const [snapshot, role] = await Promise.all([
+      getDoc(userRef),
+      fetchSystemRole(uid),
+    ]);
+
     if (snapshot.exists()) {
-      return snapshot.data() as StudentProfile;
+      const data = snapshot.data();
+      return {
+        ...(data as StudentProfile),
+        role,
+      };
     }
     return null;
   } catch (err) {

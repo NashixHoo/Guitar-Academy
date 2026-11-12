@@ -2989,23 +2989,25 @@ import {
   TeacherFilterState 
 } from './src/types/index';
 
-// 21.1 Resolução de Papéis e Permissões (RBAC)
-const teacherRole = await TeacherService.resolveUserRole('teacher_uid', 'dramosdasilva7@gmail.com');
+// 21.1 Resolução de Papéis e Permissões (RBAC) via system_roles/{uid} (Zero-Trust)
+const teacherRole = await TeacherService.resolveUserRole('teacher_uid', async (uid) => {
+  return uid === 'teacher_uid' ? { role: 'teacher' } : null;
+});
 assert(
-  teacherRole === 'admin' || teacherRole === 'teacher',
-  '21.1 Email institucional do coordenador dramosdasilva7@gmail.com resolve perfil administrativo/docente'
+  teacherRole === 'teacher',
+  '21.1 Fonte autoritativa system_roles/{uid} resolve perfil docente para UID autorizado'
 );
 
-const studentRole = await TeacherService.resolveUserRole('student_uid_1', 'aluno.iniciante@gmail.com');
+const studentRole = await TeacherService.resolveUserRole('student_uid_1', async () => null);
 assert(
   studentRole === 'student',
-  '21.1 Email de aluno comum resolve estritamente perfil student sem privilégios administrativos'
+  '21.1 Usuário sem documento em system_roles resolve estritamente perfil student sem privilégios'
 );
 
 // 21.2 Criação Segura de Turmas e Geração de Código de Convite
 const newClass = await TeacherService.createClass(
   'teacher_uid',
-  'dramosdasilva7@gmail.com',
+  'coordenador@guitaracademy.com',
   'Prof. Dennis',
   'Turma Conservatório Violão Noite',
   'Turma noturna focada nas 60 aulas de Violão'
@@ -3194,14 +3196,14 @@ assert(
 const firestoreRulesText = fs.readFileSync('firestore.rules', 'utf-8');
 assert(
   firestoreRulesText.includes('isTeacher()') &&
-  firestoreRulesText.includes('dramosdasilva7@gmail.com'),
-  '21.9 firestore.rules valida explicitamente a credencial do professor via token.email ou system_roles'
+  firestoreRulesText.includes('system_roles'),
+  '21.9 firestore.rules valida explicitamente a credencial do professor via system_roles autorizativo'
 );
 assert(
   firestoreRulesText.includes('match /users/{userId}') &&
-  firestoreRulesText.includes('isOwner(userId) || isTeacher()') &&
-  firestoreRulesText.includes('allow write: if isOwner(userId)'),
-  '21.9 firestore.rules permite leitura autorizada ao professor mas impede escrita no progresso do aluno'
+  firestoreRulesText.includes('isOwner(userId) || isAdmin()') &&
+  firestoreRulesText.includes('allow create: if isOwner(userId)'),
+  '21.9 firestore.rules permite leitura autorizada ao administrador mas impede escrita no progresso do aluno por terceiros'
 );
 assert(
   firestoreRulesText.includes('match /classes/{classId}') &&
@@ -3219,9 +3221,8 @@ assert(
 
 const teacherHeaderCode = fs.readFileSync('src/components/layout/Header.tsx', 'utf-8');
 assert(
-  teacherHeaderCode.includes('dramosdasilva7@gmail.com') &&
-  teacherHeaderCode.includes('teacher-dashboard'),
-  '21.10 Header.tsx exibe atalho de acesso ao Painel de Gestão para o professor autorizado'
+  !teacherHeaderCode.includes('dramosdasilva7@gmail.com'),
+  '21.10 Header.tsx não expõe emails hardcoded garantindo isolamento entre aluno e administração'
 );
 
 const userProfileModalCode = fs.readFileSync('src/components/profile/UserProfileModal.tsx', 'utf-8');
@@ -4721,8 +4722,7 @@ assert(
   '28.12 firebase.ts exporta métodos para Google, Facebook, Apple, E-mail Login, E-mail Cadastro e Reset de Senha'
 );
 
-// 28.13 Tradutor de Erros do Firebase (mapFirebaseAuthError)
-import { mapFirebaseAuthError } from './src/services/firebase';
+import { mapFirebaseAuthError, parseSystemRoleDoc, fetchSystemRole } from './src/services/firebase';
 
 assert(
   mapFirebaseAuthError({ code: 'auth/invalid-email' }).includes('E-mail com formato inválido'),
@@ -4782,6 +4782,399 @@ assert(
   '28.22 AuthContext limpa o ponteiro de usuário ativo e o perfil na desconexão imediata'
 );
 
+// -------------------------------------------------------------
+// GRUPO 29: FASE DE SEPARAÇÃO DE AMBIENTES (ALUNO VS ADMIN), RBAC & BACKEND HARDENING
+// -------------------------------------------------------------
+console.log('\n--- GRUPO 29: Separação de Ambientes Aluno vs Admin, RBAC Zero-Trust & Backend Hardening ---');
+
+// 29.1 Existência e Estrutura do Portal Administrativo (AdminPortalView.tsx)
+const adminPortalExists = fs.existsSync('src/components/admin/AdminPortalView.tsx');
+assert(adminPortalExists, '29.01 Componente AdminPortalView.tsx existe em src/components/admin/');
+
+const adminPortalCode = fs.readFileSync('src/components/admin/AdminPortalView.tsx', 'utf-8');
+assert(
+  adminPortalCode.includes('Guitar Academy') &&
+  (adminPortalCode.includes('Admin Suite') || adminPortalCode.includes('Portal Administrativo')),
+  '29.02 AdminPortalView exibe cabeçalho oficial do Portal Administrativo'
+);
+assert(
+  adminPortalCode.includes('overview') &&
+  adminPortalCode.includes('students') &&
+  adminPortalCode.includes('classes') &&
+  adminPortalCode.includes('courses') &&
+  adminPortalCode.includes('reports') &&
+  adminPortalCode.includes('security'),
+  '29.03 AdminPortalView possui as 6 seções mestras de governança'
+);
+assert(
+  adminPortalCode.includes('setAdminPreviewMode(true)') || adminPortalCode.includes('Ver como Aluno'),
+  '29.04 AdminPortalView permite alternância para modo de visualização de aluno (Ver como Aluno)'
+);
+
+// 29.5 Isolamento Rigoroso da Interface do Aluno (Header.tsx e Navigation.tsx)
+const headerSourceCode = fs.readFileSync('src/components/layout/Header.tsx', 'utf-8');
+assert(
+  !headerSourceCode.includes('dramosdasilva7@gmail.com'),
+  '29.05 Header.tsx não contém nenhum email hardcoded para exibição de botões administrativos'
+);
+assert(
+  headerSourceCode.includes('Retornar ao Painel Admin') && headerSourceCode.includes('isAdmin && adminPreviewMode'),
+  '29.06 Header.tsx exibe retorno ao painel administrativo EXCLUSIVAMENTE para administradores em modo preview'
+);
+
+const navCode = fs.readFileSync('src/components/layout/Navigation.tsx', 'utf-8');
+assert(
+  !navCode.includes('teacher-dashboard') && !navCode.includes('isTeacher'),
+  '29.07 Navigation.tsx do aluno não expõe abas ou rotas administrativas (teacher-dashboard)'
+);
+
+// 29.8 Isolamento no Roteador Principal (App.tsx)
+const appRootCode = fs.readFileSync('src/App.tsx', 'utf-8');
+assert(
+  appRootCode.includes("tab === 'teacher-dashboard' && !isAdmin") &&
+  appRootCode.includes("setCurrentTab('home');"),
+  '29.08 App.tsx bloqueia redireciona qualquer tentativa de acesso indevido de alunos a abas administrativas para home'
+);
+assert(
+  appRootCode.includes('if (isAdmin && !adminPreviewMode)') &&
+  appRootCode.includes('<AdminPortalView />'),
+  '29.09 App.tsx monta o AdminPortalView exclusivamente para administradores autenticados fora do modo preview'
+);
+
+// 29.10 Zero-Trust e Papéis Autorizativos em firestore.rules
+const rulesText = fs.readFileSync('firestore.rules', 'utf-8');
+assert(
+  rulesText.includes('function isAdmin()') &&
+  rulesText.includes('request.auth != null') &&
+  rulesText.includes("get(/databases/$(database)/documents/system_roles/$(request.auth.uid)).data.role == 'admin'"),
+  '29.10 firestore.rules baseia a checagem de isAdmin exclusivamente na coleção protegida system_roles'
+);
+assert(
+  rulesText.includes('match /system_roles/{userId}') &&
+  rulesText.includes('allow write: if false;'),
+  '29.11 firestore.rules bloqueia qualquer escrita de clientes na coleção system_roles'
+);
+assert(
+  rulesText.includes('match /users/{userId}') &&
+  rulesText.includes('(!request.resource.data.diff(resource.data).affectedKeys().hasAny([') &&
+  rulesText.includes("'role'"),
+  '29.12 firestore.rules impede que clientes alterem seu próprio papel (role) no documento users'
+);
+
+// 29.13 Proteção Criptográfica do Backend (server.ts)
+const serverCode = fs.readFileSync('server.ts', 'utf-8');
+assert(
+  serverCode.includes('import admin from \'firebase-admin\'') &&
+  serverCode.includes('admin.initializeApp'),
+  '29.13 server.ts inicializa o Firebase Admin SDK para verificação de tokens'
+);
+assert(
+  serverCode.includes('export async function requireAuth') &&
+  serverCode.includes('admin.auth().verifyIdToken(token)'),
+  '29.14 server.ts define middleware requireAuth com validação de ID Token Bearer'
+);
+assert(
+  serverCode.includes("app.post('/api/professor/chat', requireAuth") &&
+  serverCode.includes("app.post('/api/professor/exercise', requireAuth") &&
+  serverCode.includes("app.post('/api/professor/evaluate', requireAuth") &&
+  serverCode.includes("app.post('/api/professor/recommend', requireAuth"),
+  '29.15 Todos os endpoints do Professor IA em server.ts estão protegidos por requireAuth'
+);
+assert(
+  serverCode.includes("app.get('/api/health'"),
+  '29.16 server.ts fornece endpoint /api/health para monitoramento em produção e Cloud Run'
+);
+assert(
+  serverCode.includes('Access-Control-Allow-Origin') &&
+  serverCode.includes('Access-Control-Allow-Headers'),
+  '29.17 server.ts configura CORS com suporte a requisições com Authorization Bearer'
+);
+
+// 29.18 Transmissão de Tokens no Cliente (professorService.ts)
+const profServiceCode = fs.readFileSync('src/services/professorService.ts', 'utf-8');
+assert(
+  profServiceCode.includes('getIdToken()') &&
+  profServiceCode.includes("headers['Authorization']"),
+  '29.18 professorService.ts injeta token de autenticação em todas as requisições'
+);
+assert(
+  profServiceCode.includes('VITE_PROFESSOR_API_URL'),
+  '29.19 professorService.ts suporta configuração de URL externa de backend (VITE_PROFESSOR_API_URL)'
+);
+
+// 29.20 Isolamento do Service Worker contra Cache de Rotas de API (vite.config.ts)
+const viteConfigSW = fs.readFileSync('vite.config.ts', 'utf-8');
+assert(
+  viteConfigSW.includes('navigateFallbackDenylist') &&
+  viteConfigSW.includes('NetworkOnly'),
+  '29.20 vite.config.ts instrui o Workbox a nunca armazenar em cache respostas ou tokens de rotas /api/'
+);
+
+// 29.21 Tradução de auth/unauthorized-domain
+assert(
+  mapFirebaseAuthError({ code: 'auth/unauthorized-domain' }).includes('Domínio da aplicação não autorizado no Firebase'),
+  '29.21 mapFirebaseAuthError traduz auth/unauthorized-domain orientando configuração no Firebase Console'
+);
+
+// =============================================================
+// GRUPO 30 — SMART TUNER V1.2 & COMPLETE AUDIO SYSTEM
+// Sensibilidade, Subgraves B0/E1, Ponteiro Ágil, Síntese Acústica e Metrônomo
+// =============================================================
+
+console.log('\n--- GRUPO 30: SMART TUNER V1.2 & COMPLETE AUDIO SYSTEM ---');
+
+// 30.1 Parâmetros de Alta Sensibilidade do Detector Acústico
+const v12Detector = new GuitarPitchDetector();
+assert(
+  (v12Detector as any).silenceThreshold <= 0.005 &&
+  (v12Detector as any).confidenceThreshold <= 0.60 &&
+  (v12Detector as any).bufferSize >= 4096,
+  '30.1 GuitarPitchDetector V1.2 adota parâmetros calibrados para alta sensibilidade (silence <= 0.005, conf <= 0.60, buffer >= 4096)'
+);
+
+// 30.2 Detecção de Sinal Periódico Suave (toque de baixa intensidade sem corte artificial)
+const softSampleRate = 44100;
+const softBufferSize = 4096;
+const softBuffer = new Float32Array(softBufferSize);
+const softFreq = 110; // A2
+for (let i = 0; i < softBufferSize; i++) {
+  // RMS ~ 0.006 (sinal suave mas com formato de onda puro e periódico)
+  softBuffer[i] = 0.0085 * Math.sin((2 * Math.PI * softFreq * i) / softSampleRate);
+}
+const softDetection = v12Detector.detectPitchFromBuffer(softBuffer, softSampleRate);
+assert(
+  softDetection !== null && !softDetection.isSilence && Math.abs(softDetection.frequency - 110) < 3.0,
+  `30.2 GuitarPitchDetector detecta notas suaves e periódicas sem rejeição indevida de silêncio (detectado: ${softDetection?.frequency} Hz)`
+);
+
+// 30.3 Detecção Precisa de Subgraves — Contrabaixo (B0 = 30.87 Hz e E1 = 41.2 Hz)
+const bassSampleRate = 44100;
+const bassBufferSize = 8192;
+const b0Buffer = new Float32Array(bassBufferSize);
+const b0Freq = 30.87;
+for (let i = 0; i < bassBufferSize; i++) {
+  b0Buffer[i] = 0.25 * Math.sin((2 * Math.PI * b0Freq * i) / bassSampleRate) +
+                0.10 * Math.sin((2 * Math.PI * b0Freq * 2 * i) / bassSampleRate);
+}
+const b0Detection = v12Detector.detectPitchFromBuffer(b0Buffer, bassSampleRate, { lowCutoff: 25, highCutoff: 400 });
+assert(
+  b0Detection !== null && Math.abs(b0Detection.frequency - 30.87) < 2.0 && b0Detection.note === 'B',
+  `30.3 GuitarPitchDetector com decimação YIN identifica com precisão a corda Si mais grave do Baixo (B0 ~ 30.87 Hz, detectado: ${b0Detection?.frequency} Hz, nota: ${b0Detection?.note})`
+);
+
+const e1Buffer = new Float32Array(bassBufferSize);
+const e1Freq = 41.2;
+for (let i = 0; i < bassBufferSize; i++) {
+  e1Buffer[i] = 0.3 * Math.sin((2 * Math.PI * e1Freq * i) / bassSampleRate);
+}
+const e1Detection = v12Detector.detectPitchFromBuffer(e1Buffer, bassSampleRate, { lowCutoff: 25, highCutoff: 400 });
+assert(
+  e1Detection !== null && Math.abs(e1Detection.frequency - 41.2) < 2.0 && e1Detection.note === 'E',
+  `30.4 GuitarPitchDetector identifica com estabilidade a corda Mi do Baixo de 4 cordas (E1 ~ 41.2 Hz, detectado: ${e1Detection?.frequency} Hz)`
+);
+
+// 30.5 TunerSmoother V1.2: Alphas Ágeis (0.28 / 0.18 / 0.08) e Sem Falsos Positivos de Afinação
+const fastSmoother = new TunerSmoother();
+assert(
+  (fastSmoother as any).alphaStandard === 0.28 &&
+  (fastSmoother as any).alphaNear === 0.18 &&
+  (fastSmoother as any).alphaDeadZone === 0.08,
+  '30.5 TunerSmoother adota alphas de resposta rápida (0.28 standard, 0.18 near, 0.08 dead zone) para ponteiro ágil e vivo'
+);
+
+// Envia nota fora de afinação (+18 cents)
+fastSmoother.feedPitch({
+  frequency: 444.6,
+  note: 'A',
+  notePt: 'Lá',
+  octave: 4,
+  cents: 18,
+  confidence: 0.95,
+  intensity: 0.6,
+  isSilence: false,
+  isWeakSignal: false,
+  isOnset: false,
+  detectionType: 'monophonic_note',
+  stability: 95,
+  stabilityLabel: 'Estável',
+  expectedFreq: 440,
+  diffHz: 4.6,
+  timestamp: performance.now(),
+});
+const outOfTuneState = fastSmoother.step();
+assert(
+  outOfTuneState.isInTune === false && outOfTuneState.state !== 'in_tune',
+  '30.6 TunerSmoother jamais marca isInTune como verdadeiro enquanto a frequência alvo estiver fora da tolerância'
+);
+
+// Envia nota perfeitamente afinada (0 cents)
+fastSmoother.reset();
+fastSmoother.feedPitch({
+  frequency: 440.0,
+  note: 'A',
+  notePt: 'Lá',
+  octave: 4,
+  cents: 0.0,
+  confidence: 0.98,
+  intensity: 0.7,
+  isSilence: false,
+  isWeakSignal: false,
+  isOnset: false,
+  detectionType: 'monophonic_note',
+  stability: 100,
+  stabilityLabel: 'Excelente',
+  expectedFreq: 440,
+  diffHz: 0,
+  timestamp: performance.now(),
+});
+// Processa alguns steps para estabilizar o filtro
+for (let i = 0; i < 5; i++) {
+  fastSmoother.step();
+}
+const inTuneState = fastSmoother.step();
+assert(
+  inTuneState.isInTune === true && inTuneState.note === 'A',
+  '30.7 TunerSmoother valida afinação confirmada (isInTune: true) no centro com alta confiança'
+);
+
+// 30.8 TunerView: Orientação Visual de Tarraxa (▲ APERTAR / ▼ AFROUXAR / ✓ AFINADA)
+const tunerViewCode = fs.readFileSync('src/components/tuner/TunerView.tsx', 'utf-8');
+assert(
+  tunerViewCode.includes('▲ APERTAR') &&
+  tunerViewCode.includes('▼ AFROUXAR') &&
+  tunerViewCode.includes('✓ AFINADA'),
+  '30.8 TunerView.tsx implementa orientação inequívoca de rotação da tarraxa (▲ APERTAR / ▼ AFROUXAR / ✓ AFINADA)'
+);
+assert(
+  tunerViewCode.includes('Ação / Direção') &&
+  tunerViewCode.includes('Desvio Cents'),
+  '30.9 TunerView.tsx exibe bloco dedicado com ação recomendada, desvio, frequências e confiança'
+);
+
+// 30.10 AudioEngine: Métodos Centrais e Timbre Multi-Instrumento
+assert(
+  typeof (audioEngine as any).playNote === 'function' &&
+  typeof (audioEngine as any).playReferenceTone === 'function' &&
+  typeof (audioEngine as any).playMetronomeClick === 'function' &&
+  typeof (audioEngine as any).testMetronomeSound === 'function' &&
+  typeof (audioEngine as any).playExample === 'function' &&
+  typeof (audioEngine as any).stopAllSounds === 'function',
+  '30.10 AudioEngine disponibiliza API centralizada completa (playNote, playReferenceTone, playMetronomeClick, testMetronomeSound, playExample, stopAllSounds)'
+);
+
+const audioEngineCode = fs.readFileSync('src/audio/audioEngine.ts', 'utf-8');
+assert(
+  audioEngineCode.includes("'guitar'") &&
+  audioEngineCode.includes("'violao'") &&
+  audioEngineCode.includes("'bass'") &&
+  audioEngineCode.includes("'piano'") &&
+  audioEngineCode.includes("'drums'"),
+  '30.11 AudioEngine implementa modelos de síntese acústica para guitarra, violão, contrabaixo, piano e percussão'
+);
+
+assert(
+  audioEngineCode.includes('pointerdown') &&
+  audioEngineCode.includes('touchstart') &&
+  audioEngineCode.includes('unlockAudio'),
+  '30.12 AudioEngine registra desbloqueio global imediato no primeiro gesto do usuário (pointerdown / touchstart / keydown)'
+);
+
+// 30.13 MetronomeView: Botão de Testar Som
+const metronomeViewCode = fs.readFileSync('src/components/metronome/MetronomeView.tsx', 'utf-8');
+assert(
+  metronomeViewCode.includes('testMetronomeSound') &&
+  metronomeViewCode.includes('Testar som'),
+  '30.13 MetronomeView.tsx oferece botão "Testar som" para homologação imediata de áudio do aluno'
+);
+
+// =============================================================
+// GRUPO 31 — AUTENTICAÇÃO ADMINISTRATIVA DEFINITIVA E ZERO-TRUST
+// Validação das 10 regras de segurança de system_roles/{uid}
+// =============================================================
+
+console.log('\n--- GRUPO 31: AUTENTICAÇÃO ADMINISTRATIVA DEFINITIVA E ZERO-TRUST ---');
+
+// 31.1 Aluno autenticado não acessa o painel administrativo
+const appCodeAudit = fs.readFileSync('src/App.tsx', 'utf-8');
+assert(
+  appCodeAudit.includes('if (isAdmin && !adminPreviewMode)') &&
+  appCodeAudit.includes('<AdminPortalView />') &&
+  appCodeAudit.includes('!isAdmin && currentTab === \'teacher-dashboard\''),
+  '31.1 App.tsx impede que alunos acessem o painel administrativo mesmo autenticados ou via URL direta'
+);
+
+// 31.2 Aluno não consegue promover a própria conta
+const rulesAudit = fs.readFileSync('firestore.rules', 'utf-8');
+assert(
+  rulesAudit.includes("!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'isTeacher', 'isAdmin', 'permissions'])"),
+  '31.2 firestore.rules bloqueia qualquer alteração de role, isAdmin, isTeacher ou permissions pelo próprio aluno em users/{userId}'
+);
+
+// 31.3 Documento sem campo role não concede privilégios
+assert(
+  parseSystemRoleDoc({}) === 'student' &&
+  parseSystemRoleDoc({ displayName: 'Administrator', uid: 'test_uid' }) === 'student' &&
+  parseSystemRoleDoc(null) === 'student',
+  '31.3 Documento em system_roles sem o campo explícito role não concede privilégios administrativos (resolve student)'
+);
+
+// 31.4 Documento com role: student não concede privilégios administrativos
+assert(
+  parseSystemRoleDoc({ role: 'student' }) === 'student' &&
+  parseSystemRoleDoc({ role: 'student', isAdmin: true }) === 'student',
+  '31.4 Documento com role: student não concede privilégios administrativos, ignorando flags arbitrárias do cliente'
+);
+
+// 31.5 Documento com role: admin autoriza o administrador correto
+assert(
+  parseSystemRoleDoc({ role: 'admin' }) === 'admin',
+  '31.5 Documento com role: admin autoriza com precisão o papel de administrador no sistema'
+);
+
+// 31.6 UID diferente não recebe a autorização de outro usuário
+const isolatedAdminUid = 'admin_legitimate_uid';
+const studentAttemptUid = 'student_intruder_uid';
+const roleResolvedForStudent = await fetchSystemRole(studentAttemptUid, async (targetUid) => {
+  return targetUid === isolatedAdminUid ? { role: 'admin' } : null;
+});
+assert(
+  roleResolvedForStudent === 'student',
+  '31.6 UID de aluno diferente não herda nem intercepta privilégios de outro UID cadastrado como admin'
+);
+
+// 31.7 Falha na consulta da função não libera acesso (Fail-Closed Zero-Trust)
+const failClosedRole = await fetchSystemRole('any_uid_network_error', async () => {
+  throw new Error('Timeout / Network Failure / Permission Denied');
+});
+assert(
+  failClosedRole === 'student',
+  '31.7 Falha de rede ou erro na leitura de system_roles nunca concede privilégios (princípio Fail-Closed Zero-Trust)'
+);
+
+// 31.8 Logout remove imediatamente o estado administrativo
+const authContextSource = fs.readFileSync('src/contexts/AuthContext.tsx', 'utf-8');
+assert(
+  authContextSource.includes('setUser(null)') &&
+  authContextSource.includes("setRole('student')") &&
+  authContextSource.includes('setAdminPreviewMode(false)') &&
+  authContextSource.includes('finally {'),
+  '31.8 logOut no AuthContext limpa incondicionalmente no bloco finally o usuário, o papel administrativo e o preview'
+);
+
+// 31.9 Rotas administrativas estão protegidas no cliente
+assert(
+  appCodeAudit.includes("if (tab === 'teacher-dashboard' && !isAdmin)") &&
+  appCodeAudit.includes("setCurrentTab('home')"),
+  '31.9 navigateToTab bloqueia navegação para rotas administrativas quando o usuário não possui isAdmin confirmado'
+);
+
+// 31.10 Regras do Firestore não permitem autoatribuição de privilégios
+assert(
+  rulesAudit.includes('match /system_roles/{userId}') &&
+  rulesAudit.includes('allow write: if false;'),
+  '31.10 firestore.rules bloqueia estritamente qualquer escrita de clientes em system_roles/{userId} (allow write: if false)'
+);
+
 console.log('\n===========================================================');
 console.log(`TOTAL DE TESTES: ${totalTests}`);
 console.log(`PASSOU: ${passedTests}`);
@@ -4791,8 +5184,9 @@ console.log('===========================================================');
 if (failedTests > 0) {
   process.exit(1);
 } else {
-  console.log('✓ Todos os testes de integração do motor musical, detector, currículo, Central de Prática, Busca Global, Diagramas Cifra Club e Autenticação Obrigatória foram APROVADOS com sucesso!\n');
+  console.log('✓ Todos os testes de integração do motor musical, detector, currículo, Central de Prática, Busca Global, Diagramas Cifra Club, Autenticação Obrigatória, Separação de Ambientes Aluno/Admin, Backend Hardening, SMART TUNER V1.2 e AUTENTICAÇÃO ADMINISTRATIVA DEFINITIVA foram APROVADOS com sucesso!\n');
   process.exit(0);
 }
+
 
 

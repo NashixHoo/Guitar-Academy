@@ -45,7 +45,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenAuth,
   onOpenProfile,
 }) => {
-  const { user, syncStatus } = useAuth();
+  const { user, syncStatus, isAdmin, adminPreviewMode, setAdminPreviewMode } = useAuth();
   const [volume, setVolume] = useState<number>(0.8);
   const [isMuted, setIsMuted] = useState<boolean>(false);
 
@@ -167,20 +167,14 @@ export const Header: React.FC<HeaderProps> = ({
         {/* PWA Install Button */}
         <PWAInstallButton variant="header" />
 
-        {/* Teacher Pedagogical Dashboard Quick Button (for dramosdasilva7@gmail.com) */}
-        {user?.email === 'dramosdasilva7@gmail.com' && (
+        {/* Botão de retorno ao painel administrativo exclusivo para administrador em modo preview */}
+        {isAdmin && adminPreviewMode && (
           <button
-            onClick={() => onNavigateTab?.('teacher-dashboard')}
-            className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition shadow-xs cursor-pointer h-9 sm:h-10 shrink-0 ${
-              currentTab === 'teacher-dashboard'
-                ? 'bg-amber-500 text-white border-amber-600'
-                : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 border-amber-500/30'
-            }`}
-            title="Abrir Painel de Gestão Pedagógica"
-            aria-label="Abrir Painel de Gestão Pedagógica"
+            onClick={() => setAdminPreviewMode(false)}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl bg-[#7B1E2B] hover:bg-[#B52A3A] text-white text-xs font-bold shadow-xs transition cursor-pointer"
+            title="Retornar ao Painel Admin"
           >
-            <GraduationCap className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-            <span className="hidden md:inline">Gestão</span>
+            <span>Retornar ao Painel Admin</span>
           </button>
         )}
 

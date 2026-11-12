@@ -1,7 +1,6 @@
 import React from 'react';
 import { NavigationTab } from '../../types';
-import { X, GraduationCap } from 'lucide-react';
-import { useAuth } from '../../contexts/AuthContext';
+import { X } from 'lucide-react';
 import {
   InicioIcon,
   AulasIcon,
@@ -36,8 +35,6 @@ export const Navigation: React.FC<NavigationProps> = ({
   isOpenMobile,
   onCloseMobile,
 }) => {
-  const { user } = useAuth();
-  const isTeacher = user?.email === 'dramosdasilva7@gmail.com';
 
   const pillars: {
     title: string;
@@ -70,9 +67,6 @@ export const Navigation: React.FC<NavigationProps> = ({
       title: '3. Evoluir',
       items: [
         { id: 'progress', label: 'Meu Progresso', icon: ConquistasIcon },
-        ...(isTeacher
-          ? [{ id: 'teacher-dashboard' as NavigationTab, label: 'Gestão Pedagógica', icon: GraduationCap, badge: 'Professor' }]
-          : []),
         { id: 'professor-ai', label: 'Professor IA', icon: ProfessorAIIcon, badge: 'Gemini' },
         { id: 'diagnostics', label: 'Diagnóstico do Sistema', icon: DiagnosticoIcon, badge: 'Auditoria' },
         { id: 'settings', label: 'Configurações', icon: ConfiguracoesIcon },

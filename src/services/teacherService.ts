@@ -11,7 +11,7 @@ import {
   StudentAnalyticsSummary,
   UserRole,
 } from '../types/teacher';
-import { db } from './firebase';
+import { db, fetchSystemRole } from './firebase';
 import {
   collection,
   doc,
@@ -42,9 +42,6 @@ export function getAllLessons() {
 import { storageService } from './storageService';
 import { UserProgress } from '../types';
 
-// E-mail verificado do Professor / Administrador do Guitar Academy
-export const ADMIN_TEACHER_EMAILS = ['dramosdasilva7@gmail.com'];
-
 // Chaves locais para resiliência offline
 const LOCAL_CLASSES_KEY = 'guitar_academy:teacher_classes_v1';
 const LOCAL_ENROLLMENTS_KEY = 'guitar_academy:teacher_enrollments_v1';
@@ -54,31 +51,12 @@ const LOCAL_STUDENT_CLASS_LINK_KEY = 'guitar_academy:student_class_link_v1';
 export class TeacherService {
   /**
    * Determina o papel do usuário (STUDENT, TEACHER ou ADMIN).
-   * Não confia em valores manipulados pelo cliente; consulta e-mail verificado ou doc do Firestore.
+   * Consulta a fonte autoritativa única protegida em system_roles/{uid}.
+   * NUNCA utiliza e-mails fixos ou endereços de e-mail como mecanismo de autorização.
    */
-  static async resolveUserRole(uid: string, email: string | null): Promise<UserRole> {
-    if (!uid || !email) return 'student';
-
-    // 1. Verificação autoritativa por e-mail administrador / fundador
-    if (ADMIN_TEACHER_EMAILS.includes(email.toLowerCase().trim())) {
-      return 'admin';
-    }
-
-    // 2. Consulta de papel no Firestore (/system_roles/{uid})
-    try {
-      const roleDocRef = doc(db, 'system_roles', uid);
-      const snapshot = await getDoc(roleDocRef);
-      if (snapshot.exists()) {
-        const data = snapshot.data();
-        if (data.role === 'admin' || data.role === 'teacher') {
-          return data.role;
-        }
-      }
-    } catch {
-      // Fallback seguro em caso de indisponibilidade de rede
-    }
-
-    return 'student';
+  static async resolveUserRole(uid: string, testDocProvider?: (uid: string) => Promise<any>): Promise<UserRole> {
+    if (!uid) return 'student';
+    return await fetchSystemRole(uid, testDocProvider);
   }
 
   /**
@@ -110,7 +88,7 @@ export class TeacherService {
       code: 'GA-TURMA-101',
       description: 'Turma de formação continuada em harmonia, braço, acordes abertos e técnica.',
       teacherId,
-      teacherEmail: teacherEmail || 'dramosdasilva7@gmail.com',
+      teacherEmail: teacherEmail || 'professor@guitaracademy.com',
       teacherName: 'Professor Titular Guitar Academy',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),

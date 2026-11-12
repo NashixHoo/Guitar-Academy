@@ -9,20 +9,25 @@ import {
   sendPasswordReset as fbSendPasswordReset,
   logOut as fbLogOut, 
   fetchUserProfile,
+  fetchSystemRole,
   updateUserLastSeen,
   mapFirebaseAuthError,
   onAuthStateChanged,
   auth
 } from '../services/firebase';
 import { storageService } from '../services/storageService';
-import { UserProgress, StudentProfile } from '../types';
+import { UserProgress, StudentProfile, UserRole } from '../types';
 
 export type SyncStatus = 'synced' | 'syncing' | 'offline' | 'error';
 
 interface AuthContextType {
   user: User | null;
   studentProfile: StudentProfile | null;
+  role: UserRole;
   isAdmin: boolean;
+  isTeacher: boolean;
+  adminPreviewMode: boolean;
+  setAdminPreviewMode: (preview: boolean) => void;
   loading: boolean;
   syncStatus: SyncStatus;
   lastSyncedAt: Date | null;
@@ -50,6 +55,8 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [studentProfile, setStudentProfile] = useState<StudentProfile | null>(null);
+  const [role, setRole] = useState<UserRole>('student');
+  const [adminPreviewMode, setAdminPreviewMode] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('synced');
   const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
@@ -60,10 +67,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const refreshUserProfile = useCallback(async () => {
     if (!auth.currentUser) {
       setStudentProfile(null);
+      setRole('student');
       return;
     }
-    const profile = await fetchUserProfile(auth.currentUser.uid);
+    const [profile, resolvedRole] = await Promise.all([
+      fetchUserProfile(auth.currentUser.uid),
+      fetchSystemRole(auth.currentUser.uid),
+    ]);
     setStudentProfile(profile);
+    setRole(resolvedRole);
   }, []);
 
   // Inicialização preventiva de arquivamento de dados legados e listener de autenticação
@@ -71,17 +83,24 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     storageService.archiveLegacyData();
 
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      setLoading(true);
       setUser(currentUser);
       if (currentUser) {
         storageService.setCurrentUser(currentUser.uid);
 
-        // Carrega o perfil do estudante do Firestore
+        // Carrega o perfil do estudante e o papel confiável exclusivamente de system_roles/{uid}
         try {
-          const profile = await fetchUserProfile(currentUser.uid);
+          const [profile, resolvedRole] = await Promise.all([
+            fetchUserProfile(currentUser.uid),
+            fetchSystemRole(currentUser.uid),
+          ]);
           setStudentProfile(profile);
+          setRole(resolvedRole);
           updateUserLastSeen(currentUser.uid);
         } catch {
-          // offline fallback
+          // Em caso de falha de rede ou leitura, mantém estritamente o papel seguro de aluno
+          setRole('student');
+          setStudentProfile(null);
         }
 
         // Verifica se há dados legados anteriores e se este usuário ainda não possui histórico isolado
@@ -106,8 +125,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           setSyncStatus('offline');
         }
       } else {
-        // Sessão desconectada: limpa ponteiro do usuário ativo
+        // Sessão desconectada: limpa imediatamente usuário ativo, perfil e privilégios administrativos
+        setUser(null);
         setStudentProfile(null);
+        setRole('student');
+        setAdminPreviewMode(false);
         storageService.setCurrentUser(null);
         setShowLegacyModal(false);
         setSyncStatus('synced');
@@ -214,13 +236,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const logOut = useCallback(async () => {
     try {
       await fbLogOut();
-      storageService.setCurrentUser(null);
-      setStudentProfile(null);
-      setAuthError(null);
-      setAuthSuccessMessage(null);
     } catch (err: any) {
       console.error('Erro ao efetuar logout:', err);
       setAuthError('Erro ao desconectar sua conta.');
+    } finally {
+      // Desconexão imediata e irrevogável de privilégios e dados locais
+      setUser(null);
+      storageService.setCurrentUser(null);
+      setStudentProfile(null);
+      setRole('student');
+      setAdminPreviewMode(false);
+      setAuthError(null);
+      setAuthSuccessMessage(null);
     }
   }, []);
 
@@ -259,17 +286,20 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return storageService.loadProgress(user?.uid);
   }, [user]);
 
-  const isAdmin = Boolean(
-    (user?.email && user.email.toLowerCase() === 'dramosdasilva7@gmail.com') ||
-    studentProfile?.role === 'admin'
-  );
+  // SEGURANÇA REAL: Papéis autenticados exclusivamente pela fonte confiável system_roles
+  const isAdmin = role === 'admin';
+  const isTeacher = role === 'teacher' || role === 'admin';
 
   return (
     <AuthContext.Provider
       value={{
         user,
         studentProfile,
+        role,
         isAdmin,
+        isTeacher,
+        adminPreviewMode,
+        setAdminPreviewMode,
         loading,
         syncStatus,
         lastSyncedAt,

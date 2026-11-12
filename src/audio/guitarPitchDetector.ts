@@ -112,6 +112,7 @@ export class GuitarPitchDetector {
 
   // Onset & Debounce State
   private prevRms = 0;
+  private noiseFloor = 0.003; // Rastreamento contínuo adaptativo do ruído ambiente
   private recentDetections: { note: string | null; octave: number | null; cents: number; freq: number }[] = [];
   private maxStabilityWindow = 7;
 
@@ -122,9 +123,10 @@ export class GuitarPitchDetector {
   constructor(options: GuitarPitchDetectorOptions = {}) {
     this.lowCutoff = options.lowCutoff !== undefined ? options.lowCutoff : 25;
     this.highCutoff = options.highCutoff !== undefined ? options.highCutoff : 1600;
-    this.silenceThreshold = options.silenceThreshold !== undefined ? options.silenceThreshold : 0.01;
-    this.confidenceThreshold = options.confidenceThreshold !== undefined ? options.confidenceThreshold : 0.65;
-    this.bufferSize = options.bufferSize || 2048;
+    // Limiar calibrado para alta sensibilidade (permite capturar toques suaves e notas graves)
+    this.silenceThreshold = options.silenceThreshold !== undefined ? options.silenceThreshold : 0.004;
+    this.confidenceThreshold = options.confidenceThreshold !== undefined ? options.confidenceThreshold : 0.58;
+    this.bufferSize = options.bufferSize || 4096;
     this.a4Calibration = options.a4Calibration || 440;
   }
 
@@ -193,16 +195,27 @@ export class GuitarPitchDetector {
     }
 
     try {
-      // Configuração acústica otimizada para instrumentos musicais de corda:
+      // Configuração acústica otimizada para instrumentos de cordas e subgraves:
       // Desativa cancelamento de eco e supressão de ruído agressiva do sistema operacional,
       // pois eles costumam cortar notas sustentadas e frequências graves do instrumento.
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: false,
-          noiseSuppression: false,
-          autoGainControl: true,
-        },
-      });
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: false,
+            noiseSuppression: false,
+            autoGainControl: false,
+          },
+        });
+      } catch {
+        // Fallback caso o driver do dispositivo não suporte desativação explícita do AGC
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: false,
+            noiseSuppression: false,
+          },
+        });
+      }
 
       if (externalAudioCtx && externalAudioCtx.state !== 'closed') {
         this.audioCtx = externalAudioCtx;
@@ -244,8 +257,10 @@ export class GuitarPitchDetector {
       this.lowpassFilter.frequency.setValueAtTime(this.highCutoff, this.audioCtx.currentTime);
       this.lowpassFilter.Q.setValueAtTime(0.707, this.audioCtx.currentTime);
 
-      // Analisador FFT com buffer de 2048 ou 4096 amostras para resolução de baixas frequências
-      const effectiveBufferSize = Math.max(2048, this.bufferSize);
+      // Janela adaptativa: 8192 amostras para contrabaixo/subgraves (B0=30.87Hz, E1=41.2Hz) e 4096 para guitarra/violão
+      const isSubBassInstrument = this.lowCutoff <= 45;
+      const targetFftSize = isSubBassInstrument ? 8192 : Math.max(4096, this.bufferSize);
+      const effectiveBufferSize = Math.min(16384, Math.max(2048, targetFftSize));
       this.analyser = this.audioCtx.createAnalyser();
       this.analyser.fftSize = effectiveBufferSize;
 
@@ -513,6 +528,11 @@ export class GuitarPitchDetector {
     const isOnset = rms > 0.025 && rms > this.prevRms * 1.7;
     this.prevRms = rms;
 
+    // Rastreamento contínuo adaptativo do piso de ruído do ambiente
+    if (rms < 0.02) {
+      this.noiseFloor = this.noiseFloor * 0.95 + rms * 0.05;
+    }
+
     // 2. Silêncio ou ruído de fundo desprezível
     if (rms < this.silenceThreshold) {
       return {
@@ -561,6 +581,25 @@ export class GuitarPitchDetector {
       );
       if (lowYin && (!yinRes || lowYin.confidence > yinRes.confidence)) {
         yinRes = lowYin;
+      }
+    }
+
+    // Decimação adaptativa 4:1 adicional para subgraves extremos (B0 ~ 30.87 Hz em contrabaixos de 5 e 6 cordas)
+    if ((!yinRes || yinRes.freq < 45 || yinRes.confidence < 0.60) && effectiveLow <= 45 && bufferLen >= 2048) {
+      const quarterLen = Math.floor(bufferLen / 4);
+      const quadDecimated = new Float32Array(quarterLen);
+      for (let i = 0; i < quarterLen; i++) {
+        quadDecimated[i] = 0.25 * (buffer[4 * i] + buffer[4 * i + 1] + buffer[4 * i + 2] + buffer[4 * i + 3]);
+      }
+      const subBassYin = this.runYinCore(
+        quadDecimated,
+        sampleRate / 4,
+        effectiveLow,
+        90,
+        0.20
+      );
+      if (subBassYin && (!yinRes || subBassYin.confidence > yinRes.confidence)) {
+        yinRes = subBassYin;
       }
     }
 

@@ -85,7 +85,7 @@ export const TunerView: React.FC<TunerViewProps> = ({ onOpenLessonTuning }) => {
 
   // Smoother de física do ponteiro
   const smootherRef = useRef<TunerSmoother>(
-    new TunerSmoother({ alpha: 0.18, confidenceThreshold: 0.65, inTuneTolerance: 5.0, deadZone: 2.0 })
+    new TunerSmoother({ alpha: 0.28, confidenceThreshold: 0.58, inTuneTolerance: 5.0, deadZone: 2.0 })
   );
 
   const [displayState, setDisplayState] = useState<TunerSmoothedOutput>({
@@ -326,27 +326,30 @@ export const TunerView: React.FC<TunerViewProps> = ({ onOpenLessonTuning }) => {
   } else if (displayState.isInTune) {
     statusBadge = {
       text: '✓ AFINADA!',
-      subtext: `No centro exato (±${tuningTolerance}¢)`,
-      bg: 'bg-emerald-50 text-emerald-700 border-emerald-300 shadow-xs',
+      subtext: `No centro exato (tolerância ±${tuningTolerance}¢)`,
+      bg: 'bg-emerald-50 text-emerald-700 border-emerald-300 shadow-xs ring-2 ring-emerald-200',
       color: '#10B981',
-      actionPrompt: 'Perfeito!'
+      actionPrompt: '✓ AFINADA'
     };
   } else if (displayState.isNearTune) {
+    const isFlat = displayState.displayedCents < 0;
     statusBadge = {
-      text: displayState.displayedCents < 0 ? 'Ajuste fino: Aperte ligeiramente ♯' : 'Ajuste fino: Afrouxe ligeiramente ♭',
+      text: isFlat ? '▲ APERTAR (Ajuste fino)' : '▼ AFROUXAR (Ajuste fino)',
       subtext: `${displayState.displayedCents > 0 ? '+' : ''}${displayState.displayedCents}¢ — quase no centro`,
       bg: 'bg-amber-50 text-amber-700 border-amber-300',
       color: '#F59E0B',
-      actionPrompt: 'Ajuste fino'
+      actionPrompt: isFlat ? '▲ APERTAR' : '▼ AFROUXAR'
     };
   } else if (displayState.note) {
     const isFlat = displayState.displayedCents < 0;
     statusBadge = {
-      text: isFlat ? 'Muito Baixa (Grave) — Aperte a tarracha ♯' : 'Muito Alta (Aguda) — Afrouxe a tarracha ♭',
-      subtext: isFlat ? 'Gire no sentido de tensionar a corda' : 'Gire no sentido de soltar a corda',
+      text: isFlat ? '▲ APERTAR (Grave / Baixa)' : '▼ AFROUXAR (Aguda / Alta)',
+      subtext: isFlat
+        ? 'Gire a tarraxa para aumentar a tensão da corda'
+        : 'Gire a tarraxa para reduzir a tensão da corda',
       bg: 'bg-[#F5E8EA] text-[#7B1E2B] border-[#E8D3D6]',
       color: '#7B1E2B',
-      actionPrompt: isFlat ? 'Aperte ♯' : 'Afrouxe ♭'
+      actionPrompt: isFlat ? '▲ APERTAR' : '▼ AFROUXAR'
     };
   }
 
@@ -660,7 +663,7 @@ export const TunerView: React.FC<TunerViewProps> = ({ onOpenLessonTuning }) => {
         </div>
 
         {/* Metrics Bar */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 max-w-2xl mx-auto pt-4 border-t border-[#D9D9D9]">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 max-w-3xl mx-auto pt-4 border-t border-[#D9D9D9]">
           <div className="bg-[#F8F7F4] p-3 rounded-2xl border border-[#D9D9D9] text-center">
             <span className="text-[10px] font-bold text-[#666672] uppercase block">Frequência Real</span>
             <span className="text-sm font-black text-[#25252A] font-mono-code">
@@ -669,7 +672,7 @@ export const TunerView: React.FC<TunerViewProps> = ({ onOpenLessonTuning }) => {
           </div>
 
           <div className="bg-[#F8F7F4] p-3 rounded-2xl border border-[#D9D9D9] text-center">
-            <span className="text-[10px] font-bold text-[#666672] uppercase block">Desvio em Cents</span>
+            <span className="text-[10px] font-bold text-[#666672] uppercase block">Desvio Cents</span>
             <span
               className={`text-sm font-black font-mono-code ${
                 displayState.isInTune
@@ -682,6 +685,21 @@ export const TunerView: React.FC<TunerViewProps> = ({ onOpenLessonTuning }) => {
               {displayState.note
                 ? `${displayState.displayedCents > 0 ? '+' : ''}${displayState.displayedCents} ¢`
                 : '--'}
+            </span>
+          </div>
+
+          <div className="bg-[#F8F7F4] p-3 rounded-2xl border border-[#D9D9D9] text-center col-span-2 sm:col-span-1">
+            <span className="text-[10px] font-bold text-[#666672] uppercase block">Ação / Direção</span>
+            <span
+              className={`text-xs font-black tracking-tight ${
+                displayState.isInTune
+                  ? 'text-emerald-600'
+                  : displayState.displayedCents < 0
+                  ? 'text-amber-600'
+                  : 'text-[#7B1E2B]'
+              }`}
+            >
+              {displayState.note ? statusBadge.actionPrompt : '--'}
             </span>
           </div>
 

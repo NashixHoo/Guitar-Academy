@@ -7,10 +7,13 @@
  * 4. Ear training intervals and chords
  */
 
+export type AudioInstrumentType = 'guitar' | 'violao' | 'bass' | 'piano' | 'drums';
+
 class AudioEngine {
   private ctx: AudioContext | null = null;
   private masterGain: GainNode | null = null;
   private isUnlocked: boolean = false;
+  private activeAudioNodes: Set<{ stop?: () => void; disconnect?: () => void }> = new Set();
 
   // Metronome scheduler state
   private metronomeTimerId: number | null = null;
@@ -132,6 +135,16 @@ class AudioEngine {
     if (this.hasSetupLifecycleListeners) return;
     this.hasSetupLifecycleListeners = true;
 
+    // Desbloqueio global imediato no primeiro gesto do usuário em desktop ou mobile
+    if (typeof window !== 'undefined') {
+      const unlockAudio = () => {
+        this.initAudio().then(() => this.resumeAudio()).catch(() => {});
+      };
+      ['pointerdown', 'touchstart', 'keydown'].forEach((eventName) => {
+        window.addEventListener(eventName, unlockAudio, { once: true, passive: true });
+      });
+    }
+
     if (typeof document !== 'undefined') {
       document.addEventListener('visibilitychange', () => {
         if (!document.hidden && this.ctx && this.ctx.state === 'suspended' && this.isMetronomeRunning) {
@@ -157,68 +170,316 @@ class AudioEngine {
   }
 
   /**
-   * Synthesize a plucked guitar note
-   * @param frequency Frequency in Hz
-   * @param duration Duration in seconds
-   * @param velocity Dynamics (0.1 to 1.0)
-   * @param time Scheduled time (defaults to currentTime)
+   * Síntese acústica multi-instrumento centralizada para todo o aplicativo
+   * @param frequency Frequência da nota em Hz
+   * @param duration Duração do som em segundos
+   * @param velocity Dinâmica / intensidade sonora (0.1 a 1.0)
+   * @param instrument Timbre: 'guitar' (guitarra), 'violao' (acústico), 'bass' (baixo), 'piano' (piano), 'drums' (percussão)
+   * @param time Timestamp agendado (padrão: currentTime)
    */
-  public playGuitarNote(frequency: number, duration: number = 2.0, velocity: number = 0.7, time?: number): void {
+  public playNote(
+    frequency: number,
+    duration: number = 2.0,
+    velocity: number = 0.7,
+    instrument: AudioInstrumentType = 'guitar',
+    time?: number
+  ): void {
     if (!this.ctx || !this.masterGain) {
-      this.initAudio().then(() => this.playGuitarNote(frequency, duration, velocity, time));
+      this.initAudio().then(() => this.playNote(frequency, duration, velocity, instrument, time));
       return;
     }
 
     const t = time ?? this.ctx.currentTime;
+    const gainNode = this.ctx.createGain();
+    gainNode.connect(this.masterGain);
+
+    const activeRecord: { stop?: () => void; disconnect?: () => void } = {
+      disconnect: () => {
+        try { gainNode.disconnect(); } catch {}
+      }
+    };
+    this.activeAudioNodes.add(activeRecord);
+
+    const cleanup = () => {
+      this.activeAudioNodes.delete(activeRecord);
+      try { gainNode.disconnect(); } catch {}
+    };
+
+    if (instrument === 'drums') {
+      // Síntese percussiva (kick / snare / rimshot click)
+      const osc = this.ctx.createOscillator();
+      osc.type = 'sine';
+      const startPitch = Math.max(80, frequency * 1.5);
+      osc.frequency.setValueAtTime(startPitch, t);
+      osc.frequency.exponentialRampToValueAtTime(45, t + 0.06);
+
+      gainNode.gain.setValueAtTime(0.0001, t);
+      gainNode.gain.linearRampToValueAtTime(velocity * 0.9, t + 0.003);
+      gainNode.gain.exponentialRampToValueAtTime(0.0001, t + Math.min(0.35, duration));
+
+      osc.connect(gainNode);
+      osc.start(t);
+      osc.stop(t + Math.min(0.35, duration) + 0.02);
+      osc.onended = cleanup;
+      return;
+    }
+
+    if (instrument === 'bass') {
+      // Síntese de contrabaixo encorpado (fundamental senoidal pura + 1º harmônico triangular)
+      const osc1 = this.ctx.createOscillator();
+      const osc2 = this.ctx.createOscillator();
+      const filter = this.ctx.createBiquadFilter();
+
+      osc1.type = 'sine';
+      osc1.frequency.setValueAtTime(frequency, t);
+
+      osc2.type = 'triangle';
+      osc2.frequency.setValueAtTime(frequency * 2, t);
+
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(Math.min(1200, frequency * 4), t);
+      filter.frequency.exponentialRampToValueAtTime(Math.min(400, frequency * 1.8), t + duration * 0.8);
+
+      gainNode.gain.setValueAtTime(0.0001, t);
+      gainNode.gain.linearRampToValueAtTime(velocity * 0.8, t + 0.012);
+      gainNode.gain.exponentialRampToValueAtTime(velocity * 0.45, t + 0.12);
+      gainNode.gain.exponentialRampToValueAtTime(0.0001, t + duration);
+
+      osc1.connect(filter);
+      osc2.connect(filter);
+      filter.connect(gainNode);
+
+      osc1.start(t);
+      osc2.start(t);
+      osc1.stop(t + duration + 0.05);
+      osc2.stop(t + duration + 0.05);
+      osc1.onended = cleanup;
+      return;
+    }
+
+    if (instrument === 'violao') {
+      // Síntese de violão acústico (nylon/aço): caloroso, ressonância de corpo e decay natural
+      const osc1 = this.ctx.createOscillator();
+      const osc2 = this.ctx.createOscillator();
+      const bodyFilter = this.ctx.createBiquadFilter();
+      const lowpass = this.ctx.createBiquadFilter();
+
+      osc1.type = 'triangle';
+      osc1.frequency.setValueAtTime(frequency, t);
+
+      osc2.type = 'sine';
+      osc2.frequency.setValueAtTime(frequency * 2, t);
+
+      bodyFilter.type = 'peaking';
+      bodyFilter.frequency.setValueAtTime(220, t);
+      bodyFilter.gain.setValueAtTime(3.5, t);
+      bodyFilter.Q.setValueAtTime(1.2, t);
+
+      lowpass.type = 'lowpass';
+      lowpass.frequency.setValueAtTime(Math.min(4800, frequency * 5), t);
+      lowpass.frequency.exponentialRampToValueAtTime(frequency * 1.6, t + duration * 0.7);
+
+      gainNode.gain.setValueAtTime(0.0001, t);
+      gainNode.gain.linearRampToValueAtTime(velocity * 0.55, t + 0.01);
+      gainNode.gain.exponentialRampToValueAtTime(velocity * 0.28, t + 0.1);
+      gainNode.gain.exponentialRampToValueAtTime(0.0001, t + duration);
+
+      osc1.connect(bodyFilter);
+      osc2.connect(bodyFilter);
+      bodyFilter.connect(lowpass);
+      lowpass.connect(gainNode);
+
+      osc1.start(t);
+      osc2.start(t);
+      osc1.stop(t + duration + 0.05);
+      osc2.stop(t + duration + 0.05);
+      osc1.onended = cleanup;
+      return;
+    }
+
+    if (instrument === 'piano') {
+      // Síntese de piano acústico (ataque percussivo + harmônicos ricos e límpidos)
+      const osc1 = this.ctx.createOscillator();
+      const osc2 = this.ctx.createOscillator();
+      const osc3 = this.ctx.createOscillator();
+      const filter = this.ctx.createBiquadFilter();
+
+      osc1.type = 'triangle';
+      osc1.frequency.setValueAtTime(frequency, t);
+
+      osc2.type = 'sine';
+      osc2.frequency.setValueAtTime(frequency * 2.001, t);
+
+      osc3.type = 'sine';
+      osc3.frequency.setValueAtTime(frequency * 3.002, t);
+
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(Math.min(7000, frequency * 8), t);
+      filter.frequency.exponentialRampToValueAtTime(frequency * 2.0, t + duration * 0.85);
+
+      gainNode.gain.setValueAtTime(0.0001, t);
+      gainNode.gain.linearRampToValueAtTime(velocity * 0.7, t + 0.005);
+      gainNode.gain.exponentialRampToValueAtTime(velocity * 0.35, t + 0.07);
+      gainNode.gain.exponentialRampToValueAtTime(0.0001, t + duration);
+
+      osc1.connect(filter);
+      osc2.connect(filter);
+      osc3.connect(filter);
+      filter.connect(gainNode);
+
+      osc1.start(t);
+      osc2.start(t);
+      osc3.start(t);
+      osc1.stop(t + duration + 0.05);
+      osc2.stop(t + duration + 0.05);
+      osc3.stop(t + duration + 0.05);
+      osc1.onended = cleanup;
+      return;
+    }
+
+    // Default 'guitar' (guitarra elétrica com harmônicos ricos e brilho de palheta)
     const osc1 = this.ctx.createOscillator();
     const osc2 = this.ctx.createOscillator();
-    const gainNode = this.ctx.createGain();
     const filter = this.ctx.createBiquadFilter();
 
-    // Fundamental (triangle for warmth) + slight detuned sawtooth for rich string harmonics
     osc1.type = 'triangle';
     osc1.frequency.setValueAtTime(frequency, t);
 
     osc2.type = 'sawtooth';
     osc2.frequency.setValueAtTime(frequency * 1.002, t);
 
-    // Dynamic low-pass filter: starts bright (pluck attack) and damps down
     filter.type = 'lowpass';
     const initialCutoff = Math.min(6000, frequency * 6);
     filter.frequency.setValueAtTime(initialCutoff, t);
     filter.frequency.exponentialRampToValueAtTime(frequency * 1.5, t + duration * 0.7);
 
-    // Amplitude envelope: instantaneous pluck attack, sharp transient decay, then singing sustain
     gainNode.gain.setValueAtTime(0.0001, t);
     gainNode.gain.linearRampToValueAtTime(velocity * 0.45, t + 0.008);
     gainNode.gain.exponentialRampToValueAtTime(velocity * 0.22, t + 0.08);
     gainNode.gain.exponentialRampToValueAtTime(0.0001, t + duration);
 
-    // Routing
     osc1.connect(filter);
     osc2.connect(filter);
     filter.connect(gainNode);
-    gainNode.connect(this.masterGain);
 
     osc1.start(t);
     osc2.start(t);
     osc1.stop(t + duration + 0.05);
     osc2.stop(t + duration + 0.05);
+    osc1.onended = cleanup;
   }
 
   /**
-   * Play multiple notes as an acoustic guitar strum or arpeggio
+   * Compatibilidade garantida com código legado
    */
-  public playChord(frequencies: number[], arpeggio: boolean = false, strumSpeedMs: number = 30): void {
+  public playGuitarNote(frequency: number, duration: number = 2.0, velocity: number = 0.7, time?: number): void {
+    this.playNote(frequency, duration, velocity, 'guitar', time);
+  }
+
+  /**
+   * Emissão de tom contínuo de referência para afinação e percepção de altura
+   */
+  public playReferenceTone(frequency: number, duration: number = 3.0): void {
     if (!this.ctx || !this.masterGain) {
-      this.initAudio().then(() => this.playChord(frequencies, arpeggio, strumSpeedMs));
+      this.initAudio().then(() => this.playReferenceTone(frequency, duration));
+      return;
+    }
+
+    const t = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(frequency, t);
+
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.linearRampToValueAtTime(0.35, t + 0.03);
+    gain.gain.setValueAtTime(0.35, t + duration - 0.05);
+    gain.gain.linearRampToValueAtTime(0.0001, t + duration);
+
+    osc.connect(gain);
+    gain.connect(this.masterGain);
+
+    osc.start(t);
+    osc.stop(t + duration + 0.02);
+  }
+
+  /**
+   * Execução instantânea de clique de metrônomo para verificação
+   */
+  public playMetronomeClick(isAccent: boolean = false, isSubdivision: boolean = false): void {
+    if (!this.ctx || !this.masterGain) {
+      this.initAudio().then(() => this.playMetronomeClick(isAccent, isSubdivision));
+      return;
+    }
+    this.scheduleClick(this.ctx.currentTime, isAccent, isSubdivision);
+  }
+
+  /**
+   * Teste imediato de áudio do metrônomo (tempo forte acentuado + tempo fraco)
+   */
+  public testMetronomeSound(): void {
+    this.initAudio().then(() => {
+      if (!this.ctx) return;
+      const t = this.ctx.currentTime;
+      this.scheduleClick(t, true, false);
+      this.scheduleClick(t + 0.35, false, false);
+    });
+  }
+
+  /**
+   * Execução sequencial de exemplos de notas e melodias em exercícios
+   */
+  public playExample(
+    notesOrFrequencies: number[],
+    tempoBpm: number = 100,
+    instrument: AudioInstrumentType = 'guitar'
+  ): void {
+    if (!this.ctx || !this.masterGain) {
+      this.initAudio().then(() => this.playExample(notesOrFrequencies, tempoBpm, instrument));
+      return;
+    }
+
+    const secondsPerBeat = 60.0 / Math.max(30, tempoBpm);
+    const startT = this.ctx.currentTime + 0.05;
+
+    notesOrFrequencies.forEach((freq, idx) => {
+      this.playNote(freq, secondsPerBeat * 0.9, 0.7, instrument, startT + idx * secondsPerBeat);
+    });
+  }
+
+  /**
+   * Interrompe todos os sons ativos e silencia o motor de áudio
+   */
+  public stopAllSounds(): void {
+    this.stopMetronome();
+    this.activeAudioNodes.forEach((node) => {
+      try {
+        if (node.stop) node.stop();
+        if (node.disconnect) node.disconnect();
+      } catch {}
+    });
+    this.activeAudioNodes.clear();
+  }
+
+  /**
+   * Toca acordes dedilhados (arpejo) ou batidos (strum)
+   */
+  public playChord(
+    frequencies: number[],
+    arpeggio: boolean = false,
+    strumSpeedMs: number = 30,
+    instrument: AudioInstrumentType = 'guitar'
+  ): void {
+    if (!this.ctx || !this.masterGain) {
+      this.initAudio().then(() => this.playChord(frequencies, arpeggio, strumSpeedMs, instrument));
       return;
     }
 
     const startT = this.ctx.currentTime;
     frequencies.forEach((freq, idx) => {
-      const delay = arpeggio ? (idx * 0.18) : (idx * (strumSpeedMs / 1000));
-      this.playGuitarNote(freq, 2.5, 0.65 - idx * 0.03, startT + delay);
+      const delay = arpeggio ? idx * 0.18 : idx * (strumSpeedMs / 1000);
+      this.playNote(freq, 2.5, 0.65 - idx * 0.03, instrument, startT + delay);
     });
   }
 

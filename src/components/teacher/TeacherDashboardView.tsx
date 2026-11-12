@@ -64,7 +64,7 @@ export const TeacherDashboardView: React.FC<TeacherDashboardViewProps> = ({ onBa
   });
 
   const teacherUid = user?.uid || 'teacher-default';
-  const teacherEmail = user?.email || 'dramosdasilva7@gmail.com';
+  const teacherEmail = user?.email || 'professor@guitaracademy.com';
   const teacherName = user?.displayName || 'Professor Guitar Academy';
 
   // Carregamento de dados analíticos

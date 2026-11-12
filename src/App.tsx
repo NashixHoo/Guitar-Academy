@@ -47,9 +47,10 @@ import { UserProfileModal } from './components/profile/UserProfileModal';
 import { TeacherDashboardView } from './components/teacher/TeacherDashboardView';
 import { StudentJoinClassModal } from './components/teacher/StudentJoinClassModal';
 import { StudentPrivacyNotice } from './components/teacher/StudentPrivacyNotice';
+import { AdminPortalView } from './components/admin/AdminPortalView';
 
 function MainAppContent() {
-  const { user, loading, showLegacyModal } = useAuth();
+  const { user, loading, isAdmin, adminPreviewMode, showLegacyModal } = useAuth();
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showJoinClassModal, setShowJoinClassModal] = useState(false);
@@ -131,8 +132,24 @@ function MainAppContent() {
     };
   }, []);
 
+  // SEGURANÇA REAL: Bloqueio estrito de acesso a rotas administrativas para alunos
+  useEffect(() => {
+    if (!isAdmin && currentTab === 'teacher-dashboard') {
+      console.warn('Acesso a rota administrativa bloqueado para perfil de aluno.');
+      setCurrentTab('home');
+      setPrimaryTab('estudar');
+    }
+  }, [isAdmin, currentTab]);
+
   // Navegação unificada com preservação de rolagem e histórico
   const navigateToTab = (tab: NavigationTab, lessonId: string | null = null, resetScrollToTop: boolean = false) => {
+    // Bloqueia tentativas de navegação direta para rotas administrativas por alunos
+    if (tab === 'teacher-dashboard' && !isAdmin) {
+      setCurrentTab('home');
+      setPrimaryTab('estudar');
+      return;
+    }
+
     // 1. Salvar rolagem atual
     if (mainScrollRef.current) {
       const currentKey = selectedLessonId ? `lesson_${selectedLessonId}` : currentTab;
@@ -323,6 +340,12 @@ function MainAppContent() {
     return <AuthView />;
   }
 
+  // 4. SEPARAÇÃO ESTRITA DE AMBIENTES:
+  // Administrador autenticado visualiza exclusivamente o painel administrativo (Admin Suite)
+  if (isAdmin && !adminPreviewMode) {
+    return <AdminPortalView />;
+  }
+
   return (
     <div className="relative h-screen h-[100dvh] max-h-screen max-h-[100dvh] text-[#25252A] flex flex-col font-sans bg-transparent overflow-hidden">
       {/* 1. PAPEL DE PAREDE FIXO GLOBAL (Estúdio Cinematográfico com Guitarra Elétrica e Bateria) */}
@@ -501,8 +524,8 @@ function MainAppContent() {
                 />
               )}
 
-              {/* TAB 18: Gestão Pedagógica & Analytics do Professor */}
-              {currentTab === 'teacher-dashboard' && (
+              {/* TAB 18: Gestão Pedagógica & Analytics do Professor (Acesso restrito) */}
+              {currentTab === 'teacher-dashboard' && isAdmin && (
                 <TeacherDashboardView
                   onBackToApp={() => navigateToTab('home', null)}
                 />

@@ -1,9 +1,9 @@
 // =============================================================
-// GUITAR ACADEMY - PROFESSOR IA CLIENT SERVICE
+// GUITAR ACADEMY - PROFESSOR IA CLIENT SERVICE (HARDENED V1.1)
 // src/services/professorService.ts
 // Interface segura de integração do cliente com a API de IA
-// Mantém o histórico do aluno e o currículo estritamente separados
-// do mecanismo de IA (Regra 6).
+// Requer autenticação com Firebase Bearer Token e suporta
+// VITE_PROFESSOR_API_URL para Google Cloud Run / Produção.
 // =============================================================
 
 import {
@@ -12,6 +12,7 @@ import {
   ProfessorRecommendation,
   UserProgress,
 } from '../types';
+import { auth } from './firebase';
 
 export interface ProfessorStatus {
   available: boolean;
@@ -20,13 +21,87 @@ export interface ProfessorStatus {
   message: string;
 }
 
+/**
+ * Retorna a URL base do backend configurada ou vazia em desenvolvimento
+ */
+export function getProfessorApiBaseUrl(): string {
+  const envUrl = import.meta.env.VITE_PROFESSOR_API_URL;
+  if (envUrl && typeof envUrl === 'string' && envUrl.trim().length > 0) {
+    return envUrl.trim().replace(/\/+$/, '');
+  }
+  // Em modo de desenvolvimento local no Vite, utiliza caminho relativo '/api'
+  if (import.meta.env.DEV) {
+    return '';
+  }
+  // Em produção estática (ex: GitHub Pages) sem backend configurado
+  return '';
+}
+
+/**
+ * Cliente HTTP centralizado com injeção automática de Firebase ID Token
+ */
+async function authorizedApiFetch(endpoint: string, options: RequestInit = {}): Promise<Response> {
+  const baseUrl = getProfessorApiBaseUrl();
+  const url = `${baseUrl}${endpoint}`;
+
+  // Obtém o token seguro do usuário autenticado no Firebase
+  let idToken: string | null = null;
+  if (auth.currentUser) {
+    try {
+      idToken = await auth.currentUser.getIdToken();
+    } catch {
+      // Offline fallback
+    }
+  }
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...((options.headers as Record<string, string>) || {}),
+  };
+
+  if (idToken) {
+    headers['Authorization'] = `Bearer ${idToken}`;
+  }
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      headers,
+    });
+
+    if (response.status === 401) {
+      throw new Error('Sessão não autorizada ou expirada. Faça login novamente para consultar o Professor IA.');
+    }
+    if (response.status === 403) {
+      throw new Error('Acesso restrito. Sua conta não possui permissão para esta operação.');
+    }
+    if (response.status === 429) {
+      throw new Error('Limite de requisições excedido. Aguarde alguns instantes antes de enviar nova pergunta.');
+    }
+    if (response.status === 503) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.error || 'Serviço do Professor IA temporariamente indisponível.');
+    }
+
+    return response;
+  } catch (err: any) {
+    // Se a URL do backend não estiver configurada no GitHub Pages
+    if (!baseUrl && !import.meta.env.DEV) {
+      throw new Error(
+        'O serviço do Professor IA requer o backend conectado. Configure a URL da API em VITE_PROFESSOR_API_URL.'
+      );
+    }
+    throw err;
+  }
+}
+
 export const professorService = {
   /**
    * Checa o status e a disponibilidade do serviço de IA no servidor.
    */
   async checkStatus(): Promise<ProfessorStatus> {
     try {
-      const res = await fetch('/api/professor/status');
+      const res = await authorizedApiFetch('/api/professor/status');
       if (!res.ok) {
         return {
           available: false,
@@ -36,12 +111,12 @@ export const professorService = {
         };
       }
       return await res.json();
-    } catch {
+    } catch (err: any) {
       return {
         available: false,
         model: 'gemini-3.8-flash',
         provider: 'Google Gemini',
-        message: 'Não foi possível conectar ao backend do Professor IA.',
+        message: err?.message || 'Não foi possível conectar ao backend do Professor IA.',
       };
     }
   },
@@ -63,9 +138,8 @@ export const professorService = {
       };
     }
   ): Promise<{ reply: string; timestamp: string }> {
-    const res = await fetch('/api/professor/chat', {
+    const res = await authorizedApiFetch('/api/professor/chat', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message, context }),
     });
 
@@ -81,9 +155,8 @@ export const professorService = {
    * Solicita a geração de 1 exercício estruturado por nível e tópico.
    */
   async generateExercise(level: number, topic: string): Promise<ProfessorExercise> {
-    const res = await fetch('/api/professor/exercise', {
+    const res = await authorizedApiFetch('/api/professor/exercise', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ level, topic }),
     });
 
@@ -105,9 +178,8 @@ export const professorService = {
     explanation: string;
     level: number;
   }): Promise<ProfessorEvaluation> {
-    const res = await fetch('/api/professor/evaluate', {
+    const res = await authorizedApiFetch('/api/professor/evaluate', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(params),
     });
 
@@ -123,9 +195,8 @@ export const professorService = {
    * Gera uma recomendação didática da próxima atividade baseada no progresso real.
    */
   async getRecommendation(progress: UserProgress): Promise<ProfessorRecommendation> {
-    const res = await fetch('/api/professor/recommend', {
+    const res = await authorizedApiFetch('/api/professor/recommend', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ progress }),
     });
 

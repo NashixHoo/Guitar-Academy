@@ -50,9 +50,9 @@ export interface TunerSmootherOptions {
 }
 
 export class TunerSmoother {
-  private alphaStandard = 0.18;
-  private alphaNear = 0.08; // ±2 a ±5 cents (movimento ultra suave)
-  private alphaDeadZone = 0.03; // ±2 cents (parada estável no centro)
+  private alphaStandard = 0.28; // Resposta viva e ágil do ponteiro
+  private alphaNear = 0.18; // ±2 a ±5 cents (suavização precisa de aproximação)
+  private alphaDeadZone = 0.08; // ±2 cents (parada estável no centro)
 
   private inTuneTolerance = 5.0; // ±5 cents para afinação confirmada
   private nearTuneTolerance = 15.0; // ±15 cents para proximidade
@@ -94,7 +94,7 @@ export class TunerSmoother {
   private stableInTuneCount = 0;
 
   constructor(options: TunerSmootherOptions = {}) {
-    this.confidenceThreshold = options.confidenceThreshold !== undefined ? options.confidenceThreshold : 0.65;
+    this.confidenceThreshold = options.confidenceThreshold !== undefined ? options.confidenceThreshold : 0.58;
     if (options.alpha !== undefined) this.alphaStandard = options.alpha;
     if (options.inTuneTolerance !== undefined) this.inTuneTolerance = options.inTuneTolerance;
     if (options.nearTuneTolerance !== undefined) this.nearTuneTolerance = options.nearTuneTolerance;
@@ -149,9 +149,9 @@ export class TunerSmoother {
     }
 
     const confidence = pitch.confidence !== undefined ? pitch.confidence : 0;
-    const intensity = pitch.intensity !== undefined ? pitch.intensity : 1;
 
-    if (confidence < this.confidenceThreshold || pitch.isWeakSignal || intensity < 0.05) {
+    // Alta sensibilidade: notas musicais periódicas suaves são acolhidas sem corte artificial por intensidade
+    if (confidence < this.confidenceThreshold || pitch.isWeakSignal) {
       this.isWeakSignal = true;
       this.currentState = TUNER_STATES.WEAK_SIGNAL;
       return;
@@ -261,7 +261,8 @@ export class TunerSmoother {
       this.stableInTuneCount = 0;
     } else if (this.currentState === TUNER_STATES.WAITING_SOUND || !this.targetNote) {
       this.stableInTuneCount = 0;
-    } else if (absDisplayed <= this.inTuneTolerance) {
+    } else if (absDisplayed <= this.inTuneTolerance && absTarget <= this.inTuneTolerance) {
+      // Afinado apenas quando tanto a agulha visual quanto o desvio acústico real estão na tolerância
       this.currentState = TUNER_STATES.IN_TUNE;
       this.stableInTuneCount++;
     } else if (absDisplayed <= this.nearTuneTolerance) {

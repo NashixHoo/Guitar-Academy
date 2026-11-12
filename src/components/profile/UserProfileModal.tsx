@@ -39,10 +39,10 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   onOpenJoinClass,
   onOpenPrivacyNotice,
 }) => {
-  const { user, studentProfile, logOut, syncNow, syncStatus, lastSyncedAt } = useAuth();
+  const { user, studentProfile, logOut, syncNow, syncStatus, lastSyncedAt, isTeacher, isAdmin } = useAuth();
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
-  const isTeacher = user?.email === 'dramosdasilva7@gmail.com' || studentProfile?.role === 'teacher';
+  const hasPrivilegedRole = isTeacher || isAdmin;
 
   if (!isOpen || !user) return null;
 
@@ -133,7 +133,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
               {user.email}
             </p>
             <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-              {isTeacher ? (
+              {hasPrivilegedRole ? (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono-code font-bold bg-amber-100 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
                   <GraduationCap className="w-3 h-3 text-amber-600 dark:text-amber-400" />
                   Professor & Coordenador
@@ -218,7 +218,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
 
         {/* Ações Pedagógicas & Conta */}
         <div className="space-y-2 border-t border-[#E8E6E1] dark:border-[#422933] pt-3">
-          {isTeacher ? (
+          {hasPrivilegedRole ? (
             <button
               onClick={() => {
                 onClose();

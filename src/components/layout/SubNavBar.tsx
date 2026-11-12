@@ -68,11 +68,11 @@ export const SubNavBar: React.FC<SubNavBarProps> = ({
   onSelectTab,
   className = '',
 }) => {
-  const { user } = useAuth();
-  const isTeacher = user?.email === 'dramosdasilva7@gmail.com';
+  const { isTeacher, isAdmin } = useAuth();
+  const canAccessTeacher = isTeacher || isAdmin;
 
   const baseItems = SUB_TABS_BY_PRIMARY[primaryTab] || [];
-  const items = primaryTab === 'evoluir' && isTeacher
+  const items = primaryTab === 'evoluir' && canAccessTeacher
     ? [
         ...baseItems.slice(0, 1),
         { id: 'teacher-dashboard' as NavigationTab, label: 'Gestão Pedagógica', icon: GraduationCap },

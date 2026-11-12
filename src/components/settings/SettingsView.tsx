@@ -14,7 +14,7 @@ interface SettingsViewProps {
 }
 
 export const SettingsView: React.FC<SettingsViewProps> = ({ progress, onUpdateProgress, onNavigateTab }) => {
-  const { user, signInWithGoogle, logOut, syncNow, syncStatus, lastSyncedAt } = useAuth();
+  const { user, signInWithGoogle, logOut, syncNow, syncStatus, lastSyncedAt, isTeacher, isAdmin } = useAuth();
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [showGoalModal, setShowGoalModal] = useState<boolean>(false);
   const [backupMessage, setBackupMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -174,7 +174,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ progress, onUpdatePr
                   <span>Sincronizar</span>
                 </button>
 
-                {user?.email === 'dramosdasilva7@gmail.com' && (
+                {(isTeacher || isAdmin) && (
                   <button
                     onClick={() => onNavigateTab?.('teacher-dashboard')}
                     className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer"
