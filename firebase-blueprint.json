@@ -195,6 +195,9 @@
         "eventType": {
           "type": "string",
           "enum": [
+            "auth",
+            "database_access",
+            "role_change",
             "auth_login_success",
             "auth_login_failed",
             "auth_signup",

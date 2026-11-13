@@ -7,6 +7,7 @@ import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 import fs from 'fs';
 import http from 'http';
+import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
@@ -32,7 +33,10 @@ function loadFirebaseAppletConfig(): FirebaseAppletConfig {
 
 const appletConfig = loadFirebaseAppletConfig();
 const FIREBASE_PROJECT_ID =
-  process.env.FIREBASE_PROJECT_ID || appletConfig.projectId || 'gen-lang-client-0214739740';
+  process.env.FIREBASE_PROJECT_ID ||
+  (process.env.FIRESTORE_EMULATOR_HOST ? process.env.GCLOUD_PROJECT : undefined) ||
+  appletConfig.projectId ||
+  'gen-lang-client-0214739740';
 const FIRESTORE_DATABASE_ID =
   process.env.FIRESTORE_DATABASE_ID || appletConfig.firestoreDatabaseId || '(default)';
 
@@ -55,6 +59,34 @@ function getAdminDb() {
     : getFirestore();
 }
 
+function hasFirestoreAdminCredentials(): boolean {
+  if (process.env.FIRESTORE_EMULATOR_HOST) return true;
+  const gacPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+  if (gacPath && fs.existsSync(gacPath)) return true;
+  try {
+    const adcPath = path.join(os.homedir(), '.config', 'gcloud', 'application_default_credentials.json');
+    if (fs.existsSync(adcPath)) return true;
+  } catch {
+    // Ignora falha ao inspecionar diretório home
+  }
+  if (
+    process.env.K_SERVICE ||
+    process.env.CLOUD_RUN_JOB ||
+    process.env.FUNCTION_TARGET ||
+    process.env.GAE_APPLICATION
+  ) {
+    return true;
+  }
+  return false;
+}
+
+function canWriteAuditLogToFirestore(): boolean {
+  const isUnitTestWithoutEmulator =
+    Boolean(process.env.NODE_TEST_CONTEXT) && !process.env.FIRESTORE_EMULATOR_HOST;
+  if (isUnitTestWithoutEmulator) return false;
+  return hasFirestoreAdminCredentials();
+}
+
 export interface AdminLogPayload {
   eventType:
     | 'auth_token_rejected'
@@ -73,6 +105,7 @@ export interface ServerAuthDependencies {
   verifyIdToken?: (token: string) => Promise<{ uid: string; email?: string; [key: string]: any }>;
   getSystemRole?: (uid: string) => Promise<{ exists: boolean; role: string }>;
   writeAdminLog?: (entry: AdminLogPayload) => Promise<void>;
+  listAdminLogs?: () => Promise<Array<Record<string, unknown>>>;
 }
 
 const VALID_ROLES = new Set(['student', 'teacher', 'admin']);
@@ -172,7 +205,8 @@ export function createAuthMiddlewares(deps: ServerAuthDependencies = {}) {
     deps.writeAdminLog ||
     (async (entry: AdminLogPayload) => {
       // Não grava no Firestore remoto quando deps de autenticação de teste estão injetadas sem writeAdminLog
-      if (deps.verifyIdToken || deps.getSystemRole) return;
+      // ou quando não há emulador/credenciais ADC válidas disponíveis (evita atividade gRPC sem credencial)
+      if (deps.verifyIdToken || deps.getSystemRole || !canWriteAuditLogToFirestore()) return;
       try {
         const id = `srv_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
         await getAdminDb()
@@ -194,7 +228,7 @@ export function createAuthMiddlewares(deps: ServerAuthDependencies = {}) {
             timestamp: new Date().toISOString(),
           });
       } catch {
-        // Auditoria best-effort no servidor para não impactar disponibilidade se ADC não estiver ativo
+        // Auditoria best-effort no servidor para não impactar disponibilidade
       }
     });
 
@@ -232,7 +266,7 @@ export function createAuthMiddlewares(deps: ServerAuthDependencies = {}) {
       return next();
     } catch (err: any) {
       console.error('[requireAuth] Falha na validação criptográfica do token:', err?.message || err);
-      void recordAdminLog({
+      await recordAdminLog({
         eventType: 'auth_token_rejected',
         severity: 'warning',
         actorUid: 'unauthenticated',
@@ -269,7 +303,7 @@ export function createAuthMiddlewares(deps: ServerAuthDependencies = {}) {
         (req as any).userRole = authoritativeRole;
 
         if (!allowedRoles.includes(authoritativeRole)) {
-          void recordAdminLog({
+          await recordAdminLog({
             eventType: 'role_access_denied',
             severity: 'critical',
             actorUid: user.uid,
@@ -742,7 +776,7 @@ Responda ESTRITAMENTE em JSON com plano de intervenção coletiva:
       const isCallerAdmin = callerRecord.exists && normalizeRole(callerRecord.role) === 'admin';
 
       if (!isCallerAdmin && caller.uid !== targetUid) {
-        void recordAdminLog({
+        await recordAdminLog({
           eventType: 'role_access_denied',
           severity: 'critical',
           actorUid: caller.uid,
@@ -758,7 +792,7 @@ Responda ESTRITAMENTE em JSON com plano de intervenção coletiva:
       }
 
       if (isCallerAdmin && caller.uid !== targetUid) {
-        void recordAdminLog({
+        await recordAdminLog({
           eventType: 'admin_role_lookup',
           severity: 'info',
           actorUid: caller.uid,
@@ -784,6 +818,13 @@ Responda ESTRITAMENTE em JSON com plano de intervenção coletiva:
   // Rota administrativa para consulta de logs recentes (protegida por requireAuth e requireAdmin)
   app.get('/api/admin/logs', requireAuth, requireAdmin, async (_req, res) => {
     try {
+      if (deps.listAdminLogs) {
+        const logs = await deps.listAdminLogs();
+        return res.json({ logs });
+      }
+      if (deps.verifyIdToken || deps.getSystemRole || !canWriteAuditLogToFirestore()) {
+        return res.json({ logs: [] });
+      }
       const snap = await getAdminDb()
         .collection('admin_logs')
         .orderBy('timestamp', 'desc')

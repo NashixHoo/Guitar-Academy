@@ -125,6 +125,7 @@ service cloud.firestore {
         data.id == logId &&
         data.eventType is string &&
         data.eventType in [
+          'auth', 'database_access', 'role_change',
           'auth_login_success', 'auth_login_failed', 'auth_signup', 'auth_logout',
           'auth_password_reset', 'role_checked', 'role_escalation_blocked',
           'admin_preview_toggled', 'student_status_updated', 'security_audit_viewed',

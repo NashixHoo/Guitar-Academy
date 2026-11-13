@@ -6,9 +6,11 @@ import {
   onSnapshot,
   orderBy,
   query,
+  QueryConstraint,
   serverTimestamp,
   setDoc,
   Unsubscribe,
+  where,
 } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import type { UserRole } from '../types';
@@ -66,6 +68,9 @@ export function handleFirestoreError(
 }
 
 export type AdminLogEventType =
+  | 'auth'
+  | 'database_access'
+  | 'role_change'
   | 'auth_login_success'
   | 'auth_login_failed'
   | 'auth_signup'
@@ -79,6 +84,19 @@ export type AdminLogEventType =
   | 'auth_token_rejected'
   | 'role_access_denied'
   | 'admin_role_lookup';
+
+export type AdminLogFilterGroup =
+  | 'all'
+  | 'auth'
+  | 'database_access'
+  | 'role_change'
+  | AdminLogEventType;
+
+export interface AdminLogQueryFilter {
+  startDate?: string;
+  endDate?: string;
+  maxItems?: number;
+}
 
 export type AdminLogSeverity = 'info' | 'warning' | 'critical';
 export type AdminLogSource = 'client' | 'backend' | 'admin_portal';
@@ -173,31 +191,80 @@ export async function logAdminSecurityEvent(
   }
 }
 
-export async function fetchRecentAdminLogs(maxItems = 50): Promise<AdminLogEntry[]> {
+export function matchesAdminLogEventFilter(
+  eventType: AdminLogEventType,
+  filter: AdminLogFilterGroup
+): boolean {
+  if (filter === 'all') return true;
+  if (filter === 'auth') {
+    return eventType === 'auth' || eventType.startsWith('auth_');
+  }
+  if (filter === 'database_access') {
+    return (
+      eventType === 'database_access' ||
+      eventType === 'security_audit_viewed' ||
+      eventType === 'admin_preview_toggled'
+    );
+  }
+  if (filter === 'role_change') {
+    return (
+      eventType === 'role_change' ||
+      eventType.startsWith('role_') ||
+      eventType === 'admin_role_lookup' ||
+      eventType === 'student_status_updated'
+    );
+  }
+  return eventType === filter;
+}
+
+function buildDateRangeConstraints(filter: AdminLogQueryFilter): QueryConstraint[] {
+  const constraints: QueryConstraint[] = [];
+  if (filter.startDate) {
+    const startBoundary = new Date(`${filter.startDate}T00:00:00`);
+    if (!Number.isNaN(startBoundary.getTime())) {
+      constraints.push(where('timestamp', '>=', startBoundary.toISOString()));
+    }
+  }
+  if (filter.endDate) {
+    const endBoundary = new Date(`${filter.endDate}T23:59:59.999`);
+    if (!Number.isNaN(endBoundary.getTime())) {
+      constraints.push(where('timestamp', '<=', endBoundary.toISOString()));
+    }
+  }
+  constraints.push(orderBy('timestamp', 'desc'));
+  constraints.push(limit(Math.max(1, Math.min(200, filter.maxItems ?? 100))));
+  return constraints;
+}
+
+function mapSnapshotDocs(docs: Array<{ id: string; data: () => any }>): AdminLogEntry[] {
+  return docs.map((d) => {
+    const data = d.data() as Partial<AdminLogEntry>;
+    return {
+      id: data.id || d.id,
+      eventType: (data.eventType as AdminLogEventType) || 'security_audit_viewed',
+      severity: (data.severity as AdminLogSeverity) || 'info',
+      actorUid: data.actorUid || 'unknown',
+      actorEmail: data.actorEmail ?? null,
+      actorRole: data.actorRole || 'student',
+      targetUid: data.targetUid ?? null,
+      action: data.action || 'Evento registrado',
+      details: data.details ?? null,
+      source: data.source || 'client',
+      timestamp: data.timestamp || new Date(0).toISOString(),
+    };
+  });
+}
+
+export async function fetchRecentAdminLogs(
+  maxItemsOrFilter: number | AdminLogQueryFilter = 100
+): Promise<AdminLogEntry[]> {
+  const filter: AdminLogQueryFilter =
+    typeof maxItemsOrFilter === 'number' ? { maxItems: maxItemsOrFilter } : maxItemsOrFilter;
   const path = 'admin_logs';
   try {
-    const logsQuery = query(
-      collection(db, path),
-      orderBy('timestamp', 'desc'),
-      limit(Math.max(1, Math.min(100, maxItems)))
-    );
+    const logsQuery = query(collection(db, path), ...buildDateRangeConstraints(filter));
     const snapshot = await getDocs(logsQuery);
-    return snapshot.docs.map((d) => {
-      const data = d.data() as Partial<AdminLogEntry>;
-      return {
-        id: data.id || d.id,
-        eventType: (data.eventType as AdminLogEventType) || 'security_audit_viewed',
-        severity: (data.severity as AdminLogSeverity) || 'info',
-        actorUid: data.actorUid || 'unknown',
-        actorEmail: data.actorEmail ?? null,
-        actorRole: data.actorRole || 'student',
-        targetUid: data.targetUid ?? null,
-        action: data.action || 'Evento registrado',
-        details: data.details ?? null,
-        source: data.source || 'client',
-        timestamp: data.timestamp || new Date(0).toISOString(),
-      };
-    });
+    return mapSnapshotDocs(snapshot.docs);
   } catch (error) {
     handleFirestoreError(error, OperationType.LIST, path);
   }
@@ -206,35 +273,17 @@ export async function fetchRecentAdminLogs(maxItems = 50): Promise<AdminLogEntry
 export function subscribeToAdminLogs(
   onData: (logs: AdminLogEntry[]) => void,
   onError: (error: Error) => void,
-  maxItems = 50
+  maxItemsOrFilter: number | AdminLogQueryFilter = 100
 ): Unsubscribe {
+  const filter: AdminLogQueryFilter =
+    typeof maxItemsOrFilter === 'number' ? { maxItems: maxItemsOrFilter } : maxItemsOrFilter;
   const path = 'admin_logs';
-  const logsQuery = query(
-    collection(db, path),
-    orderBy('timestamp', 'desc'),
-    limit(Math.max(1, Math.min(100, maxItems)))
-  );
+  const logsQuery = query(collection(db, path), ...buildDateRangeConstraints(filter));
 
   return onSnapshot(
     logsQuery,
     (snapshot) => {
-      const items: AdminLogEntry[] = snapshot.docs.map((d) => {
-        const data = d.data() as Partial<AdminLogEntry>;
-        return {
-          id: data.id || d.id,
-          eventType: (data.eventType as AdminLogEventType) || 'security_audit_viewed',
-          severity: (data.severity as AdminLogSeverity) || 'info',
-          actorUid: data.actorUid || 'unknown',
-          actorEmail: data.actorEmail ?? null,
-          actorRole: data.actorRole || 'student',
-          targetUid: data.targetUid ?? null,
-          action: data.action || 'Evento registrado',
-          details: data.details ?? null,
-          source: data.source || 'client',
-          timestamp: data.timestamp || new Date(0).toISOString(),
-        };
-      });
-      onData(items);
+      onData(mapSnapshotDocs(snapshot.docs));
     },
     (error) => {
       try {

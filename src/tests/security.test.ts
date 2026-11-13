@@ -35,8 +35,12 @@ import {
   where,
 } from 'firebase/firestore';
 import { fetchSystemRole, parseSystemRoleDoc } from '../services/firebase';
+import { matchesAdminLogEventFilter } from '../services/adminLogsService';
 
-const PROJECT_ID = 'guitar-academy-security-test';
+const PROJECT_ID =
+  process.env.GCLOUD_PROJECT ||
+  process.env.FIREBASE_PROJECT_ID ||
+  'demo-guitar-academy-security-test';
 
 function parseEmulatorHost(): { host: string; port: number } {
   const raw = process.env.FIRESTORE_EMULATOR_HOST || '127.0.0.1:8080';
@@ -88,6 +92,21 @@ describe('Zero-Trust RBAC Role Resolution (Client Fail-Closed Unit Tests)', () =
     }));
 
     assert.equal(resolved, 'admin');
+  });
+
+  it('filters admin_logs accurately by auth, database_access, and role_change groups', () => {
+    assert.equal(matchesAdminLogEventFilter('auth_login_success', 'auth'), true);
+    assert.equal(matchesAdminLogEventFilter('auth_token_rejected', 'auth'), true);
+    assert.equal(matchesAdminLogEventFilter('student_status_updated', 'auth'), false);
+
+    assert.equal(matchesAdminLogEventFilter('database_access', 'database_access'), true);
+    assert.equal(matchesAdminLogEventFilter('security_audit_viewed', 'database_access'), true);
+    assert.equal(matchesAdminLogEventFilter('auth_login_success', 'database_access'), false);
+
+    assert.equal(matchesAdminLogEventFilter('role_change', 'role_change'), true);
+    assert.equal(matchesAdminLogEventFilter('role_access_denied', 'role_change'), true);
+    assert.equal(matchesAdminLogEventFilter('student_status_updated', 'role_change'), true);
+    assert.equal(matchesAdminLogEventFilter('auth_logout', 'role_change'), false);
   });
 });
 
@@ -651,6 +670,8 @@ describe('Backend Express HTTP — Zero-Trust Auth, RBAC & CORS (Real Server Req
       }
       return ROLES[uid] || { exists: false, role: 'student' };
     },
+    writeAdminLog: async () => {},
+    listAdminLogs: async () => [],
   });
 
   let server: import('node:http').Server;
@@ -671,6 +692,7 @@ describe('Backend Express HTTP — Zero-Trust Auth, RBAC & CORS (Real Server Req
 
   after(async () => {
     if (server) {
+      server.closeAllConnections?.();
       await new Promise<void>((resolve) => server.close(() => resolve()));
     }
   });
@@ -693,7 +715,7 @@ describe('Backend Express HTTP — Zero-Trust Auth, RBAC & CORS (Real Server Req
 
     // Even default production server middleware rejects mock-valid-token-* strings
     const defaultApp = createServerApp();
-    await new Promise<void>((resolve) => {
+    await new Promise<void>((resolve, reject) => {
       const defaultSrv = http.createServer(defaultApp);
       defaultSrv.listen(0, '127.0.0.1', async () => {
         const addr = defaultSrv.address();
@@ -703,8 +725,11 @@ describe('Backend Express HTTP — Zero-Trust Auth, RBAC & CORS (Real Server Req
             headers: { Authorization: 'Bearer mock-valid-token-admin_123' },
           });
           assert.equal(res.status, 401);
-        } finally {
+          defaultSrv.closeAllConnections?.();
           defaultSrv.close(() => resolve());
+        } catch (err) {
+          defaultSrv.closeAllConnections?.();
+          defaultSrv.close(() => reject(err));
         }
       });
     });

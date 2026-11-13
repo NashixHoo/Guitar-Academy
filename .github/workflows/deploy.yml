@@ -53,7 +53,7 @@ jobs:
         run: npm test
 
       - name: Run security unit and HTTP backend tests
-        run: npm run test:security
+        run: npm run test:security:unit
 
       - name: Run security tests with Firebase Emulator
         env:

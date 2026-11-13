@@ -2,24 +2,32 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Activity,
   AlertTriangle,
+  Calendar,
   CheckCircle2,
+  Filter,
   KeyRound,
   RefreshCw,
   Search,
   ShieldAlert,
   ShieldCheck,
   UserCheck,
+  X,
 } from 'lucide-react';
 import {
   AdminLogEntry,
+  AdminLogFilterGroup,
   AdminLogSeverity,
   fetchRecentAdminLogs,
   logAdminSecurityEvent,
+  matchesAdminLogEventFilter,
   subscribeToAdminLogs,
 } from '../../services/adminLogsService';
 import { useAuth } from '../../contexts/AuthContext';
 
 const EVENT_TYPE_LABELS: Record<string, string> = {
+  auth: 'Autenticação (auth)',
+  database_access: 'Acesso ao Banco (database_access)',
+  role_change: 'Alteração de Papel (role_change)',
   auth_login_success: 'Login Realizado',
   auth_login_failed: 'Falha de Login',
   auth_signup: 'Novo Cadastro',
@@ -29,11 +37,18 @@ const EVENT_TYPE_LABELS: Record<string, string> = {
   role_escalation_blocked: 'Escalonamento Bloqueado',
   admin_preview_toggled: 'Modo Preview Admin',
   student_status_updated: 'Status de Aluno Alterado',
-  security_audit_viewed: 'Auditoria Registrada',
+  security_audit_viewed: 'Auditoria de Banco / Segurança',
   auth_token_rejected: 'Token Rejeitado (401)',
   role_access_denied: 'Acesso Negado (403)',
   admin_role_lookup: 'Consulta de Papel Admin',
 };
+
+function formatLocalDateInput(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
 
 function formatLogTimestamp(iso: string): string {
   try {
@@ -52,22 +67,46 @@ function formatLogTimestamp(iso: string): string {
   }
 }
 
-export const AdminLogsPanel: React.FC = () => {
+export interface AdminLogsPanelProps {
+  initialEventTypeFilter?: AdminLogFilterGroup;
+  initialStartDate?: string;
+  initialEndDate?: string;
+}
+
+export const AdminLogsPanel: React.FC<AdminLogsPanelProps> = ({
+  initialEventTypeFilter = 'all',
+  initialStartDate = '',
+  initialEndDate = '',
+}) => {
   const { user, role, isAdmin } = useAuth();
   const [logs, setLogs] = useState<AdminLogEntry[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [severityFilter, setSeverityFilter] = useState<'all' | AdminLogSeverity>('all');
-  const [categoryFilter, setCategoryFilter] = useState<'all' | 'auth' | 'security'>('all');
+  const [eventTypeFilter, setEventTypeFilter] =
+    useState<AdminLogFilterGroup>(initialEventTypeFilter);
+  const [startDate, setStartDate] = useState<string>(initialStartDate);
+  const [endDate, setEndDate] = useState<string>(initialEndDate);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [isRecordingCheck, setIsRecordingCheck] = useState<boolean>(false);
 
+  const isInvalidDateRange = Boolean(startDate && endDate && startDate > endDate);
+
+  const queryFilter = useMemo(
+    () => ({
+      startDate: !isInvalidDateRange && startDate ? startDate : undefined,
+      endDate: !isInvalidDateRange && endDate ? endDate : undefined,
+      maxItems: 100,
+    }),
+    [startDate, endDate, isInvalidDateRange]
+  );
+
   const loadManualRefresh = useCallback(async () => {
-    if (!user || !isAdmin) return;
+    if (!user || !isAdmin || isInvalidDateRange) return;
     setLoading(true);
     setErrorMsg(null);
     try {
-      const items = await fetchRecentAdminLogs(60);
+      const items = await fetchRecentAdminLogs(queryFilter);
       setLogs(items);
     } catch (err: any) {
       setErrorMsg(
@@ -77,10 +116,14 @@ export const AdminLogsPanel: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [user, isAdmin]);
+  }, [user, isAdmin, isInvalidDateRange, queryFilter]);
 
   useEffect(() => {
     if (!user || !isAdmin) {
+      setLoading(false);
+      return;
+    }
+    if (isInvalidDateRange) {
       setLoading(false);
       return;
     }
@@ -99,24 +142,24 @@ export const AdminLogsPanel: React.FC = () => {
           'Permissão insuficiente ou indisponibilidade ao assinar admin_logs em tempo real.'
         );
       },
-      60
+      queryFilter
     );
 
     return () => unsubscribe();
-  }, [user, isAdmin]);
+  }, [user, isAdmin, isInvalidDateRange, queryFilter]);
 
   const handleRecordAuditCheck = async () => {
     if (!user || !isAdmin || isRecordingCheck) return;
     setIsRecordingCheck(true);
     try {
       await logAdminSecurityEvent({
-        eventType: 'security_audit_viewed',
+        eventType: 'database_access',
         severity: 'info',
         actorUid: user.uid,
         actorEmail: user.email,
         actorRole: role,
-        action: 'Verificação manual da trilha de auditoria administrativa',
-        details: `Painel Admin Suite consultado por ${user.email || user.uid}`,
+        action: 'Inspeção manual da coleção admin_logs',
+        details: `Consulta administrativa executada por ${user.email || user.uid}`,
         source: 'admin_portal',
       });
       await loadManualRefresh();
@@ -125,17 +168,49 @@ export const AdminLogsPanel: React.FC = () => {
     }
   };
 
+  const applyDatePreset = (days: number) => {
+    const today = new Date();
+    const start = new Date(today);
+    start.setDate(today.getDate() - (days - 1));
+    setStartDate(formatLocalDateInput(start));
+    setEndDate(formatLocalDateInput(today));
+  };
+
+  const clearAllFilters = () => {
+    setSearchTerm('');
+    setSeverityFilter('all');
+    setEventTypeFilter('all');
+    setStartDate('');
+    setEndDate('');
+  };
+
+  const hasActiveFilters = Boolean(
+    searchTerm.trim() ||
+      severityFilter !== 'all' ||
+      eventTypeFilter !== 'all' ||
+      startDate ||
+      endDate
+  );
+
   const filteredLogs = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
+    const startMs =
+      !isInvalidDateRange && startDate ? new Date(`${startDate}T00:00:00`).getTime() : null;
+    const endMs =
+      !isInvalidDateRange && endDate ? new Date(`${endDate}T23:59:59.999`).getTime() : null;
+
     return logs.filter((entry) => {
       if (severityFilter !== 'all' && entry.severity !== severityFilter) {
         return false;
       }
-      if (categoryFilter === 'auth' && !entry.eventType.startsWith('auth_')) {
+      if (!matchesAdminLogEventFilter(entry.eventType, eventTypeFilter)) {
         return false;
       }
-      if (categoryFilter === 'security' && entry.eventType.startsWith('auth_')) {
-        return false;
+      if (startMs !== null || endMs !== null) {
+        const entryMs = new Date(entry.timestamp).getTime();
+        if (Number.isNaN(entryMs)) return false;
+        if (startMs !== null && entryMs < startMs) return false;
+        if (endMs !== null && entryMs > endMs) return false;
       }
       if (!term) return true;
       return (
@@ -146,16 +221,16 @@ export const AdminLogsPanel: React.FC = () => {
         (entry.details || '').toLowerCase().includes(term)
       );
     });
-  }, [logs, severityFilter, categoryFilter, searchTerm]);
+  }, [logs, severityFilter, eventTypeFilter, startDate, endDate, isInvalidDateRange, searchTerm]);
 
   const counts = useMemo(() => {
     return {
-      total: logs.length,
-      critical: logs.filter((l) => l.severity === 'critical').length,
-      warning: logs.filter((l) => l.severity === 'warning').length,
-      auth: logs.filter((l) => l.eventType.startsWith('auth_')).length,
+      total: filteredLogs.length,
+      critical: filteredLogs.filter((l) => l.severity === 'critical').length,
+      warning: filteredLogs.filter((l) => l.severity === 'warning').length,
+      auth: filteredLogs.filter((l) => matchesAdminLogEventFilter(l.eventType, 'auth')).length,
     };
-  }, [logs]);
+  }, [filteredLogs]);
 
   const renderSeverityBadge = (severity: AdminLogSeverity) => {
     if (severity === 'critical') {
@@ -193,7 +268,7 @@ export const AdminLogsPanel: React.FC = () => {
             </h3>
           </div>
           <p className="text-xs text-[#A1A1AA] mt-0.5">
-            Coleção imutável no Firestore com leitura exclusiva para administradores verificados.
+            Coleção imutável no Firestore com filtros por período e tipo de evento para administradores.
           </p>
         </div>
 
@@ -209,7 +284,7 @@ export const AdminLogsPanel: React.FC = () => {
           </button>
           <button
             onClick={loadManualRefresh}
-            disabled={loading}
+            disabled={loading || isInvalidDateRange}
             className="p-2 rounded-xl bg-[#27272A] hover:bg-[#3F3F46] disabled:opacity-50 text-[#E4E4E7] border border-[#3F3F46] transition cursor-pointer"
             title="Atualizar logs de segurança"
           >
@@ -221,7 +296,7 @@ export const AdminLogsPanel: React.FC = () => {
       {/* Resumo Numérico */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
         <div className="p-3 rounded-xl bg-[#141417] border border-[#27272A]">
-          <span className="text-[#A1A1AA] block text-[11px]">Eventos Carregados</span>
+          <span className="text-[#A1A1AA] block text-[11px]">Eventos Exibidos</span>
           <span className="text-lg font-black text-white font-mono-code">{counts.total}</span>
         </div>
         <div className="p-3 rounded-xl bg-[#141417] border border-[#27272A]">
@@ -238,7 +313,7 @@ export const AdminLogsPanel: React.FC = () => {
         </div>
       </div>
 
-      {/* Filtros */}
+      {/* Filtros por Busca, Tipo de Evento e Severidade */}
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
         <div className="sm:col-span-2 relative">
           <Search className="w-3.5 h-3.5 text-[#A1A1AA] absolute left-3 top-1/2 -translate-y-1/2" />
@@ -247,21 +322,43 @@ export const AdminLogsPanel: React.FC = () => {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Filtrar por ação, e-mail, UID ou detalhe..."
+            aria-label="Buscar nos logs de segurança"
             className="w-full h-9 pl-9 pr-3 rounded-xl bg-[#141417] border border-[#27272A] text-xs text-white placeholder:text-[#71717A] focus:border-[#7B1E2B] outline-hidden"
           />
         </div>
-        <select
-          value={categoryFilter}
-          onChange={(e) => setCategoryFilter(e.target.value as 'all' | 'auth' | 'security')}
-          className="h-9 px-3 rounded-xl bg-[#141417] border border-[#27272A] text-xs text-white focus:border-[#7B1E2B] outline-hidden"
-        >
-          <option value="all">Todas as Categorias</option>
-          <option value="auth">Autenticação</option>
-          <option value="security">Segurança & Admin</option>
-        </select>
+
+        <div className="relative">
+          <Filter className="w-3.5 h-3.5 text-[#A1A1AA] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <select
+            value={eventTypeFilter}
+            onChange={(e) => setEventTypeFilter(e.target.value as AdminLogFilterGroup)}
+            aria-label="Filtrar por tipo de evento"
+            className="w-full h-9 pl-9 pr-3 rounded-xl bg-[#141417] border border-[#27272A] text-xs text-white focus:border-[#7B1E2B] outline-hidden"
+          >
+            <option value="all">Todos os Tipos de Evento</option>
+            <optgroup label="Grupos Principais">
+              <option value="auth">Autenticação (auth)</option>
+              <option value="database_access">Acesso ao Banco (database_access)</option>
+              <option value="role_change">Alteração de Papel (role_change)</option>
+            </optgroup>
+            <optgroup label="Eventos Específicos">
+              <option value="auth_login_success">Login Realizado</option>
+              <option value="auth_signup">Novo Cadastro</option>
+              <option value="auth_logout">Sessão Encerrada</option>
+              <option value="auth_token_rejected">Token Rejeitado (401)</option>
+              <option value="role_access_denied">Acesso Negado (403)</option>
+              <option value="admin_role_lookup">Consulta de Papel Admin</option>
+              <option value="student_status_updated">Status de Aluno Alterado</option>
+              <option value="security_audit_viewed">Auditoria de Segurança</option>
+              <option value="admin_preview_toggled">Modo Preview Admin</option>
+            </optgroup>
+          </select>
+        </div>
+
         <select
           value={severityFilter}
           onChange={(e) => setSeverityFilter(e.target.value as 'all' | AdminLogSeverity)}
+          aria-label="Filtrar por severidade"
           className="h-9 px-3 rounded-xl bg-[#141417] border border-[#27272A] text-xs text-white focus:border-[#7B1E2B] outline-hidden"
         >
           <option value="all">Todas as Severidades</option>
@@ -270,6 +367,80 @@ export const AdminLogsPanel: React.FC = () => {
           <option value="critical">Crítico</option>
         </select>
       </div>
+
+      {/* Seletor de Período (Date Range Picker) */}
+      <div className="p-3 rounded-xl bg-[#141417] border border-[#27272A] flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2.5 text-xs">
+          <div className="flex items-center gap-1.5 text-[#A1A1AA] font-semibold">
+            <Calendar className="w-3.5 h-3.5 text-[#C5A059]" />
+            <span>Período:</span>
+          </div>
+          <label className="flex items-center gap-1.5 text-[11px] text-[#A1A1AA]">
+            <span>De</span>
+            <input
+              type="date"
+              value={startDate}
+              max={endDate || undefined}
+              onChange={(e) => setStartDate(e.target.value)}
+              aria-label="Data inicial"
+              className="h-8 px-2.5 rounded-lg bg-[#1C1C21] border border-[#27272A] text-xs text-white font-mono-code focus:border-[#7B1E2B] outline-hidden"
+            />
+          </label>
+          <label className="flex items-center gap-1.5 text-[11px] text-[#A1A1AA]">
+            <span>Até</span>
+            <input
+              type="date"
+              value={endDate}
+              min={startDate || undefined}
+              onChange={(e) => setEndDate(e.target.value)}
+              aria-label="Data final"
+              className="h-8 px-2.5 rounded-lg bg-[#1C1C21] border border-[#27272A] text-xs text-white font-mono-code focus:border-[#7B1E2B] outline-hidden"
+            />
+          </label>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+          <button
+            type="button"
+            onClick={() => applyDatePreset(1)}
+            className="px-2.5 py-1 rounded-lg bg-[#1C1C21] hover:bg-[#27272A] text-[#E4E4E7] border border-[#27272A] transition cursor-pointer"
+          >
+            Hoje
+          </button>
+          <button
+            type="button"
+            onClick={() => applyDatePreset(7)}
+            className="px-2.5 py-1 rounded-lg bg-[#1C1C21] hover:bg-[#27272A] text-[#E4E4E7] border border-[#27272A] transition cursor-pointer"
+          >
+            7 dias
+          </button>
+          <button
+            type="button"
+            onClick={() => applyDatePreset(30)}
+            className="px-2.5 py-1 rounded-lg bg-[#1C1C21] hover:bg-[#27272A] text-[#E4E4E7] border border-[#27272A] transition cursor-pointer"
+          >
+            30 dias
+          </button>
+          {hasActiveFilters && (
+            <button
+              type="button"
+              onClick={clearAllFilters}
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#7B1E2B]/30 hover:bg-[#7B1E2B]/50 text-[#FFA4B0] border border-[#7B1E2B]/60 transition cursor-pointer"
+            >
+              <X className="w-3 h-3" />
+              <span>Limpar filtros</span>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Erro de intervalo inválido */}
+      {isInvalidDateRange && (
+        <div className="p-3 rounded-xl bg-amber-950/40 border border-amber-800/60 text-amber-300 text-xs flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4 shrink-0" />
+          <span>A data inicial não pode ser posterior à data final.</span>
+        </div>
+      )}
 
       {/* Erro */}
       {errorMsg && (
