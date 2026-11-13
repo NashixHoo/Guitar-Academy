@@ -40,8 +40,8 @@ jobs:
       - name: Setup Java JDK 21 for Firebase Emulator
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
-          java-version: '21'
+          distribution: temurin
+          java-version: 21
 
       - name: Install Firebase CLI
         run: npm install -g firebase-tools
