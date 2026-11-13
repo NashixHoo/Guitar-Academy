@@ -13,7 +13,8 @@
     "lint": "tsc --noEmit",
     "test": "tsx test-integration.ts",
     "test:security": "tsx --test src/tests/security.test.ts",
-    "test:security:emulator": "REQUIRE_FIREBASE_EMULATOR=true firebase emulators:exec --only firestore \"npx tsx --test src/tests/security.test.ts\"",
+    "test:security:unit": "tsx --test --test-name-pattern=\"Zero-Trust RBAC|Backend Express HTTP\" src/tests/security.test.ts",
+    "test:security:emulator": "REQUIRE_FIREBASE_EMULATOR=true firebase emulators:exec --only firestore --project gen-lang-client-0214739740 \"REQUIRE_FIREBASE_EMULATOR=true tsx --test src/tests/security.test.ts\"",
     "verify": "tsx scripts/verify-phase6.ts"
   },
   "dependencies": {

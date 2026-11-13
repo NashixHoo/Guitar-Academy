@@ -112,6 +112,43 @@ service cloud.firestore {
         (!('studentId' in data) || data.studentId == uid);
     }
 
+    // Validação estrita de registros de auditoria (/admin_logs/{logId})
+    function isValidAdminLog(data, logId) {
+      return data.keys().hasAll([
+          'id', 'eventType', 'severity', 'actorUid', 'actorRole', 'action', 'source', 'timestamp'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'eventType', 'severity', 'actorUid', 'actorEmail', 'actorRole',
+          'targetUid', 'action', 'details', 'source', 'timestamp', 'createdAt'
+        ]) &&
+        isValidId(data.id) &&
+        data.id == logId &&
+        data.eventType is string &&
+        data.eventType in [
+          'auth_login_success', 'auth_login_failed', 'auth_signup', 'auth_logout',
+          'auth_password_reset', 'role_checked', 'role_escalation_blocked',
+          'admin_preview_toggled', 'student_status_updated', 'security_audit_viewed',
+          'auth_token_rejected', 'role_access_denied', 'admin_role_lookup'
+        ] &&
+        data.severity is string &&
+        data.severity in ['info', 'warning', 'critical'] &&
+        isValidId(data.actorUid) &&
+        (!('actorEmail' in data) || data.actorEmail == null || (data.actorEmail is string && data.actorEmail.size() <= 254)) &&
+        data.actorRole is string &&
+        data.actorRole in ['student', 'teacher', 'admin', 'unauthenticated'] &&
+        (!('targetUid' in data) || data.targetUid == null || isValidId(data.targetUid)) &&
+        data.action is string &&
+        data.action.size() > 0 &&
+        data.action.size() <= 160 &&
+        (!('details' in data) || data.details == null || (data.details is string && data.details.size() <= 500)) &&
+        data.source is string &&
+        data.source in ['client', 'backend', 'admin_portal'] &&
+        data.timestamp is string &&
+        data.timestamp.size() > 0 &&
+        data.timestamp.size() <= 40 &&
+        hasNoPrivilegeFields(data);
+    }
+
     // 1. Dados dos Estudantes (/users/{userId})
     // Leitura: somente o próprio estudante (ownership) ou administrador autorizado.
     // Escrita: bloqueia explicitamente role, isAdmin, isTeacher e permissions na criação e atualização.
@@ -394,6 +431,27 @@ service cloud.firestore {
       allow get: if isAdmin() && isValidId(userId);
       allow list: if isAdmin();
       allow write: if false;
+    }
+
+    // 12. Logs de Auditoria e Segurança (/admin_logs/{logId}):
+    // Leitura e listagem restritas EXCLUSIVAMENTE a administradores verificados.
+    // Clientes autenticados só podem registrar eventos atribuídos ao próprio UID e sem falsificação de papel.
+    // Trilha imutável: atualizações e exclusões bloqueadas para todos os clientes.
+    match /admin_logs/{logId} {
+      allow get: if isAdmin() && isValidId(logId);
+      allow list: if isAdmin();
+      allow create: if isAuthenticated() &&
+        isValidId(logId) &&
+        isValidAdminLog(request.resource.data, logId) &&
+        request.resource.data.actorUid == request.auth.uid &&
+        request.resource.data.actorRole != 'unauthenticated' &&
+        (
+          request.resource.data.actorRole == 'student' ||
+          (request.resource.data.actorRole == 'teacher' && isTeacher()) ||
+          (request.resource.data.actorRole == 'admin' && isAdmin())
+        ) &&
+        (isAdmin() || request.resource.data.source == 'client');
+      allow update, delete: if false;
     }
 
     // Bloqueio padrão para qualquer caminho não explicitamente autorizado

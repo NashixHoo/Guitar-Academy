@@ -6,6 +6,7 @@ import { getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 import fs from 'fs';
+import http from 'http';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
@@ -54,9 +55,24 @@ function getAdminDb() {
     : getFirestore();
 }
 
+export interface AdminLogPayload {
+  eventType:
+    | 'auth_token_rejected'
+    | 'role_access_denied'
+    | 'admin_role_lookup';
+  severity: 'info' | 'warning' | 'critical';
+  actorUid: string;
+  actorEmail?: string | null;
+  actorRole: 'student' | 'teacher' | 'admin' | 'unauthenticated';
+  targetUid?: string | null;
+  action: string;
+  details?: string;
+}
+
 export interface ServerAuthDependencies {
   verifyIdToken?: (token: string) => Promise<{ uid: string; email?: string; [key: string]: any }>;
   getSystemRole?: (uid: string) => Promise<{ exists: boolean; role: string }>;
+  writeAdminLog?: (entry: AdminLogPayload) => Promise<void>;
 }
 
 const VALID_ROLES = new Set(['student', 'teacher', 'admin']);
@@ -152,6 +168,36 @@ export function createAuthMiddlewares(deps: ServerAuthDependencies = {}) {
       };
     });
 
+  const recordAdminLog =
+    deps.writeAdminLog ||
+    (async (entry: AdminLogPayload) => {
+      // Não grava no Firestore remoto quando deps de autenticação de teste estão injetadas sem writeAdminLog
+      if (deps.verifyIdToken || deps.getSystemRole) return;
+      try {
+        const id = `srv_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+        await getAdminDb()
+          .collection('admin_logs')
+          .doc(id)
+          .set({
+            id,
+            eventType: entry.eventType,
+            severity: entry.severity,
+            actorUid: UID_REGEX.test(entry.actorUid) ? entry.actorUid : 'unauthenticated',
+            actorEmail: entry.actorEmail ? String(entry.actorEmail).slice(0, 254) : null,
+            actorRole: entry.actorRole,
+            ...(entry.targetUid && UID_REGEX.test(entry.targetUid)
+              ? { targetUid: entry.targetUid }
+              : {}),
+            action: String(entry.action).slice(0, 160),
+            ...(entry.details ? { details: String(entry.details).slice(0, 500) } : {}),
+            source: 'backend',
+            timestamp: new Date().toISOString(),
+          });
+      } catch {
+        // Auditoria best-effort no servidor para não impactar disponibilidade se ADC não estiver ativo
+      }
+    });
+
   // Middleware de Autenticação Obrigatória via Firebase ID Token (Bearer Token)
   async function requireAuthMiddleware(
     req: express.Request,
@@ -186,6 +232,14 @@ export function createAuthMiddlewares(deps: ServerAuthDependencies = {}) {
       return next();
     } catch (err: any) {
       console.error('[requireAuth] Falha na validação criptográfica do token:', err?.message || err);
+      void recordAdminLog({
+        eventType: 'auth_token_rejected',
+        severity: 'warning',
+        actorUid: 'unauthenticated',
+        actorRole: 'unauthenticated',
+        action: `Token rejeitado em ${req.method} ${req.path}`,
+        details: 'Token Bearer inválido ou expirado bloqueado pelo middleware requireAuth',
+      });
       return res.status(401).json({
         error: 'Sessão inválida ou expirada. Faça login novamente no Guitar Academy.',
         code: 'auth/token-expired-or-invalid',
@@ -215,6 +269,15 @@ export function createAuthMiddlewares(deps: ServerAuthDependencies = {}) {
         (req as any).userRole = authoritativeRole;
 
         if (!allowedRoles.includes(authoritativeRole)) {
+          void recordAdminLog({
+            eventType: 'role_access_denied',
+            severity: 'critical',
+            actorUid: user.uid,
+            actorEmail: user.email || null,
+            actorRole: authoritativeRole,
+            action: `Acesso negado (403) em ${req.method} ${req.path}`,
+            details: `Papel "${authoritativeRole}" tentou acessar rota restrita a [${allowedRoles.join(', ')}]`,
+          });
           return res.status(403).json({
             error: 'Acesso negado. Seu perfil autenticado não possui permissão para esta operação.',
             code: 'auth/forbidden-role',
@@ -240,6 +303,7 @@ export function createAuthMiddlewares(deps: ServerAuthDependencies = {}) {
     requireRole: requireRoleMiddleware,
     requireAdmin: requireAdminMiddleware,
     resolveSystemRole,
+    recordAdminLog,
   };
 }
 
@@ -286,6 +350,7 @@ export function createServerApp(deps: ServerAuthDependencies = {}) {
   const requireRole = middlewares.requireRole;
   const requireAdmin = middlewares.requireAdmin;
   const resolveSystemRole = middlewares.resolveSystemRole;
+  const recordAdminLog = middlewares.recordAdminLog;
   const ai = createGeminiClient();
   const allowedOrigins = getAllowedOrigins();
 
@@ -677,8 +742,31 @@ Responda ESTRITAMENTE em JSON com plano de intervenção coletiva:
       const isCallerAdmin = callerRecord.exists && normalizeRole(callerRecord.role) === 'admin';
 
       if (!isCallerAdmin && caller.uid !== targetUid) {
+        void recordAdminLog({
+          eventType: 'role_access_denied',
+          severity: 'critical',
+          actorUid: caller.uid,
+          actorEmail: caller.email || null,
+          actorRole: callerRecord.exists ? normalizeRole(callerRecord.role) : 'student',
+          targetUid,
+          action: 'Tentativa bloqueada de consulta de papel de terceiros',
+          details: `Usuário ${caller.uid} tentou consultar /api/admin/roles/${targetUid}`,
+        });
         return res.status(403).json({
           error: 'Acesso negado. Apenas administradores podem consultar papéis de outros usuários.',
+        });
+      }
+
+      if (isCallerAdmin && caller.uid !== targetUid) {
+        void recordAdminLog({
+          eventType: 'admin_role_lookup',
+          severity: 'info',
+          actorUid: caller.uid,
+          actorEmail: caller.email || null,
+          actorRole: 'admin',
+          targetUid,
+          action: 'Consulta administrativa de papel de usuário',
+          details: `Admin consultou papel do UID ${targetUid}`,
         });
       }
 
@@ -690,6 +778,22 @@ Responda ESTRITAMENTE em JSON com plano de intervenção coletiva:
       });
     } catch {
       return res.status(403).json({ error: 'Falha ao validar permissão para consulta de papel.' });
+    }
+  });
+
+  // Rota administrativa para consulta de logs recentes (protegida por requireAuth e requireAdmin)
+  app.get('/api/admin/logs', requireAuth, requireAdmin, async (_req, res) => {
+    try {
+      const snap = await getAdminDb()
+        .collection('admin_logs')
+        .orderBy('timestamp', 'desc')
+        .limit(50)
+        .get();
+      return res.json({
+        logs: snap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() })),
+      });
+    } catch {
+      return res.json({ logs: [] });
     }
   });
 
@@ -720,6 +824,7 @@ async function start() {
   const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
   const isProduction = process.env.NODE_ENV === 'production';
   const ai = createGeminiClient();
+  const httpServer = http.createServer(app);
 
   if (isProduction) {
     const distPath = path.resolve('dist');
@@ -729,13 +834,16 @@ async function start() {
     });
   } else {
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        ws: { server: httpServer },
+      },
       appType: 'spa',
     });
     app.use(vite.middlewares);
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  httpServer.listen(PORT, '0.0.0.0', () => {
     console.log(
       `Guitar Academy Server running on http://0.0.0.0:${PORT} (Gemini AI: ${ai ? 'ENABLED' : 'DISABLED'})`
     );

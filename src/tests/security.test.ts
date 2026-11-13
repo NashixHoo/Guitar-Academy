@@ -125,6 +125,11 @@ describe('Firebase Emulator — Firestore Security Rules (Student vs Admin)', ()
   });
 
   after(async () => {
+    if (!emulatorAvailable) {
+      console.error(
+        `[WARNING] Firebase Firestore Emulator indisponivel em ${host}:${port}. Os 5 testes de regras do Emulator foram IGNORADOS (NAO APROVADOS).`
+      );
+    }
     if (testEnv) {
       await testEnv.cleanup();
       testEnv = null;
@@ -212,6 +217,17 @@ describe('Firebase Emulator — Firestore Security Rules (Student vs Admin)', ()
       await setDoc(doc(adminDb, 'courses', 'violao'), {
         id: 'violao',
         title: 'Dominio Total do Violao',
+      });
+      await setDoc(doc(adminDb, 'admin_logs', 'log-seed-1'), {
+        id: 'log-seed-1',
+        eventType: 'auth_login_success',
+        severity: 'info',
+        actorUid: ADMIN_UID,
+        actorEmail: 'admin@guitaracademy.test',
+        actorRole: 'admin',
+        action: 'Login administrativo inicial',
+        source: 'client',
+        timestamp: '2026-11-13T00:00:00.000Z',
       });
     });
   });
@@ -428,12 +444,32 @@ describe('Firebase Emulator — Firestore Security Rules (Student vs Admin)', ()
         action: 'bypass',
       })
     );
+    await assertFails(getDocs(collection(studentDb, 'admin_logs')));
+    await assertFails(getDoc(doc(studentDb, 'admin_logs', 'log-seed-1')));
+    await assertFails(
+      setDoc(doc(studentDb, 'admin_logs', 'log-forged-1'), {
+        id: 'log-forged-1',
+        eventType: 'auth_login_success',
+        severity: 'info',
+        actorUid: STUDENT_UID,
+        actorRole: 'admin',
+        action: 'Tentativa de falsificar papel no log',
+        source: 'admin_portal',
+        timestamp: '2026-11-13T00:00:00.000Z',
+      })
+    );
+    await assertFails(
+      updateDoc(doc(studentDb, 'admin_logs', 'log-seed-1'), {
+        action: 'Tampered',
+      })
+    );
 
-    // Unauthenticated users are also blocked from system_roles and users
+    // Unauthenticated users are also blocked from system_roles, users and admin_logs
     const unauthDb = env.unauthenticatedContext().firestore();
     await assertFails(getDocs(collection(unauthDb, 'system_roles')));
     await assertFails(getDoc(doc(unauthDb, 'system_roles', STUDENT_UID)));
     await assertFails(getDocs(collection(unauthDb, 'users')));
+    await assertFails(getDocs(collection(unauthDb, 'admin_logs')));
   });
 
   it('allows verified admin to query administrative collections while blocking teacher escalation', async (t) => {
@@ -451,9 +487,16 @@ describe('Firebase Emulator — Firestore Security Rules (Student vs Admin)', ()
     const usersSnap = await assertSucceeds(getDocs(collection(adminDb, 'users')));
     assert.ok(usersSnap.size >= 2);
 
-    // Teacher is blocked from reading system_roles (admin-only) and cannot self-promote
+    const logsSnap = await assertSucceeds(getDocs(collection(adminDb, 'admin_logs')));
+    assert.ok(logsSnap.size >= 1);
+    await assertFails(
+      updateDoc(doc(adminDb, 'admin_logs', 'log-seed-1'), { action: 'Overwrite immutable' })
+    );
+
+    // Teacher is blocked from reading system_roles and admin_logs and cannot self-promote
     await assertFails(getDoc(doc(teacherDb, 'system_roles', TEACHER_UID)));
     await assertFails(getDocs(collection(teacherDb, 'system_roles')));
+    await assertFails(getDocs(collection(teacherDb, 'admin_logs')));
     await assertSucceeds(
       getDocs(query(collection(teacherDb, 'classes'), where('teacherId', '==', TEACHER_UID)))
     );
@@ -689,6 +732,23 @@ describe('Backend Express HTTP — Zero-Trust Auth, RBAC & CORS (Real Server Req
     assert.equal(adminOverview.status, 200);
     const adminBody = (await adminOverview.json()) as { status: string };
     assert.equal(adminBody.status, 'ok');
+
+    const studentLogs = await fetch(`${baseUrl}/api/admin/logs`, {
+      headers: { Authorization: 'Bearer valid-student-jwt' },
+    });
+    assert.equal(studentLogs.status, 403);
+
+    const teacherLogs = await fetch(`${baseUrl}/api/admin/logs`, {
+      headers: { Authorization: 'Bearer valid-teacher-jwt' },
+    });
+    assert.equal(teacherLogs.status, 403);
+
+    const adminLogs = await fetch(`${baseUrl}/api/admin/logs`, {
+      headers: { Authorization: 'Bearer valid-admin-jwt' },
+    });
+    assert.equal(adminLogs.status, 200);
+    const adminLogsBody = (await adminLogs.json()) as { logs: unknown[] };
+    assert.ok(Array.isArray(adminLogsBody.logs));
   });
 
   it('enforces self-only vs admin role inspection on /api/auth/role and /api/admin/roles/:uid', async () => {

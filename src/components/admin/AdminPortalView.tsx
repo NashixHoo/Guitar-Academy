@@ -37,6 +37,8 @@ import { VIOLAO_LESSONS } from '../../data/violaoCourse';
 import { BASS_LESSONS } from '../../data/bassCourse';
 import { KEYBOARD_LESSONS } from '../../data/keyboardCourse';
 import { DRUMS_LESSONS } from '../../data/drumsCourse';
+import { AdminLogsPanel } from './AdminLogsPanel';
+import { logAdminSecurityEvent } from '../../services/adminLogsService';
 
 type AdminTabKey = 
   | 'overview' 
@@ -189,7 +191,36 @@ export const AdminPortalView: React.FC = () => {
     setStudents((prev) =>
       prev.map((s) => (s.uid === uid ? { ...s, status: nextStatus } : s))
     );
+    if (user) {
+      void logAdminSecurityEvent({
+        eventType: 'student_status_updated',
+        severity: nextStatus === 'suspended' ? 'warning' : 'info',
+        actorUid: user.uid,
+        actorEmail: user.email,
+        actorRole: 'admin',
+        targetUid: uid,
+        action: `Status do estudante alterado para "${nextStatus === 'active' ? 'Ativo' : 'Suspenso'}"`,
+        details: `Alteração executada no diretório administrativo por ${user.email || user.uid}`,
+        source: 'admin_portal',
+      });
+    }
     showToast(`Status do aluno atualizado para "${nextStatus === 'active' ? 'Ativo' : 'Suspenso'}"`);
+  };
+
+  const handleEnterStudentPreview = () => {
+    if (user) {
+      void logAdminSecurityEvent({
+        eventType: 'admin_preview_toggled',
+        severity: 'info',
+        actorUid: user.uid,
+        actorEmail: user.email,
+        actorRole: 'admin',
+        action: 'Administrador alternou para visualização como aluno',
+        details: 'Modo preview acadêmico ativado pelo Admin Suite',
+        source: 'admin_portal',
+      });
+    }
+    setAdminPreviewMode(true);
   };
 
   return (
@@ -218,7 +249,7 @@ export const AdminPortalView: React.FC = () => {
         <div className="flex items-center gap-2.5">
           {/* Botão de Preview: Ver como Aluno */}
           <button
-            onClick={() => setAdminPreviewMode(true)}
+            onClick={handleEnterStudentPreview}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#27272A] hover:bg-[#3F3F46] text-[#E4E4E7] text-xs font-semibold border border-[#3F3F46] transition cursor-pointer"
             title="Acessar o ambiente de aprendizagem para testar como aluno"
           >
@@ -719,7 +750,7 @@ export const AdminPortalView: React.FC = () => {
                   <ul className="text-xs text-[#A1A1AA] space-y-2 list-disc list-inside">
                     <li><strong className="text-white">users/{'{userId}'}:</strong> Somente o próprio aluno ou admin validado pode ler/escrever.</li>
                     <li><strong className="text-white">system_roles/{'{userId}'}:</strong> Imutável por clientes (<code className="text-amber-400">allow write: if false</code>).</li>
-                    <li><strong className="text-white">Impedimento de Auto-promoção:</strong> Alunos não podem alterar o campo <code className="text-rose-400">role</code>.</li>
+                    <li><strong className="text-white">admin_logs/{'{logId}'}:</strong> Leitura exclusiva para administradores e escrita imutável.</li>
                     <li><strong className="text-white">Isolamento Multi-aluno:</strong> Aluno não consegue consultar dados de outros estudantes.</li>
                   </ul>
                 </div>
@@ -737,6 +768,8 @@ export const AdminPortalView: React.FC = () => {
                   </ul>
                 </div>
               </div>
+
+              <AdminLogsPanel />
             </div>
           )}
         </main>

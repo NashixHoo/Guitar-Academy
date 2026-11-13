@@ -16,6 +16,7 @@ import {
   auth
 } from '../services/firebase';
 import { storageService } from '../services/storageService';
+import { logAdminSecurityEvent } from '../services/adminLogsService';
 import { UserProgress, StudentProfile, UserRole } from '../types';
 
 export type SyncStatus = 'synced' | 'syncing' | 'offline' | 'error';
@@ -174,19 +175,47 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setAuthSuccessMessage(null);
   }, []);
 
+  const recordAuthAuditEvent = useCallback(
+    async (
+      eventType: 'auth_login_success' | 'auth_signup' | 'auth_logout',
+      action: string,
+      details: string
+    ) => {
+      const current = auth.currentUser;
+      if (!current) return;
+      const resolved = await fetchSystemRole(current.uid).catch(() => 'student' as UserRole);
+      await logAdminSecurityEvent({
+        eventType,
+        severity: 'info',
+        actorUid: current.uid,
+        actorEmail: current.email,
+        actorRole: resolved,
+        action,
+        details,
+        source: 'client',
+      });
+    },
+    []
+  );
+
   const signInWithGoogle = useCallback(async () => {
     setAuthError(null);
     setAuthSuccessMessage(null);
     try {
       await fbSignInGoogle();
       await refreshUserProfile();
+      void recordAuthAuditEvent(
+        'auth_login_success',
+        'Autenticação via Google concluída',
+        'Provedor google.com validado pelo Firebase Auth'
+      );
     } catch (err: any) {
       console.error('Falha no login com Google:', err);
       const friendly = mapFirebaseAuthError(err);
       setAuthError(friendly);
       throw err;
     }
-  }, [refreshUserProfile]);
+  }, [refreshUserProfile, recordAuthAuditEvent]);
 
   const signInWithFacebook = useCallback(async () => {
     setAuthError(null);
@@ -194,13 +223,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       await fbSignInFacebook();
       await refreshUserProfile();
+      void recordAuthAuditEvent(
+        'auth_login_success',
+        'Autenticação via Facebook concluída',
+        'Provedor facebook.com validado pelo Firebase Auth'
+      );
     } catch (err: any) {
       console.error('Falha no login com Facebook:', err);
       const friendly = mapFirebaseAuthError(err);
       setAuthError(friendly);
       throw err;
     }
-  }, [refreshUserProfile]);
+  }, [refreshUserProfile, recordAuthAuditEvent]);
 
   const signInWithApple = useCallback(async () => {
     setAuthError(null);
@@ -208,13 +242,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       await fbSignInApple();
       await refreshUserProfile();
+      void recordAuthAuditEvent(
+        'auth_login_success',
+        'Autenticação via Apple concluída',
+        'Provedor apple.com validado pelo Firebase Auth'
+      );
     } catch (err: any) {
       console.error('Falha no login com Apple:', err);
       const friendly = mapFirebaseAuthError(err);
       setAuthError(friendly);
       throw err;
     }
-  }, [refreshUserProfile]);
+  }, [refreshUserProfile, recordAuthAuditEvent]);
 
   const signInWithEmail = useCallback(async (email: string, pass: string) => {
     setAuthError(null);
@@ -222,13 +261,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       await fbSignInEmail(email, pass);
       await refreshUserProfile();
+      void recordAuthAuditEvent(
+        'auth_login_success',
+        'Autenticação por e-mail e senha concluída',
+        'Provedor password validado pelo Firebase Auth'
+      );
     } catch (err: any) {
       console.error('Falha no login com e-mail/senha:', err);
       const friendly = mapFirebaseAuthError(err);
       setAuthError(friendly);
       throw err;
     }
-  }, [refreshUserProfile]);
+  }, [refreshUserProfile, recordAuthAuditEvent]);
 
   const signUpWithEmail = useCallback(async (name: string, email: string, pass: string) => {
     setAuthError(null);
@@ -236,6 +280,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       await fbSignUpEmail(name, email, pass);
       await refreshUserProfile();
+      void recordAuthAuditEvent(
+        'auth_signup',
+        'Novo cadastro por e-mail concluído',
+        'Conta discente registrada com papel padrão student'
+      );
       setAuthSuccessMessage('Conta criada com sucesso! Seja bem-vindo à Guitar Academy.');
     } catch (err: any) {
       console.error('Falha no cadastro com e-mail/senha:', err);
@@ -243,7 +292,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setAuthError(friendly);
       throw err;
     }
-  }, [refreshUserProfile]);
+  }, [refreshUserProfile, recordAuthAuditEvent]);
 
   const sendPasswordReset = useCallback(async (email: string) => {
     setAuthError(null);
@@ -261,6 +310,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const logOut = useCallback(async () => {
     try {
+      await Promise.race([
+        recordAuthAuditEvent(
+          'auth_logout',
+          'Sessão encerrada pelo usuário',
+          'Logout explícito solicitado pela interface'
+        ),
+        new Promise((resolve) => setTimeout(resolve, 600)),
+      ]).catch(() => undefined);
       await fbLogOut();
     } catch (err: any) {
       console.error('Erro ao efetuar logout:', err);
@@ -275,7 +332,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setAuthError(null);
       setAuthSuccessMessage(null);
     }
-  }, []);
+  }, [recordAuthAuditEvent]);
 
   const syncNow = useCallback(async () => {
     if (!user) return;

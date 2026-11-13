@@ -180,6 +180,86 @@
         "active": { "type": "boolean", "description": "Convite ativo" }
       },
       "required": ["classId", "code", "teacherId", "active"]
+    },
+    "AdminLogEntry": {
+      "title": "AdminLogEntry",
+      "description": "Registro imutável de auditoria para eventos de autenticação e ações sensíveis de segurança",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-\\.:]+$",
+          "description": "Identificador único do evento de auditoria"
+        },
+        "eventType": {
+          "type": "string",
+          "enum": [
+            "auth_login_success",
+            "auth_login_failed",
+            "auth_signup",
+            "auth_logout",
+            "auth_password_reset",
+            "role_checked",
+            "role_escalation_blocked",
+            "admin_preview_toggled",
+            "student_status_updated",
+            "security_audit_viewed",
+            "auth_token_rejected",
+            "role_access_denied",
+            "admin_role_lookup"
+          ],
+          "description": "Categoria do evento de segurança ou autenticação"
+        },
+        "severity": {
+          "type": "string",
+          "enum": ["info", "warning", "critical"],
+          "description": "Nível de criticidade do evento"
+        },
+        "actorUid": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-\\.:]+$",
+          "description": "UID do usuário que originou a ação"
+        },
+        "actorEmail": {
+          "type": "string",
+          "maxLength": 254,
+          "description": "E-mail do ator autenticado quando disponível"
+        },
+        "actorRole": {
+          "type": "string",
+          "enum": ["student", "teacher", "admin", "unauthenticated"],
+          "description": "Papel efetivo do ator no momento do evento"
+        },
+        "targetUid": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-\\.:]+$",
+          "description": "UID de destino afetado pela operação administrativa, se aplicável"
+        },
+        "action": {
+          "type": "string",
+          "maxLength": 160,
+          "description": "Descrição resumida da ação executada"
+        },
+        "details": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "Contexto técnico complementar sanitizado"
+        },
+        "source": {
+          "type": "string",
+          "enum": ["client", "backend", "admin_portal"],
+          "description": "Origem do registro de auditoria"
+        },
+        "timestamp": {
+          "type": "string",
+          "maxLength": 40,
+          "description": "Timestamp ISO 8601 do evento"
+        }
+      },
+      "required": ["id", "eventType", "severity", "actorUid", "actorRole", "action", "source", "timestamp"]
     }
   },
   "firestore": {
@@ -234,6 +314,10 @@
     "/system_roles/{userId}": {
       "schema": "UserRoleRecord",
       "description": "Registro autoritativo de papéis do sistema"
+    },
+    "/admin_logs/{logId}": {
+      "schema": "AdminLogEntry",
+      "description": "Registros imutáveis de auditoria de segurança e eventos de autenticação"
     }
   }
 }
