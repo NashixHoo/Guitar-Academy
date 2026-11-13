@@ -13,6 +13,7 @@
     "lint": "tsc --noEmit",
     "test": "tsx test-integration.ts",
     "test:security": "tsx --test src/tests/security.test.ts",
+    "test:security:emulator": "REQUIRE_FIREBASE_EMULATOR=true firebase emulators:exec --only firestore \"npx tsx --test src/tests/security.test.ts\"",
     "verify": "tsx scripts/verify-phase6.ts"
   },
   "dependencies": {

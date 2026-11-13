@@ -47,8 +47,7 @@ service cloud.firestore {
       return data.keys().hasOnly([
           'uid', 'displayName', 'email', 'photoURL', 'provider',
           'createdAt', 'lastLoginAt', 'lastSeenAt', 'accountStatus',
-          'enrolledCourses', 'preferences', 'updatedAt',
-          'role', 'isAdmin', 'isTeacher'
+          'enrolledCourses', 'preferences', 'updatedAt'
         ]) &&
         (!('uid' in data) || (isValidId(data.uid) && data.uid == userId)) &&
         (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 120)) &&
@@ -115,17 +114,18 @@ service cloud.firestore {
 
     // 1. Dados dos Estudantes (/users/{userId})
     // Leitura: somente o próprio estudante (ownership) ou administrador autorizado.
-    // Escrita: somente o próprio estudante com validação de payload, imutabilidade de identidade e bloqueio total de privilégios.
+    // Escrita: bloqueia explicitamente role, isAdmin, isTeacher e permissions na criação e atualização.
     match /users/{userId} {
       allow get: if (isOwner(userId) || isAdmin()) && isValidId(userId);
       allow list: if isAdmin();
       allow create: if isOwner(userId) && isValidId(userId) &&
+        hasNoPrivilegeFields(request.resource.data) &&
         isValidUserPayload(request.resource.data, userId) &&
-        hasNoElevatedUserFields(request.resource.data) &&
         (!('accountStatus' in request.resource.data) || request.resource.data.accountStatus == 'active');
       allow update: if (isOwner(userId) || isAdmin()) && isValidId(userId) &&
-        isValidUserPayload(request.resource.data, userId) &&
         (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'isTeacher', 'isAdmin', 'permissions'])) &&
+        isValidUserPayload(request.resource.data, userId) &&
+        hasNoPrivilegeFields(request.resource.data) &&
         (isAdmin() || (
           (!('uid' in resource.data) || request.resource.data.uid == resource.data.uid) &&
           (!('createdAt' in resource.data) || request.resource.data.createdAt == resource.data.createdAt) &&
@@ -206,11 +206,14 @@ service cloud.firestore {
              request.resource.data.teacherId == get(/databases/$(database)/documents/classes/$(classId)).data.teacherId)
           );
         allow update: if isValidId(studentId) &&
-          hasNoElevatedUserFields(request.resource.data) &&
+          hasNoPrivilegeFields(request.resource.data) &&
           (!('studentId' in resource.data) || request.resource.data.studentId == resource.data.studentId) &&
-          (!('teacherId' in resource.data) || request.resource.data.teacherId == resource.data.teacherId) && (
+          (!('teacherId' in resource.data) || request.resource.data.teacherId == resource.data.teacherId) &&
+          (!('classId' in resource.data) || request.resource.data.classId == resource.data.classId) && (
             isAdmin() ||
-            (isTeacher() && get(/databases/$(database)/documents/classes/$(classId)).data.teacherId == request.auth.uid)
+            (isTeacher() && get(/databases/$(database)/documents/classes/$(classId)).data.teacherId == request.auth.uid) ||
+            (isOwner(studentId) &&
+             request.resource.data.diff(resource.data).affectedKeys().hasOnly(['studentName', 'studentEmail', 'studentPhotoUrl', 'lastActivityAt', 'updatedAt']))
           );
         allow delete: if isValidId(studentId) && (
           isAdmin() ||

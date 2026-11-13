@@ -193,40 +193,51 @@ export function createAuthMiddlewares(deps: ServerAuthDependencies = {}) {
     }
   }
 
-  // Middleware para verificar autorização administrativa baseada exclusivamente em system_roles
-  async function requireAdminMiddleware(
-    req: express.Request,
-    res: express.Response,
-    next: express.NextFunction
-  ) {
-    const user = (req as any).user;
-    if (!user || !user.uid) {
-      return res.status(401).json({
-        error: 'Autenticação necessária para acesso administrativo.',
-        code: 'auth/unauthorized',
-      });
-    }
-
-    try {
-      const record = await resolveSystemRole(user.uid);
-      if (!record.exists || normalizeRole(record.role) !== 'admin') {
-        return res.status(403).json({
-          error: 'Acesso negado. Esta rota exige privilégios administrativos confirmados.',
-          code: 'auth/forbidden-not-admin',
+  // Middleware de Autorização por Papel (RBAC Zero-Trust)
+  // Consulta EXCLUSIVAMENTE system_roles/{uid} — jamais confia em role enviado pelo frontend.
+  function requireRoleMiddleware(allowedRoles: Array<'student' | 'teacher' | 'admin'>) {
+    return async (
+      req: express.Request,
+      res: express.Response,
+      next: express.NextFunction
+    ) => {
+      const user = (req as any).user;
+      if (!user || !user.uid) {
+        return res.status(401).json({
+          error: 'Autenticação necessária para verificação de permissão.',
+          code: 'auth/unauthorized',
         });
       }
-      return next();
-    } catch (err: any) {
-      console.error('[requireAdmin] Falha ao verificar papel administrativo:', err?.message || err);
-      return res.status(403).json({
-        error: 'Falha na validação de permissões administrativas.',
-        code: 'auth/role-verification-failed',
-      });
-    }
+
+      try {
+        const record = await resolveSystemRole(user.uid);
+        const authoritativeRole = record.exists ? normalizeRole(record.role) : 'student';
+        (req as any).userRole = authoritativeRole;
+
+        if (!allowedRoles.includes(authoritativeRole)) {
+          return res.status(403).json({
+            error: 'Acesso negado. Seu perfil autenticado não possui permissão para esta operação.',
+            code: 'auth/forbidden-role',
+          });
+        }
+
+        return next();
+      } catch (err: any) {
+        console.error('[requireRole] Falha na consulta autoritativa de papel (fail-closed):', err?.message || err);
+        return res.status(403).json({
+          error: 'Falha na validação de permissões. Acesso negado por segurança.',
+          code: 'auth/role-verification-failed',
+        });
+      }
+    };
   }
+
+  // Middleware administrativo baseado exclusivamente em requireRole(['admin'])
+  const requireAdminMiddleware = requireRoleMiddleware(['admin']);
 
   return {
     requireAuth: requireAuthMiddleware,
+    requireRole: requireRoleMiddleware,
     requireAdmin: requireAdminMiddleware,
     resolveSystemRole,
   };
@@ -239,6 +250,10 @@ export async function requireAuth(
   next: express.NextFunction
 ) {
   return defaultMiddlewares.requireAuth(req, res, next);
+}
+
+export function requireRole(allowedRoles: Array<'student' | 'teacher' | 'admin'>) {
+  return defaultMiddlewares.requireRole(allowedRoles);
 }
 
 export async function requireAdmin(
@@ -268,6 +283,7 @@ export function createServerApp(deps: ServerAuthDependencies = {}) {
   const app = express();
   const middlewares = createAuthMiddlewares(deps);
   const requireAuth = middlewares.requireAuth;
+  const requireRole = middlewares.requireRole;
   const requireAdmin = middlewares.requireAdmin;
   const resolveSystemRole = middlewares.resolveSystemRole;
   const ai = createGeminiClient();
@@ -276,14 +292,20 @@ export function createServerApp(deps: ServerAuthDependencies = {}) {
   // Configuração estrita de CORS por allowlist explícita
   app.use((req, res, next) => {
     const origin = req.headers.origin;
+    const requestHostOrigin = req.headers.host ? `${req.protocol}://${req.headers.host}` : '';
+    const isAllowedOrigin =
+      !origin ||
+      allowedOrigins.has(origin) ||
+      (Boolean(requestHostOrigin) && origin === requestHostOrigin);
+
     if (origin) {
-      if (allowedOrigins.has(origin)) {
+      if (isAllowedOrigin) {
         res.setHeader('Access-Control-Allow-Origin', origin);
         res.setHeader('Vary', 'Origin');
         res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
         res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
         res.setHeader('Access-Control-Allow-Credentials', 'true');
-      } else if (req.method === 'OPTIONS') {
+      } else if (req.method === 'OPTIONS' || req.path.startsWith('/api/')) {
         return res.status(403).json({ error: 'Origem não autorizada pela política CORS.' });
       }
     }
@@ -351,6 +373,9 @@ export function createServerApp(deps: ServerAuthDependencies = {}) {
 
   // ==========================================
   // PROFESSOR IA API ROUTES
+  // Matriz explícita de autorização:
+  // - Uso discente (student, teacher, admin): /chat, /exercise, /evaluate, /recommend
+  // - Gestão pedagógica (somente teacher ou admin): /class-insights
   // ==========================================
 
   // 1. Status do Professor IA
@@ -359,14 +384,19 @@ export function createServerApp(deps: ServerAuthDependencies = {}) {
       available: !!ai,
       model: 'gemini-3.8-flash',
       provider: 'Google Gemini',
+      permissions: {
+        studentRoutes: ['/api/professor/chat', '/api/professor/exercise', '/api/professor/evaluate', '/api/professor/recommend'],
+        teacherRoutes: ['/api/professor/class-insights'],
+        adminRoutes: ['/api/admin/overview', '/api/admin/roles/:uid'],
+      },
       message: ai
         ? 'Professor IA operacional via Gemini 3.8 Flash'
         : 'GEMINI_API_KEY não configurada no ambiente. Adicione a chave nas Configurações.',
     });
   });
 
-  // 2. Chat Contextualizado com Professor IA (Protegido por requireAuth e rateLimiter)
-  app.post('/api/professor/chat', requireAuth, rateLimiter(20, 60000), async (req, res) => {
+  // 2. Chat Contextualizado com Professor IA (student, teacher, admin)
+  app.post('/api/professor/chat', requireAuth, requireRole(['student', 'teacher', 'admin']), rateLimiter(20, 60000), async (req, res) => {
     if (!ai) {
       return res.status(503).json({
         error: 'Serviço do Professor IA indisponível. Configure a chave GEMINI_API_KEY no painel de configurações.',
@@ -441,8 +471,8 @@ DIRETRIZES DA RESPOSTA:
     }
   });
 
-  // 3. Gerador de Exercícios Estruturados por Nível
-  app.post('/api/professor/exercise', requireAuth, rateLimiter(20, 60000), async (req, res) => {
+  // 3. Gerador de Exercícios Estruturados por Nível (student, teacher, admin)
+  app.post('/api/professor/exercise', requireAuth, requireRole(['student', 'teacher', 'admin']), rateLimiter(20, 60000), async (req, res) => {
     if (!ai) {
       return res.status(503).json({ error: 'GEMINI_API_KEY não configurada.' });
     }
@@ -488,8 +518,8 @@ Responda ESTRITAMENTE em formato JSON com o seguinte schema:
     }
   });
 
-  // 4. Avaliação e Correção de Respostas / Desempenho
-  app.post('/api/professor/evaluate', requireAuth, rateLimiter(20, 60000), async (req, res) => {
+  // 4. Avaliação e Correção de Respostas / Desempenho (student, teacher, admin)
+  app.post('/api/professor/evaluate', requireAuth, requireRole(['student', 'teacher', 'admin']), rateLimiter(20, 60000), async (req, res) => {
     if (!ai) {
       return res.status(503).json({ error: 'GEMINI_API_KEY não configurada.' });
     }
@@ -541,8 +571,8 @@ Responda ESTRITAMENTE em formato JSON com o seguinte schema:
     }
   });
 
-  // 5. Recomendação de Próxima Atividade baseada no Progresso
-  app.post('/api/professor/recommend', requireAuth, rateLimiter(20, 60000), async (req, res) => {
+  // 5. Recomendação de Próxima Atividade baseada no Progresso (student, teacher, admin)
+  app.post('/api/professor/recommend', requireAuth, requireRole(['student', 'teacher', 'admin']), rateLimiter(20, 60000), async (req, res) => {
     if (!ai) {
       return res.status(503).json({ error: 'GEMINI_API_KEY não configurada.' });
     }
@@ -593,6 +623,42 @@ Responda ESTRITAMENTE em formato JSON com o seguinte schema:
       return res.json(result);
     } catch (err: any) {
       console.error('Error in /api/professor/recommend:', err?.message || err);
+      return res.status(500).json({ error: sanitizeErrorMessage(err) });
+    }
+  });
+
+  // 6. Análise Pedagógica Agregada de Turmas (EXIGE papel teacher ou admin — bloqueia student com HTTP 403)
+  app.post('/api/professor/class-insights', requireAuth, requireRole(['teacher', 'admin']), rateLimiter(15, 60000), async (req, res) => {
+    if (!ai) {
+      return res.status(503).json({ error: 'GEMINI_API_KEY não configurada.' });
+    }
+
+    const className = typeof req.body?.className === 'string' ? req.body.className.trim().slice(0, 100) : 'Turma Geral';
+    const summarySnippet = sanitizeJsonSnippet(req.body?.metrics, 800);
+
+    const prompt = `Você é o consultor pedagógico sênior da Guitar Academy auxiliando um professor.
+Analise os indicadores agregados da turma "${className}":
+${summarySnippet}
+
+Responda ESTRITAMENTE em JSON com plano de intervenção coletiva:
+{
+  "priorityFocus": "Tema principal para a próxima aula coletiva",
+  "recommendations": ["Ação 1", "Ação 2"],
+  "suggestedWarmupBpm": 70
+}`;
+
+    try {
+      const response = await withTimeout(
+        ai.models.generateContent({
+          model: 'gemini-3.8-flash',
+          contents: prompt,
+          config: { responseMimeType: 'application/json' },
+        }),
+        25000
+      );
+      return res.json(JSON.parse(response.text?.trim() || '{}'));
+    } catch (err: any) {
+      console.error('Error in /api/professor/class-insights:', err?.message || err);
       return res.status(500).json({ error: sanitizeErrorMessage(err) });
     }
   });

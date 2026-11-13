@@ -5223,20 +5223,37 @@ try {
   assert(unauthResp.status === 401, '32.03 Backend retorna HTTP 401 para requisições não autenticadas');
 
   const stuAdminResp = await fetch(`${phase7Url}/api/admin/overview`, {
-    headers: { Authorization: 'Bearer jwt-student' },
+    headers: { Authorization: 'Bearer jwt-student', 'x-role': 'admin' },
   });
-  assert(stuAdminResp.status === 403, '32.04 Backend bloqueia aluno em rota administrativa com HTTP 403');
+  const stuClassInsightsResp = await fetch(`${phase7Url}/api/professor/class-insights`, {
+    method: 'POST',
+    headers: { Authorization: 'Bearer jwt-student', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ role: 'admin', className: 'Turma A' }),
+  });
+  assert(
+    stuAdminResp.status === 403 && stuClassInsightsResp.status === 403 && serverCode.includes('requireRole('),
+    '32.04 Backend aplica requireRole consultando system_roles, ignora role do frontend e bloqueia aluno (HTTP 403)'
+  );
 
   const teaAdminResp = await fetch(`${phase7Url}/api/admin/overview`, {
     headers: { Authorization: 'Bearer jwt-teacher' },
+  });
+  const teaClassInsightsResp = await fetch(`${phase7Url}/api/professor/class-insights`, {
+    method: 'POST',
+    headers: { Authorization: 'Bearer jwt-teacher', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ className: 'Turma A', metrics: {} }),
   });
   const teaRoleResp = await fetch(`${phase7Url}/api/auth/role`, {
     headers: { Authorization: 'Bearer jwt-teacher' },
   });
   const teaRoleData = (await teaRoleResp.json()) as { role: string };
   assert(
-    teaAdminResp.status === 403 && teaRoleResp.status === 200 && teaRoleData.role === 'teacher',
-    '32.05 Backend bloqueia professor em rota exclusiva admin (403) e confirma papel teacher em /api/auth/role'
+    teaAdminResp.status === 403 &&
+    teaClassInsightsResp.status !== 403 &&
+    teaClassInsightsResp.status !== 401 &&
+    teaRoleResp.status === 200 &&
+    teaRoleData.role === 'teacher',
+    '32.05 Backend bloqueia professor em rota exclusiva admin (403), autoriza rota pedagógica de professor e confirma papel teacher em /api/auth/role'
   );
 
   const admResp = await fetch(`${phase7Url}/api/admin/overview`, {

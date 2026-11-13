@@ -218,7 +218,11 @@ describe('Firebase Emulator — Firestore Security Rules (Student vs Admin)', ()
 
   function requireEmulator(t: { skip: (message?: string) => void }): RulesTestEnvironment | null {
     if (!emulatorAvailable || !testEnv) {
-      t.skip(`Firebase Firestore Emulator not running at ${host}:${port}`);
+      const msg = `Firebase Firestore Emulator not running at ${host}:${port} (NOT PASSED — skipped)`;
+      if (process.env.REQUIRE_FIREBASE_EMULATOR === 'true') {
+        assert.fail(msg);
+      }
+      t.skip(msg);
       return null;
     }
     return testEnv;
@@ -299,12 +303,19 @@ describe('Firebase Emulator — Firestore Security Rules (Student vs Admin)', ()
       updateDoc(doc(studentDb, 'users', STUDENT_UID), { displayName: 'Aluno Atualizado' })
     );
 
-    // New student signup cannot self-assign admin role or permissions during create
+    // New student signup cannot send role, isAdmin, isTeacher or permissions (even student/false) during create
     await assertFails(
       setDoc(doc(newStudentDb, 'users', newStudentUid), {
         uid: newStudentUid,
         email: 'hacker@guitaracademy.test',
         role: 'admin',
+      })
+    );
+    await assertFails(
+      setDoc(doc(newStudentDb, 'users', newStudentUid), {
+        uid: newStudentUid,
+        email: 'hacker@guitaracademy.test',
+        role: 'student',
       })
     );
     await assertFails(
@@ -318,18 +329,27 @@ describe('Firebase Emulator — Firestore Security Rules (Student vs Admin)', ()
       setDoc(doc(newStudentDb, 'users', newStudentUid), {
         uid: newStudentUid,
         email: 'hacker@guitaracademy.test',
+        isTeacher: false,
+      })
+    );
+    await assertFails(
+      setDoc(doc(newStudentDb, 'users', newStudentUid), {
+        uid: newStudentUid,
+        email: 'hacker@guitaracademy.test',
         permissions: ['manage_roles'],
       })
     );
 
-    // Normal student signup without elevated claims succeeds
+    // Normal student signup without privilege fields succeeds, and reading own profile succeeds
     await assertSucceeds(
       setDoc(doc(newStudentDb, 'users', newStudentUid), {
         uid: newStudentUid,
+        displayName: 'Novo Aluno',
         email: 'legit@guitaracademy.test',
-        role: 'student',
+        accountStatus: 'active',
       })
     );
+    await assertSucceeds(getDoc(doc(newStudentDb, 'users', newStudentUid)));
 
     // Student cannot self-assign admin fields in /students/{uid}
     await assertFails(
@@ -700,7 +720,53 @@ describe('Backend Express HTTP — Zero-Trust Auth, RBAC & CORS (Real Server Req
     });
   });
 
-  it('enforces strict CORS allowlist on preflight OPTIONS requests', async () => {
+  it('ignores frontend-supplied role claims and enforces teacher/admin separation on Professor IA routes', async () => {
+    const spoofedAdminAttempt = await fetch(`${baseUrl}/api/admin/overview`, {
+      headers: {
+        Authorization: 'Bearer valid-student-jwt',
+        'x-role': 'admin',
+        'x-user-role': 'admin',
+      },
+    });
+    assert.equal(spoofedAdminAttempt.status, 403);
+
+    // Student cannot invoke teacher-only Professor IA route even if sending role: "teacher" or "admin" in body
+    const studentClassInsights = await fetch(`${baseUrl}/api/professor/class-insights`, {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer valid-student-jwt',
+        'Content-Type': 'application/json',
+        'x-role': 'teacher',
+      },
+      body: JSON.stringify({ role: 'admin', className: 'Turma 1', metrics: { total: 10 } }),
+    });
+    assert.equal(studentClassInsights.status, 403);
+
+    // Teacher passes requireRole(['teacher', 'admin']) (reaches Gemini availability check 503 or 200, never 403)
+    const teacherClassInsights = await fetch(`${baseUrl}/api/professor/class-insights`, {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer valid-teacher-jwt',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ className: 'Turma 1', metrics: { total: 10 } }),
+    });
+    assert.notEqual(teacherClassInsights.status, 401);
+    assert.notEqual(teacherClassInsights.status, 403);
+
+    // Student passes requireRole(['student', 'teacher', 'admin']) on /api/professor/chat (validation 400 with empty msg, never 403)
+    const studentChatEmpty = await fetch(`${baseUrl}/api/professor/chat`, {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer valid-student-jwt',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ message: '' }),
+    });
+    assert.ok(studentChatEmpty.status === 400 || studentChatEmpty.status === 503);
+  });
+
+  it('enforces strict CORS allowlist on preflight OPTIONS and API POST requests', async () => {
     const allowedOriginRes = await fetch(`${baseUrl}/api/health`, {
       method: 'OPTIONS',
       headers: { Origin: 'https://nashixhoo.github.io' },
@@ -714,6 +780,17 @@ describe('Backend Express HTTP — Zero-Trust Auth, RBAC & CORS (Real Server Req
     });
     assert.equal(blockedOriginRes.status, 403);
     assert.equal(blockedOriginRes.headers.get('access-control-allow-origin'), null);
+
+    const blockedPostRes = await fetch(`${baseUrl}/api/professor/chat`, {
+      method: 'POST',
+      headers: {
+        Origin: 'https://malicious-attacker.example.com',
+        Authorization: 'Bearer valid-student-jwt',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ message: 'Ola' }),
+    });
+    assert.equal(blockedPostRes.status, 403);
   });
 });
 
