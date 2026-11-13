@@ -50,7 +50,7 @@ import { StudentPrivacyNotice } from './components/teacher/StudentPrivacyNotice'
 import { AdminPortalView } from './components/admin/AdminPortalView';
 
 function MainAppContent() {
-  const { user, loading, isAdmin, adminPreviewMode, showLegacyModal } = useAuth();
+  const { user, loading, isAdmin, isTeacher, adminPreviewMode, showLegacyModal } = useAuth();
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showJoinClassModal, setShowJoinClassModal] = useState(false);
@@ -132,19 +132,19 @@ function MainAppContent() {
     };
   }, []);
 
-  // SEGURANÇA REAL: Bloqueio estrito de acesso a rotas administrativas para alunos
+  // SEGURANÇA REAL: Bloqueio estrito de acesso a rotas administrativas/pedagógicas para alunos
   useEffect(() => {
-    if (!isAdmin && currentTab === 'teacher-dashboard') {
-      console.warn('Acesso a rota administrativa bloqueado para perfil de aluno.');
+    if (!isTeacher && currentTab === 'teacher-dashboard') {
+      console.warn('Acesso a rota pedagógica/administrativa bloqueado para perfil de aluno.');
       setCurrentTab('home');
       setPrimaryTab('estudar');
     }
-  }, [isAdmin, currentTab]);
+  }, [isTeacher, currentTab]);
 
   // Navegação unificada com preservação de rolagem e histórico
   const navigateToTab = (tab: NavigationTab, lessonId: string | null = null, resetScrollToTop: boolean = false) => {
-    // Bloqueia tentativas de navegação direta para rotas administrativas por alunos
-    if (tab === 'teacher-dashboard' && !isAdmin) {
+    // Bloqueia tentativas de navegação direta para rotas administrativas/pedagógicas por alunos
+    if (tab === 'teacher-dashboard' && !isTeacher) {
       setCurrentTab('home');
       setPrimaryTab('estudar');
       return;
@@ -524,8 +524,8 @@ function MainAppContent() {
                 />
               )}
 
-              {/* TAB 18: Gestão Pedagógica & Analytics do Professor (Acesso restrito) */}
-              {currentTab === 'teacher-dashboard' && isAdmin && (
+              {/* TAB 18: Gestão Pedagógica & Analytics do Professor (Acesso restrito a professor/admin) */}
+              {currentTab === 'teacher-dashboard' && isTeacher && (
                 <TeacherDashboardView
                   onBackToApp={() => navigateToTab('home', null)}
                 />

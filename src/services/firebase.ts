@@ -254,11 +254,40 @@ export async function fetchSystemRole(
     if (snap.exists()) {
       return parseSystemRoleDoc(snap.data());
     }
-    return 'student';
   } catch (err) {
-    console.warn('Não foi possível consultar system_roles (fail-closed Zero-Trust):', err);
-    return 'student';
+    // system_roles é restrito a administradores nas Firestore Rules (Zero-Trust).
+    // Se o usuário atual não for admin (ex: teacher ou student), o backend autenticado
+    // pode confirmar o papel via Firebase Admin SDK quando configurado.
+    console.warn('Consulta direta a system_roles negada ou indisponível:', err);
   }
+
+  // Fallback verificado no servidor via Firebase ID Token (para teacher quando backend estiver ativo)
+  try {
+    const envMeta = typeof import.meta !== 'undefined' ? (import.meta as any).env : undefined;
+    const configuredBackend =
+      envMeta?.VITE_PROFESSOR_API_URL && typeof envMeta.VITE_PROFESSOR_API_URL === 'string'
+        ? envMeta.VITE_PROFESSOR_API_URL.trim().replace(/\/+$/, '')
+        : '';
+    const hasBackend = Boolean(configuredBackend) || Boolean(envMeta?.DEV);
+
+    if (hasBackend && auth.currentUser && auth.currentUser.uid === uid && typeof fetch === 'function') {
+      const idToken = await auth.currentUser.getIdToken();
+      const response = await fetch(`${configuredBackend}/api/auth/role`, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+        },
+      });
+      if (response.ok) {
+        const payload = await response.json();
+        return parseSystemRoleDoc(payload);
+      }
+    }
+  } catch (backendErr) {
+    console.warn('Falha na consulta de papel ao servidor (fail-closed Zero-Trust):', backendErr);
+  }
+
+  return 'student';
 }
 
 /**

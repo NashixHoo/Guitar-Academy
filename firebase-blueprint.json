@@ -128,6 +128,58 @@
         "assignedBy": { "type": "string", "description": "Administrador responsável" }
       },
       "required": ["uid", "role"]
+    },
+    "Course": {
+      "title": "Course",
+      "description": "Curso acadêmico da Guitar Academy",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "ID do curso" },
+        "title": { "type": "string", "description": "Título do curso" }
+      },
+      "required": ["id", "title"]
+    },
+    "Lesson": {
+      "title": "Lesson",
+      "description": "Aula estruturada de um curso",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "ID da aula" },
+        "title": { "type": "string", "description": "Título da aula" }
+      },
+      "required": ["id", "title"]
+    },
+    "PracticeRecord": {
+      "title": "PracticeRecord",
+      "description": "Registro de sessão prática individual de estudo",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "UID do estudante" },
+        "durationMinutes": { "type": "number", "description": "Duração em minutos" }
+      },
+      "required": ["userId", "durationMinutes"]
+    },
+    "TeacherStudentLink": {
+      "title": "TeacherStudentLink",
+      "description": "Vínculo direto entre professor e aluno",
+      "type": "object",
+      "properties": {
+        "studentId": { "type": "string", "description": "UID do aluno" },
+        "teacherId": { "type": "string", "description": "UID do professor" }
+      },
+      "required": ["studentId", "teacherId"]
+    },
+    "ClassInvite": {
+      "title": "ClassInvite",
+      "description": "Convite indexado por código para ingresso seguro de aluno em turma",
+      "type": "object",
+      "properties": {
+        "classId": { "type": "string", "description": "ID da turma" },
+        "code": { "type": "string", "description": "Código de convite" },
+        "teacherId": { "type": "string", "description": "UID do professor responsável" },
+        "active": { "type": "boolean", "description": "Convite ativo" }
+      },
+      "required": ["classId", "code", "teacherId", "active"]
     }
   },
   "firestore": {
@@ -150,6 +202,34 @@
     "/classes/{classId}/events/{eventId}": {
       "schema": "EducationalEvent",
       "description": "Eventos de estudo e prática registrados para a turma"
+    },
+    "/class_invites/{inviteCode}": {
+      "schema": "ClassInvite",
+      "description": "Índice pontual de códigos de convite de turmas"
+    },
+    "/enrollments/{enrollmentId}": {
+      "schema": "ClassEnrollment",
+      "description": "Matrículas acadêmicas em nível raiz"
+    },
+    "/teacher_student_links/{linkId}": {
+      "schema": "TeacherStudentLink",
+      "description": "Vínculos formais autorizados entre professor e estudante"
+    },
+    "/courses/{courseId}": {
+      "schema": "Course",
+      "description": "Cursos acadêmicos oficiais"
+    },
+    "/lessons/{lessonId}": {
+      "schema": "Lesson",
+      "description": "Aulas estruturadas dos cursos"
+    },
+    "/student_progress/{progressId}": {
+      "schema": "UserProgress",
+      "description": "Progresso de estudos e domínio técnico"
+    },
+    "/practice_records/{recordId}": {
+      "schema": "PracticeRecord",
+      "description": "Registros de rotina prática e metrônomo"
     },
     "/system_roles/{userId}": {
       "schema": "UserRoleRecord",

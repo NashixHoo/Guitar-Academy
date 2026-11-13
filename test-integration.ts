@@ -4831,9 +4831,9 @@ assert(
 // 29.8 Isolamento no Roteador Principal (App.tsx)
 const appRootCode = fs.readFileSync('src/App.tsx', 'utf-8');
 assert(
-  appRootCode.includes("tab === 'teacher-dashboard' && !isAdmin") &&
+  appRootCode.includes("tab === 'teacher-dashboard' && !isTeacher") &&
   appRootCode.includes("setCurrentTab('home');"),
-  '29.08 App.tsx bloqueia redireciona qualquer tentativa de acesso indevido de alunos a abas administrativas para home'
+  '29.08 App.tsx bloqueia e redireciona qualquer tentativa de acesso indevido de alunos a abas administrativas/pedagógicas para home'
 );
 assert(
   appRootCode.includes('if (isAdmin && !adminPreviewMode)') &&
@@ -5099,8 +5099,8 @@ const appCodeAudit = fs.readFileSync('src/App.tsx', 'utf-8');
 assert(
   appCodeAudit.includes('if (isAdmin && !adminPreviewMode)') &&
   appCodeAudit.includes('<AdminPortalView />') &&
-  appCodeAudit.includes('!isAdmin && currentTab === \'teacher-dashboard\''),
-  '31.1 App.tsx impede que alunos acessem o painel administrativo mesmo autenticados ou via URL direta'
+  appCodeAudit.includes("!isTeacher && currentTab === 'teacher-dashboard'"),
+  '31.1 App.tsx impede que alunos acessem o painel administrativo ou pedagógico mesmo autenticados ou via URL direta'
 );
 
 // 31.2 Aluno não consegue promover a própria conta
@@ -5161,11 +5161,11 @@ assert(
   '31.8 logOut no AuthContext limpa incondicionalmente no bloco finally o usuário, o papel administrativo e o preview'
 );
 
-// 31.9 Rotas administrativas estão protegidas no cliente
+// 31.9 Rotas administrativas e pedagógicas estão protegidas no cliente
 assert(
-  appCodeAudit.includes("if (tab === 'teacher-dashboard' && !isAdmin)") &&
+  appCodeAudit.includes("if (tab === 'teacher-dashboard' && !isTeacher)") &&
   appCodeAudit.includes("setCurrentTab('home')"),
-  '31.9 navigateToTab bloqueia navegação para rotas administrativas quando o usuário não possui isAdmin confirmado'
+  '31.9 navigateToTab bloqueia navegação para rotas administrativas/pedagógicas para alunos (AdminPortalView exige isAdmin e teacher-dashboard exige isTeacher)'
 );
 
 // 31.10 Regras do Firestore não permitem autoatribuição de privilégios
@@ -5173,6 +5173,157 @@ assert(
   rulesAudit.includes('match /system_roles/{userId}') &&
   rulesAudit.includes('allow write: if false;'),
   '31.10 firestore.rules bloqueia estritamente qualquer escrita de clientes em system_roles/{userId} (allow write: if false)'
+);
+
+// =============================================================
+// GRUPO 32 — CORREÇÃO GERAL DEFINITIVA (RBAC, MATRÍCULAS E BACKEND)
+// =============================================================
+console.log('\n--- GRUPO 32: CORREÇÃO GERAL DEFINITIVA (RBAC, MATRÍCULAS, BACKEND E INFRA) ---');
+
+// 32.01 Remoção de qualquer bypass de token mock em server.ts
+assert(
+  !serverCode.includes('mock-valid-token-') &&
+  !serverCode.includes("process.env.NODE_ENV === 'test'"),
+  '32.01 server.ts remove integralmente qualquer bypass de token mockado em runtime/produção'
+);
+
+// 32.02 CORS allowlist estrito em server.ts
+assert(
+  serverCode.includes('https://nashixhoo.github.io') &&
+  serverCode.includes('allowedOrigins.has(origin)') &&
+  serverCode.includes("res.status(403).json({ error: 'Origem não autorizada"),
+  '32.02 server.ts aplica CORS por allowlist explícita sem refletir origens desconhecidas com credenciais'
+);
+
+// 32.03-32.07 Testes HTTP reais contra createServerApp()
+const { createServerApp } = await import('./server');
+const httpMod = await import('node:http');
+const phase7App = createServerApp({
+  verifyIdToken: async (token: string) => {
+    if (token === 'jwt-student') return { uid: 'uid-stu-1', email: 'alu@guitar.test' };
+    if (token === 'jwt-teacher') return { uid: 'uid-tea-1', email: 'prof@guitar.test' };
+    if (token === 'jwt-admin') return { uid: 'uid-adm-1', email: 'adm@guitar.test' };
+    throw new Error('Invalid token');
+  },
+  getSystemRole: async (uid: string) => {
+    if (uid === 'uid-adm-1') return { exists: true, role: 'admin' };
+    if (uid === 'uid-tea-1') return { exists: true, role: 'teacher' };
+    if (uid === 'uid-stu-1') return { exists: true, role: 'student' };
+    throw new Error('Role lookup error');
+  },
+});
+
+const phase7Server = httpMod.createServer(phase7App);
+await new Promise<void>((resolve) => phase7Server.listen(0, '127.0.0.1', () => resolve()));
+const phase7Addr = phase7Server.address();
+const phase7Url = phase7Addr && typeof phase7Addr !== 'string' ? `http://127.0.0.1:${phase7Addr.port}` : '';
+
+try {
+  const unauthResp = await fetch(`${phase7Url}/api/admin/overview`);
+  assert(unauthResp.status === 401, '32.03 Backend retorna HTTP 401 para requisições não autenticadas');
+
+  const stuAdminResp = await fetch(`${phase7Url}/api/admin/overview`, {
+    headers: { Authorization: 'Bearer jwt-student' },
+  });
+  assert(stuAdminResp.status === 403, '32.04 Backend bloqueia aluno em rota administrativa com HTTP 403');
+
+  const teaAdminResp = await fetch(`${phase7Url}/api/admin/overview`, {
+    headers: { Authorization: 'Bearer jwt-teacher' },
+  });
+  const teaRoleResp = await fetch(`${phase7Url}/api/auth/role`, {
+    headers: { Authorization: 'Bearer jwt-teacher' },
+  });
+  const teaRoleData = (await teaRoleResp.json()) as { role: string };
+  assert(
+    teaAdminResp.status === 403 && teaRoleResp.status === 200 && teaRoleData.role === 'teacher',
+    '32.05 Backend bloqueia professor em rota exclusiva admin (403) e confirma papel teacher em /api/auth/role'
+  );
+
+  const admResp = await fetch(`${phase7Url}/api/admin/overview`, {
+    headers: { Authorization: 'Bearer jwt-admin' },
+  });
+  assert(admResp.status === 200, '32.06 Backend autoriza administrador confirmado em system_roles com HTTP 200');
+} finally {
+  await new Promise<void>((resolve) => phase7Server.close(() => resolve()));
+}
+
+// 32.07 Fail-closed em erro de consulta de papel
+assert(
+  (await fetchSystemRole('any_uid', async () => { throw new Error('Simulated DB outage'); })) === 'student',
+  '32.07 fetchSystemRole falha fechado retornando student quando system_roles falha'
+);
+
+// 32.08-32.10 Fluxo de matrícula e isolamento estrito entre professores no TeacherService
+const teacherAId = 'teacher-isolation-A';
+const teacherBId = 'teacher-isolation-B';
+const classA = await TeacherService.createClass(teacherAId, 'profA@guitar.test', 'Prof A', 'Turma A', 'Isolada A', 'GA-ISOLA');
+const classB = await TeacherService.createClass(teacherBId, 'profB@guitar.test', 'Prof B', 'Turma B', 'Isolada B', 'GA-ISOLB');
+
+const p7InvalidJoin = await TeacherService.joinClassWithInviteCode('GA-NAO-EXISTE', 'stu-iso-1', 'Aluno Iso', 'stu@guitar.test');
+assert(
+  p7InvalidJoin.success === false,
+  '32.08 TeacherService.joinClassWithInviteCode rejeita código inválido sem matricular aluno'
+);
+
+const p7ValidJoin = await TeacherService.joinClassWithInviteCode('GA-ISOLA', 'stu-iso-1', 'Aluno Iso', 'stu@guitar.test');
+assert(
+  p7ValidJoin.success === true && p7ValidJoin.classGroup?.teacherId === teacherAId,
+  '32.09 TeacherService.joinClassWithInviteCode matricula aluno na turma válida preservando o teacherId responsável'
+);
+
+const teacherBStudentsForClassA = await TeacherService.getEnrolledStudents(teacherBId, classA.id);
+assert(
+  teacherBStudentsForClassA.length === 0,
+  `32.10 Teacher B fica bloqueado de consultar alunos matriculados na turma de Teacher A (${classB.id} vs ${classA.id})`
+);
+
+// 32.11 AuthContext race condition guard
+assert(
+  authContextSource.includes('authSeqRef') &&
+  authContextSource.includes('if (authSeqRef.current !== seq) return;'),
+  '32.11 AuthContext implementa guarda sequencial (authSeqRef) contra race conditions em troca de conta/logout'
+);
+
+// 32.12 Separação Professor vs Admin vs Aluno em App.tsx
+assert(
+  appCodeAudit.includes('const { user, loading, isAdmin, isTeacher, adminPreviewMode, showLegacyModal } = useAuth();') &&
+  appCodeAudit.includes("currentTab === 'teacher-dashboard' && isTeacher") &&
+  appCodeAudit.includes('if (isAdmin && !adminPreviewMode)'),
+  '32.12 App.tsx libera teacher-dashboard para isTeacher e restringe AdminPortalView exclusivamente a isAdmin'
+);
+
+// 32.13 firestore.rules inclui /class_invites/{inviteCode} sem listagem pública e isola /classes list
+assert(
+  rulesAudit.includes('match /class_invites/{inviteCode}') &&
+  rulesAudit.includes('allow list: if false;') &&
+  rulesAudit.includes('allow list: if isTeacher() && (isAdmin() || resource.data.teacherId == request.auth.uid);'),
+  '32.13 firestore.rules protege /class_invites/{inviteCode} (get pontual, list bloqueado) e isola /classes por teacherId'
+);
+
+// 32.14 Auditoria de ausência de segredos ou e-mails administrativos fixos no src
+assert(
+  !fs.readFileSync('src/services/firebase.ts', 'utf-8').includes('dramosdasilva7@gmail.com') &&
+  !fs.readFileSync('src/services/teacherService.ts', 'utf-8').includes('dramosdasilva7@gmail.com'),
+  '32.14 Nenhum e-mail fixo administrativo está presente nos serviços de autenticação ou autorização'
+);
+
+// 32.15 Arquivos de infraestrutura Firebase e Backend presentes
+assert(
+  fs.existsSync('firebase.json') &&
+  fs.existsSync('.firebaserc') &&
+  fs.existsSync('firestore.indexes.json') &&
+  fs.existsSync('Dockerfile'),
+  '32.15 Arquivos reprodutíveis de Firebase CLI e hospedagem do backend (firebase.json, .firebaserc, firestore.indexes.json, Dockerfile) existem'
+);
+
+// 32.16 Mapeamento completo dos 5 erros obrigatórios de autenticação
+assert(
+  mapFirebaseAuthError({ code: 'auth/unauthorized-domain' }).length > 10 &&
+  mapFirebaseAuthError({ code: 'auth/operation-not-allowed' }).length > 10 &&
+  mapFirebaseAuthError({ code: 'auth/network-request-failed' }).length > 10 &&
+  mapFirebaseAuthError({ code: 'auth/popup-blocked' }).length > 10 &&
+  mapFirebaseAuthError({ code: 'auth/invalid-credential' }).length > 10,
+  '32.16 mapFirebaseAuthError traduz todos os 5 códigos obrigatórios de erro do Firebase Auth'
 );
 
 console.log('\n===========================================================');
@@ -5184,9 +5335,10 @@ console.log('===========================================================');
 if (failedTests > 0) {
   process.exit(1);
 } else {
-  console.log('✓ Todos os testes de integração do motor musical, detector, currículo, Central de Prática, Busca Global, Diagramas Cifra Club, Autenticação Obrigatória, Separação de Ambientes Aluno/Admin, Backend Hardening, SMART TUNER V1.2 e AUTENTICAÇÃO ADMINISTRATIVA DEFINITIVA foram APROVADOS com sucesso!\n');
+  console.log('✓ Todos os testes de integração do motor musical, detector, currículo, Central de Prática, Busca Global, Diagramas Cifra Club, Autenticação Obrigatória, Separação de Ambientes Aluno/Admin, Backend Hardening, SMART TUNER V1.2, AUTENTICAÇÃO ADMINISTRATIVA DEFINITIVA e CORREÇÃO GERAL DEFINITIVA foram APROVADOS com sucesso!\n');
   process.exit(0);
 }
+
 
 
 

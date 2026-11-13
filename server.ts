@@ -5,127 +5,98 @@ import admin from 'firebase-admin';
 import { getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
+import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-const app = express();
-const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+interface FirebaseAppletConfig {
+  projectId?: string;
+  firestoreDatabaseId?: string;
+}
 
-// Inicialização segura do Firebase Admin SDK
-// Utilizado para validação de ID Tokens das requisições e autorização Zero-Trust
-// admin.initializeApp
+function loadFirebaseAppletConfig(): FirebaseAppletConfig {
+  try {
+    const configPath = path.resolve('firebase-applet-config.json');
+    if (fs.existsSync(configPath)) {
+      return JSON.parse(fs.readFileSync(configPath, 'utf-8')) as FirebaseAppletConfig;
+    }
+  } catch {
+    // Fallback para variáveis de ambiente
+  }
+  return {};
+}
+
+const appletConfig = loadFirebaseAppletConfig();
+const FIREBASE_PROJECT_ID =
+  process.env.FIREBASE_PROJECT_ID || appletConfig.projectId || 'gen-lang-client-0214739740';
+const FIRESTORE_DATABASE_ID =
+  process.env.FIRESTORE_DATABASE_ID || appletConfig.firestoreDatabaseId || '(default)';
+
+// Inicialização segura do Firebase Admin SDK (admin.initializeApp)
+// Utilizado exclusivamente para validação criptográfica de ID Tokens e leitura de system_roles
+void admin;
 if (!getApps().length) {
   try {
-    const projectId = process.env.FIREBASE_PROJECT_ID || 'gen-lang-client-0214739740';
     initializeApp({
-      projectId,
+      projectId: FIREBASE_PROJECT_ID,
     });
-    console.log(`[Firebase Admin] Inicializado com sucesso para o projeto: ${projectId}`);
   } catch (err: any) {
     console.warn('[Firebase Admin] Aviso de inicialização:', err?.message || err);
   }
 }
 
-// Configuração robusta de CORS para suportar produção (GitHub Pages ou domínio customizado)
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  if (origin) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-  } else {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-  }
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
-
-  if (req.method === 'OPTIONS') {
-    return res.sendStatus(204);
-  }
-  next();
-});
-
-// Body parser com limite de payload para prevenir abusos
-app.use(express.json({ limit: '200kb' }));
-
-// Middleware de Autenticação Obrigatória via Firebase ID Token (Bearer Token)
-// Garante que apenas usuários autenticados consumam recursos da IA ou administrativos
-export async function requireAuth(req: express.Request, res: express.Response, next: express.NextFunction) {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({
-      error: 'Autenticação obrigatória. Cabeçalho Authorization com Bearer token ausente.',
-    });
-  }
-
-  const token = authHeader.split('Bearer ')[1]?.trim();
-  if (!token) {
-    return res.status(401).json({ error: 'Token de autenticação não fornecido.' });
-  }
-
-  try {
-    // Validação criptográfica do token usando Firebase Admin SDK
-    // admin.auth().verifyIdToken(token)
-    const decodedToken = await getAuth().verifyIdToken(token);
-    (req as any).user = decodedToken;
-    return next();
-  } catch (err: any) {
-    // Se estiver em ambiente de teste/mock com token estruturado ou credenciais locais ausentes
-    if (process.env.NODE_ENV === 'test' || token.startsWith('mock-valid-token-')) {
-      (req as any).user = { uid: token.replace('mock-valid-token-', ''), email: 'test@guitaracademy.com' };
-      return next();
-    }
-    console.error('[requireAuth] Falha na validação do token:', err?.message || err);
-    return res.status(401).json({
-      error: 'Sessão inválida ou expirada. Faça login novamente no Guitar Academy.',
-      code: 'auth/token-expired-or-invalid',
-    });
-  }
+function getAdminDb() {
+  return FIRESTORE_DATABASE_ID && FIRESTORE_DATABASE_ID !== '(default)'
+    ? getFirestore(FIRESTORE_DATABASE_ID)
+    : getFirestore();
 }
 
-// Rate Limiting simples em memória por IP/UID para proteção dos endpoints de IA
-const requestLog = new Map<string, number[]>();
-function rateLimiter(limit = 30, windowMs = 60000) {
-  return (req: express.Request, res: express.Response, next: express.NextFunction) => {
-    const key = (req as any).user?.uid || req.ip || 'anonymous';
-    const now = Date.now();
-    const timestamps = (requestLog.get(key) || []).filter((time) => now - time < windowMs);
-
-    if (timestamps.length >= limit) {
-      return res.status(429).json({
-        error: 'Limite de requisições excedido. Aguarde alguns instantes antes de enviar nova mensagem ao Professor IA.',
-      });
-    }
-
-    timestamps.push(now);
-    requestLog.set(key, timestamps);
-    next();
-  };
+export interface ServerAuthDependencies {
+  verifyIdToken?: (token: string) => Promise<{ uid: string; email?: string; [key: string]: any }>;
+  getSystemRole?: (uid: string) => Promise<{ exists: boolean; role: string }>;
 }
 
-// Inicialização segura do SDK Gemini no backend (process.env.GEMINI_API_KEY)
-// Chave NUNCA trafega para o navegador nem é exposta em bundles.
-const apiKey = process.env.GEMINI_API_KEY;
-const ai = apiKey
-  ? new GoogleGenAI({
-      apiKey,
-      httpOptions: {
-        headers: {
-          'User-Agent': 'aistudio-build',
-        },
-      },
-    })
-  : null;
+const VALID_ROLES = new Set(['student', 'teacher', 'admin']);
+const UID_REGEX = /^[a-zA-Z0-9_\-.:]{1,128}$/;
 
-// Helper para timeout seguro em chamadas de IA (25 segundos)
-function withTimeout<T>(promise: Promise<T>, ms = 25000): Promise<T> {
-  return Promise.race([
-    promise,
-    new Promise<T>((_, reject) =>
-      setTimeout(() => reject(new Error('Tempo limite excedido na comunicação com a IA.')), ms)
-    ),
+function normalizeRole(rawRole: unknown): 'student' | 'teacher' | 'admin' {
+  if (rawRole === 'admin') return 'admin';
+  if (rawRole === 'teacher') return 'teacher';
+  return 'student';
+}
+
+function getAllowedOrigins(): Set<string> {
+  const origins = new Set<string>([
+    'https://nashixhoo.github.io',
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
   ]);
+
+  const addOriginFromValue = (val?: string) => {
+    if (!val) return;
+    const trimmed = val.trim();
+    if (!trimmed || trimmed === 'MY_APP_URL') return;
+    try {
+      const parsed = new URL(trimmed);
+      origins.add(parsed.origin);
+    } catch {
+      if (/^https?:\/\/[^/\s]+$/i.test(trimmed)) {
+        origins.add(trimmed.replace(/\/+$/, ''));
+      }
+    }
+  };
+
+  addOriginFromValue(process.env.APP_URL);
+  if (process.env.ALLOWED_ORIGINS) {
+    process.env.ALLOWED_ORIGINS.split(',').forEach((entry) => addOriginFromValue(entry));
+  }
+
+  return origins;
 }
 
 // Sanitização de erros para não vazar caminhos, credenciais ou stack traces
@@ -141,71 +112,298 @@ function sanitizeErrorMessage(err: any): string {
   return 'Falha temporária ao comunicar com o Professor IA. Tente novamente.';
 }
 
-// ==========================================
-// HEALTH CHECK & STATUS ROUTES
-// ==========================================
-app.get('/api/health', (_req, res) => {
-  res.json({
-    status: 'ok',
-    uptime: Math.floor(process.uptime()),
-    timestamp: new Date().toISOString(),
-    geminiConfigured: !!ai,
-    firebaseAdminReady: !!getApps().length,
-    service: 'Guitar Academy Production Backend',
-  });
-});
+// Helper para timeout seguro em chamadas de IA (25 segundos)
+function withTimeout<T>(promise: Promise<T>, ms = 25000): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error('Tempo limite excedido na comunicação com a IA.')), ms)
+    ),
+  ]);
+}
 
-// ==========================================
-// PROFESSOR IA API ROUTES (Regra 6 & Item 3)
-// ==========================================
+function sanitizeJsonSnippet(value: unknown, maxLength = 500): string {
+  if (!value || typeof value !== 'object') return '{}';
+  try {
+    const serialized = JSON.stringify(value);
+    if (!serialized) return '{}';
+    return serialized.slice(0, maxLength);
+  } catch {
+    return '{}';
+  }
+}
 
-// 1. Status do Professor IA
-app.get('/api/professor/status', (_req, res) => {
-  res.json({
-    available: !!ai,
-    model: 'gemini-3.8-flash',
-    provider: 'Google Gemini',
-    message: ai
-      ? 'Professor IA operacional via Gemini 3.8 Flash'
-      : 'GEMINI_API_KEY não configurada no ambiente. Adicione a chave nas Configurações.',
-  });
-});
-
-// 2. Chat Contextualizado com Professor IA (Protegido por requireAuth e rateLimiter)
-app.post('/api/professor/chat', requireAuth, rateLimiter(20, 60000), async (req, res) => {
-  if (!ai) {
-    return res.status(503).json({
-      error: 'Serviço do Professor IA indisponível. Configure a chave GEMINI_API_KEY no painel de configurações.',
+export function createAuthMiddlewares(deps: ServerAuthDependencies = {}) {
+  const verifyToken =
+    deps.verifyIdToken ||
+    (async (token: string) => {
+      // admin.auth().verifyIdToken(token)
+      return await getAuth().verifyIdToken(token);
     });
+
+  const resolveSystemRole =
+    deps.getSystemRole ||
+    (async (uid: string) => {
+      const roleDoc = await getAdminDb().collection('system_roles').doc(uid).get();
+      const rawRole = roleDoc.exists ? roleDoc.data()?.role : undefined;
+      return {
+        exists: roleDoc.exists,
+        role: typeof rawRole === 'string' && VALID_ROLES.has(rawRole) ? rawRole : 'student',
+      };
+    });
+
+  // Middleware de Autenticação Obrigatória via Firebase ID Token (Bearer Token)
+  async function requireAuthMiddleware(
+    req: express.Request,
+    res: express.Response,
+    next: express.NextFunction
+  ) {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({
+        error: 'Autenticação obrigatória. Cabeçalho Authorization com Bearer token ausente.',
+        code: 'auth/missing-token',
+      });
+    }
+
+    const token = authHeader.slice('Bearer '.length).trim();
+    if (!token) {
+      return res.status(401).json({
+        error: 'Token de autenticação não fornecido.',
+        code: 'auth/missing-token',
+      });
+    }
+
+    try {
+      const decodedToken = await verifyToken(token);
+      if (!decodedToken || typeof decodedToken.uid !== 'string' || !UID_REGEX.test(decodedToken.uid)) {
+        return res.status(401).json({
+          error: 'Token de autenticação sem identificador de usuário válido.',
+          code: 'auth/invalid-token',
+        });
+      }
+      (req as any).user = decodedToken;
+      return next();
+    } catch (err: any) {
+      console.error('[requireAuth] Falha na validação criptográfica do token:', err?.message || err);
+      return res.status(401).json({
+        error: 'Sessão inválida ou expirada. Faça login novamente no Guitar Academy.',
+        code: 'auth/token-expired-or-invalid',
+      });
+    }
   }
 
-  const { message, context } = req.body;
-  if (!message || typeof message !== 'string') {
-    return res.status(400).json({ error: 'Mensagem inválida ou ausente.' });
+  // Middleware para verificar autorização administrativa baseada exclusivamente em system_roles
+  async function requireAdminMiddleware(
+    req: express.Request,
+    res: express.Response,
+    next: express.NextFunction
+  ) {
+    const user = (req as any).user;
+    if (!user || !user.uid) {
+      return res.status(401).json({
+        error: 'Autenticação necessária para acesso administrativo.',
+        code: 'auth/unauthorized',
+      });
+    }
+
+    try {
+      const record = await resolveSystemRole(user.uid);
+      if (!record.exists || normalizeRole(record.role) !== 'admin') {
+        return res.status(403).json({
+          error: 'Acesso negado. Esta rota exige privilégios administrativos confirmados.',
+          code: 'auth/forbidden-not-admin',
+        });
+      }
+      return next();
+    } catch (err: any) {
+      console.error('[requireAdmin] Falha ao verificar papel administrativo:', err?.message || err);
+      return res.status(403).json({
+        error: 'Falha na validação de permissões administrativas.',
+        code: 'auth/role-verification-failed',
+      });
+    }
   }
 
-  // Limite de tamanho de entrada para proteção contra abuso (máximo 1000 caracteres)
-  const trimmedMessage = message.trim();
-  if (trimmedMessage.length === 0) {
-    return res.status(400).json({ error: 'A pergunta não pode ser vazia.' });
-  }
-  if (trimmedMessage.length > 1000) {
-    return res.status(400).json({ error: 'A pergunta deve ter no máximo 1000 caracteres.' });
+  return {
+    requireAuth: requireAuthMiddleware,
+    requireAdmin: requireAdminMiddleware,
+    resolveSystemRole,
+  };
+}
+
+const defaultMiddlewares = createAuthMiddlewares();
+export async function requireAuth(
+  req: express.Request,
+  res: express.Response,
+  next: express.NextFunction
+) {
+  return defaultMiddlewares.requireAuth(req, res, next);
+}
+
+export async function requireAdmin(
+  req: express.Request,
+  res: express.Response,
+  next: express.NextFunction
+) {
+  return defaultMiddlewares.requireAdmin(req, res, next);
+}
+
+// Inicialização segura do SDK Gemini no backend (process.env.GEMINI_API_KEY)
+// Chave NUNCA trafega para o navegador nem é exposta em bundles.
+function createGeminiClient() {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey || apiKey === 'MY_GEMINI_API_KEY') return null;
+  return new GoogleGenAI({
+    apiKey,
+    httpOptions: {
+      headers: {
+        'User-Agent': 'aistudio-build',
+      },
+    },
+  });
+}
+
+export function createServerApp(deps: ServerAuthDependencies = {}) {
+  const app = express();
+  const middlewares = createAuthMiddlewares(deps);
+  const requireAuth = middlewares.requireAuth;
+  const requireAdmin = middlewares.requireAdmin;
+  const resolveSystemRole = middlewares.resolveSystemRole;
+  const ai = createGeminiClient();
+  const allowedOrigins = getAllowedOrigins();
+
+  // Configuração estrita de CORS por allowlist explícita
+  app.use((req, res, next) => {
+    const origin = req.headers.origin;
+    if (origin) {
+      if (allowedOrigins.has(origin)) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+        res.setHeader('Vary', 'Origin');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+        res.setHeader('Access-Control-Allow-Credentials', 'true');
+      } else if (req.method === 'OPTIONS') {
+        return res.status(403).json({ error: 'Origem não autorizada pela política CORS.' });
+      }
+    }
+
+    if (req.method === 'OPTIONS') {
+      return res.sendStatus(204);
+    }
+    next();
+  });
+
+  // Body parser com limite de payload para prevenir abusos
+  app.use(express.json({ limit: '200kb' }));
+
+  // Rate Limiting em memória por UID/IP para proteção dos endpoints de IA
+  const requestLog = new Map<string, number[]>();
+  function rateLimiter(limit = 30, windowMs = 60000) {
+    return (req: express.Request, res: express.Response, next: express.NextFunction) => {
+      const key = (req as any).user?.uid || req.ip || 'anonymous';
+      const now = Date.now();
+      const timestamps = (requestLog.get(key) || []).filter((time) => now - time < windowMs);
+
+      if (timestamps.length >= limit) {
+        return res.status(429).json({
+          error: 'Limite de requisições excedido. Aguarde alguns instantes antes de enviar nova mensagem ao Professor IA.',
+        });
+      }
+
+      timestamps.push(now);
+      requestLog.set(key, timestamps);
+      next();
+    };
   }
 
-  // Sanitização de contexto do aluno
-  const studentLevel = Math.max(0, Math.min(5, Number(context?.studentLevel) || 0));
-  const currentLessonTitle = typeof context?.currentLessonTitle === 'string' 
-    ? context.currentLessonTitle.slice(0, 120) 
-    : 'Fundamentos';
-  const masteredSkills = Array.isArray(context?.masteredSkills) 
-    ? context.masteredSkills.slice(0, 10).map((s: any) => String(s).slice(0, 50)) 
-    : [];
-  const difficulties = Array.isArray(context?.difficulties) 
-    ? context.difficulties.slice(0, 10).map((s: any) => String(s).slice(0, 50)) 
-    : [];
+  // ==========================================
+  // HEALTH CHECK & STATUS ROUTES
+  // ==========================================
+  app.get('/api/health', (_req, res) => {
+    res.json({
+      status: 'ok',
+      uptime: Math.floor(process.uptime()),
+      timestamp: new Date().toISOString(),
+      geminiConfigured: !!ai,
+      firebaseAdminReady: !!getApps().length,
+      service: 'Guitar Academy Production Backend',
+    });
+  });
 
-  const prompt = `Você é o Professor IA do Guitar Academy, um experiente mentor de guitarra e violão brasileiro.
+  // Consulta autenticada do próprio papel autoritativo (Zero-Trust Fail-Closed)
+  app.get('/api/auth/role', requireAuth, async (req, res) => {
+    const caller = (req as any).user;
+    try {
+      const record = await resolveSystemRole(caller.uid);
+      return res.json({
+        uid: caller.uid,
+        role: record.exists ? normalizeRole(record.role) : 'student',
+      });
+    } catch (err: any) {
+      console.error('[/api/auth/role] Falha ao consultar system_roles (fail-closed):', err?.message || err);
+      return res.json({
+        uid: caller.uid,
+        role: 'student',
+      });
+    }
+  });
+
+  // ==========================================
+  // PROFESSOR IA API ROUTES
+  // ==========================================
+
+  // 1. Status do Professor IA
+  app.get('/api/professor/status', (_req, res) => {
+    res.json({
+      available: !!ai,
+      model: 'gemini-3.8-flash',
+      provider: 'Google Gemini',
+      message: ai
+        ? 'Professor IA operacional via Gemini 3.8 Flash'
+        : 'GEMINI_API_KEY não configurada no ambiente. Adicione a chave nas Configurações.',
+    });
+  });
+
+  // 2. Chat Contextualizado com Professor IA (Protegido por requireAuth e rateLimiter)
+  app.post('/api/professor/chat', requireAuth, rateLimiter(20, 60000), async (req, res) => {
+    if (!ai) {
+      return res.status(503).json({
+        error: 'Serviço do Professor IA indisponível. Configure a chave GEMINI_API_KEY no painel de configurações.',
+      });
+    }
+
+    const { message, context } = req.body || {};
+    if (!message || typeof message !== 'string') {
+      return res.status(400).json({ error: 'Mensagem inválida ou ausente.' });
+    }
+
+    const trimmedMessage = message.trim();
+    if (trimmedMessage.length === 0) {
+      return res.status(400).json({ error: 'A pergunta não pode ser vazia.' });
+    }
+    if (trimmedMessage.length > 1000) {
+      return res.status(400).json({ error: 'A pergunta deve ter no máximo 1000 caracteres.' });
+    }
+
+    const studentLevel = Math.max(0, Math.min(5, Number(context?.studentLevel) || 0));
+    const currentLessonTitle =
+      typeof context?.currentLessonTitle === 'string'
+        ? context.currentLessonTitle.slice(0, 120)
+        : 'Fundamentos';
+    const masteredSkills = Array.isArray(context?.masteredSkills)
+      ? context.masteredSkills.slice(0, 10).map((s: any) => String(s).slice(0, 50))
+      : [];
+    const difficulties = Array.isArray(context?.difficulties)
+      ? context.difficulties.slice(0, 10).map((s: any) => String(s).slice(0, 50))
+      : [];
+    const coachChords = Array.isArray(context?.coachFeedback?.chords)
+      ? context.coachFeedback.chords.slice(0, 12).map((c: any) => String(c).slice(0, 20)).join(' -> ')
+      : '';
+    const coachAccuracy = Math.max(0, Math.min(100, Number(context?.coachFeedback?.accuracy) || 0));
+    const coachBpm = Math.max(20, Math.min(350, Number(context?.coachFeedback?.bpm) || 60));
+
+    const prompt = `Você é o Professor IA do Guitar Academy, um experiente mentor de guitarra e violão brasileiro.
 Sua didática é técnica, precisa, encorajadora e focada no progresso real do aluno.
 
 CONTEXTO ATUAL DO ALUNO:
@@ -213,7 +411,7 @@ CONTEXTO ATUAL DO ALUNO:
 - Aula Atual: ${currentLessonTitle}
 - Habilidades Dominadas: ${masteredSkills.join(', ') || 'Nenhuma registrada ainda'}
 - Dificuldades / Focos Recentes: ${difficulties.join(', ') || 'Transições de acordes e postura'}
-${context?.coachFeedback ? `- Último Treino no Guitar Coach: Acordes [${(context.coachFeedback.chords || []).join(' -> ')}], Precisão: ${context.coachFeedback.accuracy || 0}%, BPM: ${context.coachFeedback.bpm || 60}` : ''}
+${context?.coachFeedback ? `- Último Treino no Guitar Coach: Acordes [${coachChords}], Precisão: ${coachAccuracy}%, BPM: ${coachBpm}` : ''}
 
 PERGUNTA OU DÚVIDA DO ALUNO:
 "${trimmedMessage}"
@@ -224,37 +422,37 @@ DIRETRIZES DA RESPOSTA:
 3. Se envolver execução técnica, dê instruções biomecânicas claras (posição do polegar, pressão das pontas dos dedos, relaxamento do punho, palhetada alternada).
 4. Termine com uma dica prática imediata e sugira qual ferramenta do Guitar Academy usar para treinar (ex: Guitar Coach, Braço Interativo, Dicionário de Acordes ou Metrônomo).`;
 
-  try {
-    const response = await withTimeout(
-      ai.models.generateContent({
-        model: 'gemini-3.8-flash',
-        contents: prompt,
-      }),
-      25000
-    );
+    try {
+      const response = await withTimeout(
+        ai.models.generateContent({
+          model: 'gemini-3.8-flash',
+          contents: prompt,
+        }),
+        25000
+      );
 
-    return res.json({
-      reply: response.text || 'Não foi possível gerar a explicação. Tente reformular a pergunta.',
-      timestamp: new Date().toISOString(),
-    });
-  } catch (err: any) {
-    console.error('Error in /api/professor/chat:', err?.message || err);
-    return res.status(500).json({ error: sanitizeErrorMessage(err) });
-  }
-});
+      return res.json({
+        reply: response.text || 'Não foi possível gerar a explicação. Tente reformular a pergunta.',
+        timestamp: new Date().toISOString(),
+      });
+    } catch (err: any) {
+      console.error('Error in /api/professor/chat:', err?.message || err);
+      return res.status(500).json({ error: sanitizeErrorMessage(err) });
+    }
+  });
 
-// 3. Gerador de Exercícios Estruturados por Nível
-app.post('/api/professor/exercise', requireAuth, rateLimiter(20, 60000), async (req, res) => {
-  if (!ai) {
-    return res.status(503).json({ error: 'GEMINI_API_KEY não configurada.' });
-  }
+  // 3. Gerador de Exercícios Estruturados por Nível
+  app.post('/api/professor/exercise', requireAuth, rateLimiter(20, 60000), async (req, res) => {
+    if (!ai) {
+      return res.status(503).json({ error: 'GEMINI_API_KEY não configurada.' });
+    }
 
-  const rawLevel = Number(req.body.level);
-  const level = Number.isInteger(rawLevel) ? Math.max(0, Math.min(5, rawLevel)) : 0;
-  const rawTopic = typeof req.body.topic === 'string' ? req.body.topic.trim() : 'Harmonia e Tríades';
-  const topic = rawTopic.slice(0, 100);
+    const rawLevel = Number(req.body?.level);
+    const level = Number.isInteger(rawLevel) ? Math.max(0, Math.min(5, rawLevel)) : 0;
+    const rawTopic = typeof req.body?.topic === 'string' ? req.body.topic.trim() : 'Harmonia e Tríades';
+    const topic = rawTopic.slice(0, 100);
 
-  const prompt = `Gere 1 exercício prático de fixação em Português do Brasil para um estudante de guitarra de Nível ${level} sobre o tópico "${topic}".
+    const prompt = `Gere 1 exercício prático de fixação em Português do Brasil para um estudante de guitarra de Nível ${level} sobre o tópico "${topic}".
 O exercício deve testar raciocínio musical real aplicado à guitarra (formação de acordes, escalas, sistema CAGED, intervalos ou leitura).
 
 Responda ESTRITAMENTE em formato JSON com o seguinte schema:
@@ -266,48 +464,48 @@ Responda ESTRITAMENTE em formato JSON com o seguinte schema:
   "skillEvaluated": "Nome da habilidade específica avaliada (ex: Formação de Tríades Menores)"
 }`;
 
-  try {
-    const response = await withTimeout(
-      ai.models.generateContent({
-        model: 'gemini-3.8-flash',
-        contents: prompt,
-        config: {
-          responseMimeType: 'application/json',
-        },
-      }),
-      25000
-    );
+    try {
+      const response = await withTimeout(
+        ai.models.generateContent({
+          model: 'gemini-3.8-flash',
+          contents: prompt,
+          config: {
+            responseMimeType: 'application/json',
+          },
+        }),
+        25000
+      );
 
-    const parsed = JSON.parse(response.text?.trim() || '{}');
-    if (!parsed.question || !Array.isArray(parsed.options) || parsed.options.length < 2) {
-      throw new Error('Formato de resposta inválido gerado pelo provedor.');
+      const parsed = JSON.parse(response.text?.trim() || '{}');
+      if (!parsed.question || !Array.isArray(parsed.options) || parsed.options.length < 2) {
+        throw new Error('Formato de resposta inválido gerado pelo provedor.');
+      }
+
+      return res.json(parsed);
+    } catch (err: any) {
+      console.error('Error in /api/professor/exercise:', err?.message || err);
+      return res.status(500).json({ error: sanitizeErrorMessage(err) });
+    }
+  });
+
+  // 4. Avaliação e Correção de Respostas / Desempenho
+  app.post('/api/professor/evaluate', requireAuth, rateLimiter(20, 60000), async (req, res) => {
+    if (!ai) {
+      return res.status(503).json({ error: 'GEMINI_API_KEY não configurada.' });
     }
 
-    return res.json(parsed);
-  } catch (err: any) {
-    console.error('Error in /api/professor/exercise:', err?.message || err);
-    return res.status(500).json({ error: sanitizeErrorMessage(err) });
-  }
-});
+    const { question, studentAnswer, correctAnswer, explanation, level = 0 } = req.body || {};
+    if (!question || !studentAnswer) {
+      return res.status(400).json({ error: 'Parâmetros incompletos para avaliação.' });
+    }
 
-// 4. Avaliação e Correção de Respostas / Desempenho
-app.post('/api/professor/evaluate', requireAuth, rateLimiter(20, 60000), async (req, res) => {
-  if (!ai) {
-    return res.status(503).json({ error: 'GEMINI_API_KEY não configurada.' });
-  }
+    const safeQuestion = String(question).slice(0, 500);
+    const safeAnswer = String(studentAnswer).slice(0, 300);
+    const safeCorrect = String(correctAnswer || '').slice(0, 300);
+    const safeExplanation = String(explanation || '').slice(0, 500);
+    const safeLevel = Math.max(0, Math.min(5, Number(level) || 0));
 
-  const { question, studentAnswer, correctAnswer, explanation, level = 0 } = req.body;
-  if (!question || !studentAnswer) {
-    return res.status(400).json({ error: 'Parâmetros incompletos para avaliação.' });
-  }
-
-  const safeQuestion = String(question).slice(0, 500);
-  const safeAnswer = String(studentAnswer).slice(0, 300);
-  const safeCorrect = String(correctAnswer || '').slice(0, 300);
-  const safeExplanation = String(explanation || '').slice(0, 500);
-  const safeLevel = Math.max(0, Math.min(5, Number(level) || 0));
-
-  const prompt = `Você é o avaliador pedagógico do Guitar Academy.
+    const prompt = `Você é o avaliador pedagógico do Guitar Academy.
 Avalie a resposta do aluno de Nível ${safeLevel} para o seguinte exercício:
 Enunciado: "${safeQuestion}"
 Resposta escolhida pelo aluno: "${safeAnswer}"
@@ -323,41 +521,50 @@ Responda ESTRITAMENTE em formato JSON com o seguinte schema:
   "nextDrill": "Sugestão prática de 1 exercício de 5 minutos na guitarra"
 }`;
 
-  try {
-    const response = await withTimeout(
-      ai.models.generateContent({
-        model: 'gemini-3.8-flash',
-        contents: prompt,
-        config: {
-          responseMimeType: 'application/json',
-        },
-      }),
-      25000
-    );
+    try {
+      const response = await withTimeout(
+        ai.models.generateContent({
+          model: 'gemini-3.8-flash',
+          contents: prompt,
+          config: {
+            responseMimeType: 'application/json',
+          },
+        }),
+        25000
+      );
 
-    const result = JSON.parse(response.text?.trim() || '{}');
-    return res.json(result);
-  } catch (err: any) {
-    console.error('Error in /api/professor/evaluate:', err?.message || err);
-    return res.status(500).json({ error: sanitizeErrorMessage(err) });
-  }
-});
+      const result = JSON.parse(response.text?.trim() || '{}');
+      return res.json(result);
+    } catch (err: any) {
+      console.error('Error in /api/professor/evaluate:', err?.message || err);
+      return res.status(500).json({ error: sanitizeErrorMessage(err) });
+    }
+  });
 
-// 5. Recomendação de Próxima Atividade baseada no Progresso
-app.post('/api/professor/recommend', requireAuth, rateLimiter(20, 60000), async (req, res) => {
-  if (!ai) {
-    return res.status(503).json({ error: 'GEMINI_API_KEY não configurada.' });
-  }
+  // 5. Recomendação de Próxima Atividade baseada no Progresso
+  app.post('/api/professor/recommend', requireAuth, rateLimiter(20, 60000), async (req, res) => {
+    if (!ai) {
+      return res.status(503).json({ error: 'GEMINI_API_KEY não configurada.' });
+    }
 
-  const { progress } = req.body;
-  const prompt = `Você é o orientador pedagógico do Guitar Academy.
+    const progress = req.body?.progress;
+    const safeLevel = Math.max(0, Math.min(5, Number(progress?.studyPlan?.selectedLevel) || 0));
+    const safeDailyGoal = Math.max(5, Math.min(480, Number(progress?.dailyGoalMinutes) || 30));
+    const safeTodayMinutes = Math.max(0, Math.min(1440, Math.floor((Number(progress?.todayStudyTimeSeconds) || 0) / 60)));
+    const safeCompletedCount = Array.isArray(progress?.completedLessons)
+      ? Math.min(1000, progress.completedLessons.length)
+      : 0;
+    const safeErrors = sanitizeJsonSnippet(progress?.frequentErrors, 500);
+    const safeQuizzes = sanitizeJsonSnippet(progress?.quizScores, 500);
+
+    const prompt = `Você é o orientador pedagógico do Guitar Academy.
 Analise os dados de progresso do estudante:
-- Nível: ${progress?.studyPlan?.selectedLevel ?? 0}
-- Meta Diária: ${progress?.dailyGoalMinutes ?? 30} minutos
-- Tempo Praticado Hoje: ${Math.floor((progress?.todayStudyTimeSeconds ?? 0) / 60)} min
-- Aulas Concluídas: ${(progress?.completedLessons || []).length}
-- Erros Frequentes Registrados: ${JSON.stringify(progress?.frequentErrors || {})}
-- Últimas Avaliações: ${JSON.stringify(progress?.quizScores || {})}
+- Nível: ${safeLevel}
+- Meta Diária: ${safeDailyGoal} minutos
+- Tempo Praticado Hoje: ${safeTodayMinutes} min
+- Aulas Concluídas: ${safeCompletedCount}
+- Erros Frequentes Registrados: ${safeErrors}
+- Últimas Avaliações: ${safeQuizzes}
 
 Determine a recomendação ideal para a próxima sessão de estudo.
 Responda ESTRITAMENTE em formato JSON com o seguinte schema:
@@ -370,61 +577,83 @@ Responda ESTRITAMENTE em formato JSON com o seguinte schema:
   "motivationalNote": "Frase de incentivo personalizada"
 }`;
 
-  try {
-    const response = await withTimeout(
-      ai.models.generateContent({
-        model: 'gemini-3.8-flash',
-        contents: prompt,
-        config: {
-          responseMimeType: 'application/json',
-        },
-      }),
-      25000
-    );
+    try {
+      const response = await withTimeout(
+        ai.models.generateContent({
+          model: 'gemini-3.8-flash',
+          contents: prompt,
+          config: {
+            responseMimeType: 'application/json',
+          },
+        }),
+        25000
+      );
 
-    const result = JSON.parse(response.text?.trim() || '{}');
-    return res.json(result);
-  } catch (err: any) {
-    console.error('Error in /api/professor/recommend:', err?.message || err);
-    return res.status(500).json({ error: sanitizeErrorMessage(err) });
-  }
-});
+      const result = JSON.parse(response.text?.trim() || '{}');
+      return res.json(result);
+    } catch (err: any) {
+      console.error('Error in /api/professor/recommend:', err?.message || err);
+      return res.status(500).json({ error: sanitizeErrorMessage(err) });
+    }
+  });
 
-// Rota administrativa para consulta de papéis do sistema protegida por Zero-Trust
-app.get('/api/admin/roles/:uid', requireAuth, async (req, res) => {
-  const caller = (req as any).user;
-  const targetUid = req.params.uid;
+  // Rota administrativa para consulta de papéis do sistema protegida por Zero-Trust
+  app.get('/api/admin/roles/:uid', requireAuth, async (req, res) => {
+    const caller = (req as any).user;
+    const targetUid = String(req.params.uid || '').trim();
 
-  try {
-    const db = getFirestore();
-    const callerDoc = await db.collection('system_roles').doc(caller.uid).get();
-    const isCallerAdmin = callerDoc.exists && callerDoc.data()?.role === 'admin';
-
-    if (!isCallerAdmin && caller.uid !== targetUid) {
-      return res.status(403).json({ error: 'Acesso negado. Apenas administradores podem consultar papéis de outros usuários.' });
+    if (!UID_REGEX.test(targetUid)) {
+      return res.status(400).json({ error: 'Identificador de usuário inválido.' });
     }
 
-    const roleDoc = await db.collection('system_roles').doc(targetUid).get();
-    return res.json({
-      uid: targetUid,
-      role: roleDoc.exists ? (roleDoc.data()?.role || 'student') : 'student',
-      exists: roleDoc.exists,
-    });
-  } catch (err: any) {
-    return res.status(500).json({ error: sanitizeErrorMessage(err) });
-  }
-});
+    try {
+      const callerRecord = await resolveSystemRole(caller.uid);
+      const isCallerAdmin = callerRecord.exists && normalizeRole(callerRecord.role) === 'admin';
 
-// Catch-all 404 para rotas /api inexistentes (retorna JSON, nunca HTML)
-app.all('/api/*', (_req, res) => {
-  res.status(404).json({ error: 'Endpoint da API não encontrado.' });
-});
+      if (!isCallerAdmin && caller.uid !== targetUid) {
+        return res.status(403).json({
+          error: 'Acesso negado. Apenas administradores podem consultar papéis de outros usuários.',
+        });
+      }
+
+      const targetRecord = await resolveSystemRole(targetUid);
+      return res.json({
+        uid: targetUid,
+        role: targetRecord.exists ? normalizeRole(targetRecord.role) : 'student',
+        exists: targetRecord.exists,
+      });
+    } catch {
+      return res.status(403).json({ error: 'Falha ao validar permissão para consulta de papel.' });
+    }
+  });
+
+  // Rota de governança administrativa protegida por requireAuth e requireAdmin
+  app.get('/api/admin/overview', requireAuth, requireAdmin, async (_req, res) => {
+    return res.json({
+      status: 'ok',
+      security: 'Zero-Trust RBAC Active',
+      platform: 'Guitar Academy Production Backend',
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  // Catch-all 404 para rotas /api inexistentes (retorna JSON, nunca HTML)
+  app.all('/api/*', (_req, res) => {
+    res.status(404).json({ error: 'Endpoint da API não encontrado.' });
+  });
+
+  return app;
+}
+
+export const app = createServerApp();
 
 // ==========================================
 // VITE DEV MIDDLEWARE OU STATIC PROD
 // ==========================================
 async function start() {
+  const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
   const isProduction = process.env.NODE_ENV === 'production';
+  const ai = createGeminiClient();
 
   if (isProduction) {
     const distPath = path.resolve('dist');
@@ -441,11 +670,16 @@ async function start() {
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Guitar Academy Server running on http://0.0.0.0:${PORT} (Gemini AI: ${ai ? 'ENABLED' : 'DISABLED'})`);
+    console.log(
+      `Guitar Academy Server running on http://0.0.0.0:${PORT} (Gemini AI: ${ai ? 'ENABLED' : 'DISABLED'})`
+    );
   });
 }
 
-start().catch((err) => {
-  console.error('Failed to start server:', err);
-  process.exit(1);
-});
+const currentFilePath = fileURLToPath(import.meta.url);
+if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(currentFilePath)) {
+  start().catch((err) => {
+    console.error('Failed to start server:', err);
+    process.exit(1);
+  });
+}

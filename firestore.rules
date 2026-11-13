@@ -14,6 +14,20 @@ service cloud.firestore {
       return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-\\.:]+$');
     }
 
+    function hasNoPrivilegeFields(data) {
+      return !('role' in data) &&
+        !('isAdmin' in data) &&
+        !('isTeacher' in data) &&
+        !('permissions' in data);
+    }
+
+    function hasNoElevatedUserFields(data) {
+      return (!('role' in data) || data.role == 'student') &&
+        (!('isAdmin' in data) || data.isAdmin == false) &&
+        (!('isTeacher' in data) || data.isTeacher == false) &&
+        !('permissions' in data);
+    }
+
     // Validação de papéis baseada estritamente no CONTEÚDO de system_roles (imutável pelo cliente)
     function isAdmin() {
       return isAuthenticated() &&
@@ -28,61 +42,354 @@ service cloud.firestore {
          get(/databases/$(database)/documents/system_roles/$(request.auth.uid)).data.role == 'admin');
     }
 
-    // 1. Dados dos Estudantes
-    // Leitura: somente o próprio estudante ou administrador autorizado.
-    // Alunos comuns NUNCA podem consultar dados de outros alunos ou listar a coleção.
-    // Escrita: Aluno grava seus dados, mas NUNCA pode atribuir ou alterar privilégios (role).
+    // Validação estrita do perfil do usuário (/users/{userId})
+    function isValidUserPayload(data, userId) {
+      return data.keys().hasOnly([
+          'uid', 'displayName', 'email', 'photoURL', 'provider',
+          'createdAt', 'lastLoginAt', 'lastSeenAt', 'accountStatus',
+          'enrolledCourses', 'preferences', 'updatedAt',
+          'role', 'isAdmin', 'isTeacher'
+        ]) &&
+        (!('uid' in data) || (isValidId(data.uid) && data.uid == userId)) &&
+        (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 120)) &&
+        (!('email' in data) || (data.email is string && data.email.size() <= 254)) &&
+        (!('photoURL' in data) || data.photoURL == null || (data.photoURL is string && data.photoURL.size() <= 1024)) &&
+        (!('provider' in data) || (data.provider is string && data.provider.size() <= 64)) &&
+        (!('accountStatus' in data) || (data.accountStatus is string && data.accountStatus in ['active', 'inactive', 'suspended'])) &&
+        (!('enrolledCourses' in data) || (data.enrolledCourses is list && data.enrolledCourses.size() <= 50)) &&
+        (!('preferences' in data) || data.preferences is map);
+    }
+
+    // Validação estrita de matrículas (/enrollments/{enrollmentId})
+    function isValidEnrollment(data) {
+      return data.keys().hasAll(['studentId', 'classId', 'teacherId', 'status']) &&
+        data.keys().hasOnly([
+          'id', 'studentId', 'studentName', 'studentEmail', 'studentPhotoUrl',
+          'classId', 'courseId', 'teacherId', 'status',
+          'joinedAt', 'lastActivityAt', 'createdAt', 'updatedAt', 'approvedBy', 'approvedAt'
+        ]) &&
+        isValidId(data.studentId) &&
+        isValidId(data.classId) &&
+        isValidId(data.teacherId) &&
+        data.status is string &&
+        data.status in ['pending', 'active', 'approved', 'suspended', 'cancelled'] &&
+        (!('id' in data) || isValidId(data.id)) &&
+        (!('studentName' in data) || (data.studentName is string && data.studentName.size() <= 120)) &&
+        (!('studentEmail' in data) || (data.studentEmail is string && data.studentEmail.size() <= 254)) &&
+        (!('studentPhotoUrl' in data) || data.studentPhotoUrl == null || (data.studentPhotoUrl is string && data.studentPhotoUrl.size() <= 1024)) &&
+        (!('courseId' in data) || (data.courseId is string && data.courseId.size() <= 64)) &&
+        (!('approvedBy' in data) || isValidId(data.approvedBy)) &&
+        hasNoPrivilegeFields(data);
+    }
+
+    // Validação estrita de progresso (/student_progress/{progressId})
+    function isValidStudentProgress(data) {
+      return ('userId' in data || 'studentId' in data) &&
+        data.keys().hasOnly([
+          'userId', 'studentId', 'teacherId', 'courseId',
+          'currentLessonId', 'completedLessons', 'totalStudyTimeSeconds',
+          'todayStudyTimeSeconds', 'lastStudyDate', 'practicedBpm',
+          'quizScores', 'frequentErrors', 'pedagogicalProfile',
+          'practiceLogs', 'manualPracticeLogs', 'favoriteChords',
+          'lastUpdated', 'createdAt', 'updatedAt'
+        ]) &&
+        (!('userId' in data) || isValidId(data.userId)) &&
+        (!('studentId' in data) || isValidId(data.studentId)) &&
+        (!('userId' in data && 'studentId' in data) || data.userId == data.studentId) &&
+        (!('teacherId' in data) || isValidId(data.teacherId)) &&
+        (!('courseId' in data) || (data.courseId is string && data.courseId.size() <= 64)) &&
+        (!('currentLessonId' in data) || (data.currentLessonId is string && data.currentLessonId.size() <= 128)) &&
+        (!('completedLessons' in data) || (data.completedLessons is list && data.completedLessons.size() <= 1000)) &&
+        (!('totalStudyTimeSeconds' in data) || ((data.totalStudyTimeSeconds is int || data.totalStudyTimeSeconds is float) && data.totalStudyTimeSeconds >= 0 && data.totalStudyTimeSeconds <= 315360000)) &&
+        (!('todayStudyTimeSeconds' in data) || ((data.todayStudyTimeSeconds is int || data.todayStudyTimeSeconds is float) && data.todayStudyTimeSeconds >= 0 && data.todayStudyTimeSeconds <= 86400)) &&
+        (!('practicedBpm' in data) || ((data.practicedBpm is int || data.practicedBpm is float) && data.practicedBpm >= 20 && data.practicedBpm <= 350)) &&
+        (!('lastStudyDate' in data) || (data.lastStudyDate is string && data.lastStudyDate.size() <= 32)) &&
+        hasNoPrivilegeFields(data);
+    }
+
+    function progressMatchesUid(data, uid) {
+      return ('userId' in data || 'studentId' in data) &&
+        (!('userId' in data) || data.userId == uid) &&
+        (!('studentId' in data) || data.studentId == uid);
+    }
+
+    // 1. Dados dos Estudantes (/users/{userId})
+    // Leitura: somente o próprio estudante (ownership) ou administrador autorizado.
+    // Escrita: somente o próprio estudante com validação de payload, imutabilidade de identidade e bloqueio total de privilégios.
     match /users/{userId} {
       allow get: if (isOwner(userId) || isAdmin()) && isValidId(userId);
       allow list: if isAdmin();
       allow create: if isOwner(userId) && isValidId(userId) &&
-        (!('role' in request.resource.data) || request.resource.data.role == 'student') &&
-        (!('isAdmin' in request.resource.data) || request.resource.data.isAdmin == false) &&
-        (!('isTeacher' in request.resource.data) || request.resource.data.isTeacher == false);
-      allow update: if isOwner(userId) && isValidId(userId) &&
-        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'isTeacher', 'isAdmin', 'permissions']));
+        isValidUserPayload(request.resource.data, userId) &&
+        hasNoElevatedUserFields(request.resource.data) &&
+        (!('accountStatus' in request.resource.data) || request.resource.data.accountStatus == 'active');
+      allow update: if (isOwner(userId) || isAdmin()) && isValidId(userId) &&
+        isValidUserPayload(request.resource.data, userId) &&
+        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'isTeacher', 'isAdmin', 'permissions'])) &&
+        (isAdmin() || (
+          (!('uid' in resource.data) || request.resource.data.uid == resource.data.uid) &&
+          (!('createdAt' in resource.data) || request.resource.data.createdAt == resource.data.createdAt) &&
+          (!('accountStatus' in resource.data) || request.resource.data.accountStatus == resource.data.accountStatus)
+        ));
       allow delete: if isAdmin() && isValidId(userId);
 
       // Subcoleções isoladas (ex: progresso /users/{userId}/data/progress)
       match /{allSubcollections=**} {
         allow read: if (isOwner(userId) || isAdmin()) && isValidId(userId);
-        allow write: if isOwner(userId) && isValidId(userId);
+        allow create, update: if isOwner(userId) && isValidId(userId) &&
+          (!('uid' in request.resource.data) || request.resource.data.uid == userId) &&
+          hasNoPrivilegeFields(request.resource.data);
+        allow delete: if (isOwner(userId) || isAdmin()) && isValidId(userId);
       }
     }
 
-    // 2. Turmas Pedagógicas (Classes):
-    // Professores e administradores gerenciam suas turmas;
+    // 2. Coleção de Estudantes (/students/{studentId})
+    match /students/{studentId} {
+      allow get: if isValidId(studentId) && (
+        isOwner(studentId) ||
+        isAdmin() ||
+        (isTeacher() && ('teacherId' in resource.data) && resource.data.teacherId == request.auth.uid)
+      );
+      allow list: if isAdmin() || (isTeacher() && resource.data.teacherId == request.auth.uid);
+      allow create: if isOwner(studentId) && isValidId(studentId) &&
+        (!('uid' in request.resource.data) || request.resource.data.uid == studentId) &&
+        hasNoElevatedUserFields(request.resource.data);
+      allow update: if isOwner(studentId) && isValidId(studentId) &&
+        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'isTeacher', 'isAdmin', 'permissions', 'uid', 'teacherId']));
+      allow delete: if isAdmin() && isValidId(studentId);
+    }
+
+    // 3. Coleção de Professores (/teachers/{teacherId})
+    match /teachers/{teacherId} {
+      allow get: if (isOwner(teacherId) || isAdmin()) && isValidId(teacherId);
+      allow list: if isAdmin();
+      allow create, update, delete: if isAdmin() && isValidId(teacherId);
+    }
+
+    // 4. Turmas Pedagógicas (/classes/{classId}):
+    // Professores gerenciam apenas suas próprias turmas; administradores têm supervisão.
     // Alunos somente podem consultar a turma se forem matriculados nela.
     match /classes/{classId} {
       allow get: if isAuthenticated() && isValidId(classId) && (
-        isTeacher() || exists(/databases/$(database)/documents/classes/$(classId)/students/$(request.auth.uid))
+        isAdmin() ||
+        (isTeacher() && resource.data.teacherId == request.auth.uid) ||
+        exists(/databases/$(database)/documents/classes/$(classId)/students/$(request.auth.uid))
       );
-      allow list: if isTeacher();
-      allow create, update, delete: if isTeacher() && isValidId(classId);
+      allow list: if isTeacher() && (isAdmin() || resource.data.teacherId == request.auth.uid);
+      allow create: if isValidId(classId) && (
+        isAdmin() ||
+        (isTeacher() && request.resource.data.teacherId == request.auth.uid)
+      );
+      allow update, delete: if isValidId(classId) && (
+        isAdmin() ||
+        (isTeacher() && resource.data.teacherId == request.auth.uid && request.resource.data.teacherId == resource.data.teacherId)
+      );
 
       // Matrículas de Alunos na Turma:
-      // O aluno somente pode ver sua própria matrícula; professor vê as da turma.
       match /students/{studentId} {
-        allow read: if (isOwner(studentId) || isTeacher()) && isValidId(studentId);
-        allow create: if (isOwner(studentId) || isTeacher()) && isValidId(studentId);
-        allow update, delete: if isTeacher() && isValidId(studentId);
+        allow get: if isValidId(studentId) && (
+          isOwner(studentId) ||
+          isAdmin() ||
+          (isTeacher() && get(/databases/$(database)/documents/classes/$(classId)).data.teacherId == request.auth.uid)
+        );
+        allow list: if isAdmin() || (
+          isTeacher() && get(/databases/$(database)/documents/classes/$(classId)).data.teacherId == request.auth.uid
+        );
+        allow create: if isValidId(studentId) &&
+          hasNoElevatedUserFields(request.resource.data) &&
+          (!('studentId' in request.resource.data) || request.resource.data.studentId == studentId) &&
+          exists(/databases/$(database)/documents/classes/$(classId)) && (
+            isAdmin() ||
+            (isTeacher() && get(/databases/$(database)/documents/classes/$(classId)).data.teacherId == request.auth.uid) ||
+            (isOwner(studentId) &&
+             get(/databases/$(database)/documents/classes/$(classId)).data.active == true &&
+             request.resource.data.teacherId == get(/databases/$(database)/documents/classes/$(classId)).data.teacherId)
+          );
+        allow update: if isValidId(studentId) &&
+          hasNoElevatedUserFields(request.resource.data) &&
+          (!('studentId' in resource.data) || request.resource.data.studentId == resource.data.studentId) &&
+          (!('teacherId' in resource.data) || request.resource.data.teacherId == resource.data.teacherId) && (
+            isAdmin() ||
+            (isTeacher() && get(/databases/$(database)/documents/classes/$(classId)).data.teacherId == request.auth.uid)
+          );
+        allow delete: if isValidId(studentId) && (
+          isAdmin() ||
+          (isTeacher() && get(/databases/$(database)/documents/classes/$(classId)).data.teacherId == request.auth.uid)
+        );
       }
 
       // Eventos Analíticos Educacionais da Turma:
-      // O aluno NÃO pode registrar eventos em nome de terceiros.
       match /events/{eventId} {
-        allow read: if isTeacher() && isValidId(eventId);
+        allow read: if isValidId(eventId) && (
+          isAdmin() ||
+          (isTeacher() && get(/databases/$(database)/documents/classes/$(classId)).data.teacherId == request.auth.uid)
+        );
         allow create: if isAuthenticated() && isValidId(eventId) &&
-          request.resource.data.studentUid == request.auth.uid;
+          request.resource.data.studentUid == request.auth.uid &&
+          exists(/databases/$(database)/documents/classes/$(classId)/students/$(request.auth.uid));
         allow update, delete: if false;
       }
     }
 
-    // 3. Papéis do Sistema (system_roles):
-    // Imutável pelo cliente para impedir qualquer auto-atribuição de permissões.
-    // Escrita estritamente bloqueada (somente via Firebase Admin SDK no servidor).
+    // 4b. Códigos de Convite de Turma (/class_invites/{inviteCode}):
+    // Permite consulta pontual por código para ingresso de alunos sem expor listagem de turmas.
+    match /class_invites/{inviteCode} {
+      allow get: if isAuthenticated() && isValidId(inviteCode);
+      allow list: if false;
+      allow create: if isValidId(inviteCode) && (
+        isAdmin() ||
+        (isTeacher() &&
+         request.resource.data.teacherId == request.auth.uid &&
+         isValidId(request.resource.data.classId))
+      );
+      allow update: if isValidId(inviteCode) && (
+        isAdmin() ||
+        (isTeacher() &&
+         resource.data.teacherId == request.auth.uid &&
+         request.resource.data.teacherId == resource.data.teacherId)
+      );
+      allow delete: if isValidId(inviteCode) && (
+        isAdmin() ||
+        (isTeacher() && resource.data.teacherId == request.auth.uid)
+      );
+    }
+
+    // 5. Matrículas (/enrollments/{enrollmentId})
+    // Prevenção estrita de falsificação, aprovação indevida e modificação cruzada entre usuários.
+    match /enrollments/{enrollmentId} {
+      allow get: if isAuthenticated() && isValidId(enrollmentId) && (
+        resource.data.studentId == request.auth.uid ||
+        resource.data.teacherId == request.auth.uid ||
+        isAdmin()
+      );
+      allow list: if isAuthenticated() && (
+        resource.data.studentId == request.auth.uid ||
+        resource.data.teacherId == request.auth.uid ||
+        isAdmin()
+      );
+      allow create: if isAuthenticated() && isValidId(enrollmentId) &&
+        isValidEnrollment(request.resource.data) && (
+          isAdmin() ||
+          (isTeacher() && request.resource.data.teacherId == request.auth.uid) ||
+          (request.resource.data.studentId == request.auth.uid &&
+           request.resource.data.status in ['pending', 'active'] &&
+           !('approvedBy' in request.resource.data) &&
+           !('approvedAt' in request.resource.data) &&
+           exists(/databases/$(database)/documents/classes/$(request.resource.data.classId)) &&
+           get(/databases/$(database)/documents/classes/$(request.resource.data.classId)).data.active == true &&
+           get(/databases/$(database)/documents/classes/$(request.resource.data.classId)).data.teacherId == request.resource.data.teacherId)
+        );
+      allow update: if isAuthenticated() && isValidId(enrollmentId) &&
+        isValidEnrollment(request.resource.data) &&
+        request.resource.data.studentId == resource.data.studentId &&
+        request.resource.data.classId == resource.data.classId &&
+        request.resource.data.teacherId == resource.data.teacherId && (
+          isAdmin() ||
+          (isTeacher() && resource.data.teacherId == request.auth.uid) ||
+          (resource.data.studentId == request.auth.uid &&
+           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt', 'lastActivityAt']) &&
+           request.resource.data.status == 'cancelled')
+        );
+      allow delete: if isAdmin() && isValidId(enrollmentId);
+    }
+
+    // 6. Vínculos Professor-Aluno (/teacher_student_links/{linkId})
+    match /teacher_student_links/{linkId} {
+      allow get: if isAuthenticated() && isValidId(linkId) && (
+        resource.data.studentId == request.auth.uid ||
+        resource.data.teacherId == request.auth.uid ||
+        isAdmin()
+      );
+      allow list: if isAdmin() || (isTeacher() && resource.data.teacherId == request.auth.uid);
+      allow create: if isValidId(linkId) &&
+        isValidId(request.resource.data.studentId) &&
+        isValidId(request.resource.data.teacherId) && (
+          isAdmin() ||
+          (isTeacher() && request.resource.data.teacherId == request.auth.uid)
+        );
+      allow update: if isValidId(linkId) &&
+        request.resource.data.studentId == resource.data.studentId &&
+        request.resource.data.teacherId == resource.data.teacherId && (
+          isAdmin() ||
+          (isTeacher() && resource.data.teacherId == request.auth.uid)
+        );
+      allow delete: if isValidId(linkId) && (
+        isAdmin() ||
+        (isTeacher() && resource.data.teacherId == request.auth.uid)
+      );
+    }
+
+    // 7. Cursos (/courses/{courseId})
+    match /courses/{courseId} {
+      allow get, list: if isAuthenticated();
+      allow create, update, delete: if isAdmin() && isValidId(courseId);
+    }
+
+    // 8. Aulas (/lessons/{lessonId})
+    match /lessons/{lessonId} {
+      allow get, list: if isAuthenticated();
+      allow create, update, delete: if isAdmin() && isValidId(lessonId);
+    }
+
+    // 9. Progresso de Estudante (/student_progress/{progressId})
+    // Prevenção estrita de identidade dividida (userId != studentId), limites de campos e modificação cruzada.
+    match /student_progress/{progressId} {
+      allow get: if isAuthenticated() && isValidId(progressId) && (
+        progressMatchesUid(resource.data, request.auth.uid) ||
+        isAdmin() ||
+        (isTeacher() && ('teacherId' in resource.data) && resource.data.teacherId == request.auth.uid)
+      );
+      allow list: if isAuthenticated() && (
+        progressMatchesUid(resource.data, request.auth.uid) ||
+        isAdmin() ||
+        (isTeacher() && ('teacherId' in resource.data) && resource.data.teacherId == request.auth.uid)
+      );
+      allow create: if isAuthenticated() && isValidId(progressId) &&
+        isValidStudentProgress(request.resource.data) && (
+          isAdmin() ||
+          (progressMatchesUid(request.resource.data, request.auth.uid) &&
+           (progressId == request.auth.uid || !exists(/databases/$(database)/documents/users/$(progressId))))
+        );
+      allow update: if isAuthenticated() && isValidId(progressId) &&
+        isValidStudentProgress(request.resource.data) && (
+          isAdmin() ||
+          (progressMatchesUid(resource.data, request.auth.uid) &&
+           progressMatchesUid(request.resource.data, request.auth.uid) &&
+           (!('userId' in resource.data) || request.resource.data.userId == resource.data.userId) &&
+           (!('studentId' in resource.data) || request.resource.data.studentId == resource.data.studentId) &&
+           (!('teacherId' in resource.data) || request.resource.data.teacherId == resource.data.teacherId))
+        );
+      allow delete: if isAdmin() && isValidId(progressId);
+    }
+
+    // 10. Registros de Prática (/practice_records/{recordId})
+    match /practice_records/{recordId} {
+      allow get: if isAuthenticated() && isValidId(recordId) && (
+        resource.data.userId == request.auth.uid ||
+        isAdmin() ||
+        (isTeacher() && ('teacherId' in resource.data) && resource.data.teacherId == request.auth.uid)
+      );
+      allow list: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid ||
+        isAdmin() ||
+        (isTeacher() && ('teacherId' in resource.data) && resource.data.teacherId == request.auth.uid)
+      );
+      allow create: if isAuthenticated() && isValidId(recordId) &&
+        request.resource.data.userId == request.auth.uid &&
+        hasNoPrivilegeFields(request.resource.data);
+      allow update: if isAuthenticated() && isValidId(recordId) &&
+        resource.data.userId == request.auth.uid &&
+        request.resource.data.userId == request.auth.uid &&
+        hasNoPrivilegeFields(request.resource.data);
+      allow delete: if (resource.data.userId == request.auth.uid || isAdmin()) && isValidId(recordId);
+    }
+
+    // 11. Papéis do Sistema (system_roles):
+    // Acesso de leitura restrito EXCLUSIVAMENTE a administradores (Zero-Trust).
+    // Escrita estritamente bloqueada para todos os clientes (somente via Firebase Admin SDK no servidor).
     match /system_roles/{userId} {
-      allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin()) && isValidId(userId);
+      allow get: if isAdmin() && isValidId(userId);
+      allow list: if isAdmin();
       allow write: if false;
     }
 

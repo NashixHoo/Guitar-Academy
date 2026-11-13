@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
 import { 
   User, 
   signInWithGoogle as fbSignInGoogle, 
@@ -63,19 +63,32 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [authError, setAuthError] = useState<string | null>(null);
   const [authSuccessMessage, setAuthSuccessMessage] = useState<string | null>(null);
   const [showLegacyModal, setShowLegacyModal] = useState<boolean>(false);
+  const authSeqRef = useRef<number>(0);
 
   const refreshUserProfile = useCallback(async () => {
-    if (!auth.currentUser) {
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
       setStudentProfile(null);
       setRole('student');
+      setAdminPreviewMode(false);
       return;
     }
-    const [profile, resolvedRole] = await Promise.all([
-      fetchUserProfile(auth.currentUser.uid),
-      fetchSystemRole(auth.currentUser.uid),
-    ]);
-    setStudentProfile(profile);
-    setRole(resolvedRole);
+    try {
+      const [profile, resolvedRole] = await Promise.all([
+        fetchUserProfile(currentUser.uid),
+        fetchSystemRole(currentUser.uid),
+      ]);
+      if (auth.currentUser?.uid !== currentUser.uid) return;
+      setStudentProfile(profile);
+      setRole(resolvedRole);
+      if (resolvedRole !== 'admin') {
+        setAdminPreviewMode(false);
+      }
+    } catch {
+      if (auth.currentUser?.uid !== currentUser.uid) return;
+      setRole('student');
+      setAdminPreviewMode(false);
+    }
   }, []);
 
   // Inicialização preventiva de arquivamento de dados legados e listener de autenticação
@@ -83,6 +96,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     storageService.archiveLegacyData();
 
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      const seq = ++authSeqRef.current;
       setLoading(true);
       setUser(currentUser);
       if (currentUser) {
@@ -94,14 +108,22 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             fetchUserProfile(currentUser.uid),
             fetchSystemRole(currentUser.uid),
           ]);
+          if (authSeqRef.current !== seq) return;
           setStudentProfile(profile);
           setRole(resolvedRole);
+          if (resolvedRole !== 'admin') {
+            setAdminPreviewMode(false);
+          }
           updateUserLastSeen(currentUser.uid);
         } catch {
+          if (authSeqRef.current !== seq) return;
           // Em caso de falha de rede ou leitura, mantém estritamente o papel seguro de aluno
           setRole('student');
           setStudentProfile(null);
+          setAdminPreviewMode(false);
         }
+
+        if (authSeqRef.current !== seq) return;
 
         // Verifica se há dados legados anteriores e se este usuário ainda não possui histórico isolado
         const userHasLocal = storageService.hasUserLocalData(currentUser.uid);
@@ -115,6 +137,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         try {
           setSyncStatus('syncing');
           const syncResult = await storageService.syncUserWithCloud(currentUser.uid);
+          if (authSeqRef.current !== seq) return;
           if (syncResult.synced) {
             setSyncStatus('synced');
             setLastSyncedAt(new Date());
@@ -122,6 +145,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setSyncStatus('offline');
           }
         } catch {
+          if (authSeqRef.current !== seq) return;
           setSyncStatus('offline');
         }
       } else {
@@ -134,7 +158,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setShowLegacyModal(false);
         setSyncStatus('synced');
       }
-      setLoading(false);
+      if (authSeqRef.current === seq) {
+        setLoading(false);
+      }
     });
 
     return () => unsubscribe();

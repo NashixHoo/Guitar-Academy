@@ -11,7 +11,7 @@ import {
   StudentAnalyticsSummary,
   UserRole,
 } from '../types/teacher';
-import { db, fetchSystemRole } from './firebase';
+import { auth, db, fetchSystemRole } from './firebase';
 import {
   collection,
   doc,
@@ -99,10 +99,19 @@ export class TeacherService {
     const initialList = [defaultClass];
     this.saveLocalClasses(initialList);
 
-    // Tenta persistir no Firestore
+    // Tenta persistir no Firestore (turma + convite indexado sem expor listagem de turmas)
     try {
       await setDoc(doc(db, 'classes', defaultClass.id), {
         ...defaultClass,
+        updatedAt: serverTimestamp(),
+      });
+      await setDoc(doc(db, 'class_invites', defaultClass.code), {
+        classId: defaultClass.id,
+        code: defaultClass.code,
+        name: defaultClass.name,
+        teacherId: defaultClass.teacherId,
+        teacherName: defaultClass.teacherName,
+        active: true,
         updatedAt: serverTimestamp(),
       });
     } catch {
@@ -148,6 +157,15 @@ export class TeacherService {
         ...newClass,
         updatedAt: serverTimestamp(),
       });
+      await setDoc(doc(db, 'class_invites', code), {
+        classId,
+        code,
+        name: newClass.name,
+        teacherId,
+        teacherName,
+        active: true,
+        updatedAt: serverTimestamp(),
+      });
     } catch {
       // offline
     }
@@ -178,23 +196,63 @@ export class TeacherService {
       studentEmail = inviteCodeOrEmail || '';
     }
 
+    const cleanStudentUid = (studentUid || '').trim();
+    if (!cleanStudentUid) {
+      return { success: false, message: 'Sessão do estudante inválida para matrícula.', error: 'UID ausente.' };
+    }
+
+    // Impede que o cliente tente matricular outro UID diferente do usuário autenticado
+    if (auth.currentUser && auth.currentUser.uid !== cleanStudentUid) {
+      return {
+        success: false,
+        message: 'Operação negada: o aluno só pode realizar matrícula em seu próprio UID autenticado.',
+        error: 'UID divergente do usuário autenticado.',
+      };
+    }
+
     const cleanCode = inviteCode.trim().toUpperCase();
     if (!cleanCode) {
       return { success: false, message: 'Código de convite inválido ou vazio.', error: 'Código de convite inválido ou vazio.' };
     }
 
-    // 1. Busca a turma pelo código
+    // 1. Busca direta segura pelo documento /class_invites/{cleanCode} (evita expor listagem de classes)
     let matchedClass: ClassGroup | undefined;
 
     try {
-      const classesRef = collection(db, 'classes');
-      const q = query(classesRef, where('code', '==', cleanCode), where('active', '==', true));
-      const snap = await getDocs(q);
-      if (!snap.empty) {
-        matchedClass = { id: snap.docs[0].id, ...snap.docs[0].data() } as ClassGroup;
+      const inviteSnap = await getDoc(doc(db, 'class_invites', cleanCode));
+      if (inviteSnap.exists()) {
+        const inv = inviteSnap.data();
+        if (inv.active === true && inv.classId && inv.teacherId) {
+          matchedClass = {
+            id: inv.classId,
+            name: inv.name || 'Turma Guitar Academy',
+            code: inv.code || cleanCode,
+            description: inv.description || '',
+            teacherId: inv.teacherId,
+            teacherEmail: inv.teacherEmail || '',
+            teacherName: inv.teacherName || 'Professor Guitar Academy',
+            createdAt: inv.createdAt || new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            active: true,
+            maxStudents: inv.maxStudents || 60,
+          };
+        }
       }
     } catch {
-      // offline
+      // fallback abaixo
+    }
+
+    if (!matchedClass) {
+      try {
+        const classesRef = collection(db, 'classes');
+        const q = query(classesRef, where('code', '==', cleanCode), where('active', '==', true));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          matchedClass = { id: snap.docs[0].id, ...snap.docs[0].data() } as ClassGroup;
+        }
+      } catch {
+        // offline ou bloqueado para listagem direta de classes
+      }
     }
 
     if (!matchedClass) {
@@ -211,11 +269,11 @@ export class TeacherService {
       };
     }
 
-    const enrollmentId = `enroll-${matchedClass.id}-${studentUid}`;
+    const enrollmentId = `enroll-${matchedClass.id}-${cleanStudentUid}`;
     const enrollment: ClassEnrollment = {
       id: enrollmentId,
       classId: matchedClass.id,
-      studentId: studentUid,
+      studentId: cleanStudentUid,
       studentName: studentName || 'Estudante',
       studentEmail: studentEmail || '',
       studentPhotoUrl,
@@ -227,7 +285,7 @@ export class TeacherService {
 
     // Salva localmente
     const localEnrollments = this.loadLocalEnrollments();
-    const existingIndex = localEnrollments.findIndex((e) => e.studentId === studentUid && e.classId === matchedClass!.id);
+    const existingIndex = localEnrollments.findIndex((e) => e.studentId === cleanStudentUid && e.classId === matchedClass!.id);
     if (existingIndex >= 0) {
       localEnrollments[existingIndex] = enrollment;
     } else {
@@ -242,9 +300,9 @@ export class TeacherService {
       } catch {}
     }
 
-    // Salva no Firestore
+    // Salva no Firestore (coleção da turma e registro de matrícula isolado)
     try {
-      await setDoc(doc(db, 'classes', matchedClass.id, 'students', studentUid), {
+      await setDoc(doc(db, 'classes', matchedClass.id, 'students', cleanStudentUid), {
         ...enrollment,
         updatedAt: serverTimestamp(),
       });
@@ -267,13 +325,22 @@ export class TeacherService {
 
     try {
       if (classId && classId !== 'all') {
+        const classes = await this.getTeacherClasses(teacherId);
+        const ownsClass = classes.some((c) => c.id === classId && c.teacherId === teacherId);
+        if (!ownsClass) {
+          return [];
+        }
         const snap = await getDocs(collection(db, 'classes', classId, 'students'));
-        enrollments = snap.docs.map((d) => ({ id: d.id, ...d.data() } as ClassEnrollment));
+        enrollments = snap.docs
+          .map((d) => ({ id: d.id, ...d.data() } as ClassEnrollment))
+          .filter((e) => !e.teacherId || e.teacherId === teacherId);
       } else {
         const classes = await this.getTeacherClasses(teacherId);
         for (const c of classes) {
           const snap = await getDocs(collection(db, 'classes', c.id, 'students'));
-          const classStudents = snap.docs.map((d) => ({ id: d.id, ...d.data() } as ClassEnrollment));
+          const classStudents = snap.docs
+            .map((d) => ({ id: d.id, ...d.data() } as ClassEnrollment))
+            .filter((e) => !e.teacherId || e.teacherId === teacherId);
           enrollments.push(...classStudents);
         }
       }
@@ -291,10 +358,10 @@ export class TeacherService {
     }
 
     // Se ainda não houver nenhum aluno vinculado, provisiona alunos de demonstração acadêmica
-    // baseados nos 3 perfis ativos descritos no contexto para permitir visualização analítica imediata
+    // isolados estritamente ao teacherId atual para permitir visualização analítica imediata
     if (enrollments.length === 0) {
       enrollments = this.getBootstrapDemoEnrollments(teacherId, classId);
-      this.saveLocalEnrollments(enrollments);
+      this.saveLocalEnrollments([...this.loadLocalEnrollments(), ...enrollments]);
     }
 
     return enrollments;
