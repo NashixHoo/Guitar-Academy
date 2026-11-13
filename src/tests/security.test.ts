@@ -179,13 +179,11 @@ describe('Firebase Emulator — Firestore Security Rules (Student vs Admin)', ()
         uid: STUDENT_UID,
         displayName: 'Aluno Teste',
         email: 'aluno1@guitaracademy.test',
-        role: 'student',
       });
       await setDoc(doc(adminDb, 'users', OTHER_STUDENT_UID), {
         uid: OTHER_STUDENT_UID,
         displayName: 'Outro Aluno',
         email: 'aluno2@guitaracademy.test',
-        role: 'student',
       });
 
       await setDoc(doc(adminDb, 'students', OTHER_STUDENT_UID), {
