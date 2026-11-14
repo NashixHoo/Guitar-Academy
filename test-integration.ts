@@ -88,6 +88,8 @@ import {
   generateDailyPracticePlan,
   DOMAIN_AREAS_METADATA,
 } from './src/services/learningEngine';
+import { resolveChordForModal, findChordTokensInText } from './src/services/chordLookupService';
+import { getCourseModuleVisual, getLessonVisual } from './src/data/courseLessonVisuals';
 import fs from 'fs';
 import path from 'path';
 
@@ -5401,6 +5403,122 @@ assert(
   '32.16 mapFirebaseAuthError traduz todos os 5 códigos obrigatórios de erro do Firebase Auth'
 );
 
+// =============================================================
+// GRUPO 33 — MODAL AMPLIADO DE ACORDES E IMAGENS NOS CURSOS
+// =============================================================
+console.log('\n--- GRUPO 33: MODAL AMPLIADO DE ACORDES E IMAGENS NOS CURSOS ---');
+
+// 33.1 Resolução unificada de acordes do banco, aliases e cifras dinâmicas
+const modalC = resolveChordForModal('C');
+const modalCmaj7 = resolveChordForModal('Cmaj7');
+const modalBm7b5 = resolveChordForModal('Bm7b5');
+const modalGadd9 = resolveChordForModal('Gadd9');
+const modalDSlashFSharp = resolveChordForModal('D/F#');
+assert(
+  Boolean(modalC && modalC.frets.length === 6 && modalC.fingers.length === 6 && modalC.notes.length >= 3 && modalC.notesPt.length >= 3),
+  '33.01 resolveChordForModal resolve C Maior do banco com 6 cordas, dedos e notas em cifra e português'
+);
+assert(
+  Boolean(modalCmaj7 && modalCmaj7.notes.includes('B') && modalBm7b5 && modalBm7b5.frets.length === 6),
+  '33.02 resolveChordForModal normaliza aliases Cmaj7/C7M e Bm7b5/Bm7(b5)'
+);
+assert(
+  Boolean(modalGadd9 && modalGadd9.frets.length === 6 && modalDSlashFSharp && modalDSlashFSharp.frets.length === 6),
+  '33.03 resolveChordForModal calcula diagramas dinâmicos para cifras avançadas (Gadd9, D/F#)'
+);
+
+// 33.2 Extração segura de cifras em texto corrido sem falsos positivos em preposições portuguesas
+const tokensWithPt = findChordTokensInText('Toque a sequência G, Cadd9, Em7 e D/F# com calma e precisão.');
+const detectedChordTokens = tokensWithPt.filter((s) => s.isChord).map((s) => s.text);
+assert(
+  detectedChordTokens.includes('Cadd9') &&
+  detectedChordTokens.includes('Em7') &&
+  detectedChordTokens.includes('D/F#') &&
+  !detectedChordTokens.includes('a') &&
+  !detectedChordTokens.includes('e'),
+  '33.04 findChordTokensInText identifica cifras reais (Cadd9, Em7, D/F#) sem marcar artigos/conjunções portuguesas ("a", "e")'
+);
+
+// 33.3 Biblioteca de acordes sem painel na parte inferior da aba Dicionário e integrada ao modal central
+const updatedDictSource = fs.readFileSync('src/components/chords/ChordDictionaryView.tsx', 'utf-8');
+const dictStartIdx = updatedDictSource.indexOf("{activeTabMode === 'dictionary'");
+const dictEndIdx = updatedDictSource.indexOf("{activeTabMode === 'reverse'");
+const dictionaryTabSlice = updatedDictSource.slice(dictStartIdx, dictEndIdx);
+assert(
+  dictionaryTabSlice.includes('toggleChord(') &&
+  !dictionaryTabSlice.includes('<ChordDiagram'),
+  '33.05 Aba Dicionário de ChordDictionaryView removeu o diagrama da parte inferior e abre o modal central ao tocar no acorde'
+);
+
+// 33.4 Modal central ampliado com toggles, cordas, casas, dedos, notas e fechamento completo
+const chordModalContextSrc = fs.readFileSync('src/contexts/ChordModalContext.tsx', 'utf-8');
+const chordPreviewModalSrc = fs.readFileSync('src/components/chords/ChordPreviewModal.tsx', 'utf-8');
+const chordDiagramSrc33 = fs.readFileSync('src/components/chords/ChordDiagram.tsx', 'utf-8');
+assert(
+  chordModalContextSrc.includes('prev.matchKey === resolved.matchKey') &&
+  chordModalContextSrc.includes("e.key === 'Escape'") &&
+  chordPreviewModalSrc.includes('size="lg"') &&
+  chordPreviewModalSrc.includes('showStringLabels={true}') &&
+  chordPreviewModalSrc.includes('showFretNumbers={true}') &&
+  chordPreviewModalSrc.includes('showFingerLegend={true}') &&
+  chordPreviewModalSrc.includes('onClick={closeChord}') &&
+  chordDiagramSrc33.includes('Indicador') &&
+  chordDiagramSrc33.includes('Mínimo'),
+  '33.06 ChordPreviewModal exibe diagrama ampliado centralizado com cordas, casas, dedos, notas e fecha ao tocar novamente, no backdrop ou Esc'
+);
+
+// 33.5 Demais áreas clicáveis (Estudos, Currículo, Aulas, Coach e Teoria) conectadas ao modal central
+const curriculumSrc33 = fs.readFileSync('src/components/curriculum/CurriculumView.tsx', 'utf-8');
+const lessonViewerSrc33 = fs.readFileSync('src/components/curriculum/LessonViewer.tsx', 'utf-8');
+const guitarCoachSrc33 = fs.readFileSync('src/components/coach/GuitarCoachView.tsx', 'utf-8');
+const musicTheorySrc33 = fs.readFileSync('src/components/theory/MusicTheoryView.tsx', 'utf-8');
+const studyLibSrc33 = fs.readFileSync('src/components/library/StudyLibraryView.tsx', 'utf-8');
+assert(
+  curriculumSrc33.includes('toggleChord(') &&
+  lessonViewerSrc33.includes('toggleChord(') &&
+  lessonViewerSrc33.includes('ChordNameButton') &&
+  guitarCoachSrc33.includes('toggleChord(') &&
+  musicTheorySrc33.includes('ChordNameButton') &&
+  studyLibSrc33.includes('handleToggleInspectedChord'),
+  '33.07 Todas as áreas com nomes de acordes (Biblioteca, Estudos, Currículo, Aulas, Coach, Teoria) disparam e alternam o diagrama ampliado'
+);
+
+// 33.6 Imagens temáticas distintas por instrumento e assunto nos cursos e aulas
+const courseBannerSrc = fs.readFileSync('src/components/curriculum/CourseVisualBanner.tsx', 'utf-8');
+const violaoAssets = new Set(VIOLAO_LESSONS.map((l) => getLessonVisual(l).assetKey));
+const soloAssets = new Set(SOLO_LESSONS.map((l) => getLessonVisual(l).assetKey));
+const canonicalAssets = new Set(CURRICULUM_LEVELS.flatMap((lvl) => lvl.lessons).map((l) => getLessonVisual(l).assetKey));
+const bassAssets = new Set(BASS_LESSONS.map((l) => getLessonVisual(l).assetKey));
+const keyAssets = new Set(KEYBOARD_LESSONS.map((l) => getLessonVisual(l).assetKey));
+const drumsAssets = new Set(DRUMS_LESSONS.map((l) => getLessonVisual(l).assetKey));
+assert(
+  violaoAssets.size >= 3 &&
+  soloAssets.size >= 2 &&
+  canonicalAssets.size >= 3 &&
+  bassAssets.size >= 2 &&
+  keyAssets.size >= 2 &&
+  drumsAssets.size >= 2,
+  '33.08 Todos os cursos (Violão, Guitarra, Solo, Baixo, Teclado, Bateria) recebem múltiplas imagens específicas ao assunto de cada aula'
+);
+
+assert(
+  curriculumSrc33.includes('<CourseVisualBanner') &&
+  lessonViewerSrc33.includes('<CourseVisualBanner') &&
+  courseBannerSrc.includes('ASSET_MAP') &&
+  getCourseModuleVisual('baixo', 3).assetKey === 'baixo-slap' &&
+  getCourseModuleVisual('teclado', 3).assetKey === 'teclado-harmonia' &&
+  getCourseModuleVisual('bateria', 2).assetKey === 'bateria-kit',
+  '33.09 CurriculumView e LessonViewer renderizam CourseVisualBanner com mapeamento por módulo e aula'
+);
+
+// Verifica existência física de todos os arquivos .jpg referenciados no banner
+const bannerImportMatches = [...courseBannerSrc.matchAll(/from '\.\.\/\.\.\/(assets\/images\/[^']+\.jpg)'/g)];
+assert(
+  bannerImportMatches.length === 12 &&
+  bannerImportMatches.every((m) => fs.existsSync(path.join('src', m[1])) && fs.statSync(path.join('src', m[1])).size > 10000),
+  `33.10 Todas as ${bannerImportMatches.length} imagens exclusivas dos cursos existem em src/assets/images/ com tamanho válido`
+);
+
 console.log('\n===========================================================');
 console.log(`TOTAL DE TESTES: ${totalTests}`);
 console.log(`PASSOU: ${passedTests}`);
@@ -5410,7 +5528,7 @@ console.log('===========================================================');
 if (failedTests > 0) {
   process.exit(1);
 } else {
-  console.log('✓ Todos os testes de integração do motor musical, detector, currículo, Central de Prática, Busca Global, Diagramas Cifra Club, Autenticação Obrigatória, Separação de Ambientes Aluno/Admin, Backend Hardening, SMART TUNER V1.2, AUTENTICAÇÃO ADMINISTRATIVA DEFINITIVA e CORREÇÃO GERAL DEFINITIVA foram APROVADOS com sucesso!\n');
+  console.log('✓ Todos os testes de integração do motor musical, detector, currículo, Central de Prática, Busca Global, Diagramas Cifra Club, Autenticação Obrigatória, Separação de Ambientes Aluno/Admin, Backend Hardening, SMART TUNER V1.2, AUTENTICAÇÃO ADMINISTRATIVA DEFINITIVA, CORREÇÃO GERAL DEFINITIVA e MODAL/IMAGENS DOS CURSOS foram APROVADOS com sucesso!\n');
   process.exit(0);
 }
 

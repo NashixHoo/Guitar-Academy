@@ -1,10 +1,12 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { STUDY_LIBRARY } from '../../data/studyLibrary';
 import { ChordDiagram } from '../chords/ChordDiagram';
 import { ChordEngine } from '../../chords/chord-engine';
 import { MusicIntelligence } from '../../music/music-intelligence';
 import { calculateKey, transposeChord } from '../../music/transposer';
 import { toEasyPlay } from '../../chords/easy-play-integration';
+import { CIPHER_TO_PT } from '../../data/musicTheory';
+import { NoteCipher } from '../../types';
 import {
   BookMarked,
   Flame,
@@ -80,6 +82,19 @@ export const StudyLibraryView: React.FC<StudyLibraryViewProps> = ({ onOpenMetron
     const chord = ChordEngine.getChord(inspectedChord);
     const shapes = ChordEngine.getShapes(inspectedChord, 'electric-guitar');
     return { chord, shapes };
+  }, [inspectedChord]);
+
+  const handleToggleInspectedChord = (symbol: string) => {
+    setInspectedChord((prev) => (prev === symbol ? null : symbol));
+  };
+
+  useEffect(() => {
+    if (!inspectedChord) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setInspectedChord(null);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
   }, [inspectedChord]);
 
   return (
@@ -289,15 +304,16 @@ export const StudyLibraryView: React.FC<StudyLibraryViewProps> = ({ onOpenMetron
             {processedChords.map((ch, idx) => (
               <button
                 key={`${ch.display}-${idx}`}
-                onClick={() => setInspectedChord(ch.display)}
-                className={`px-4 py-2 rounded-xl border text-sm font-bold font-mono-code flex items-center gap-2 transition cursor-pointer shadow-xs ${
+                type="button"
+                onClick={() => handleToggleInspectedChord(ch.display)}
+                className={`min-h-[40px] px-4 py-2 rounded-xl border text-sm font-bold font-mono-code flex items-center gap-2 transition cursor-pointer shadow-xs ${
                   inspectedChord === ch.display
                     ? 'bg-[#7B1E2B] text-white border-[#7B1E2B]'
                     : ch.isSimplified
                     ? 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100'
                     : 'bg-[#F8F7F4] text-[#25252A] border-[#D9D9D9] hover:bg-white hover:border-[#7B1E2B]'
                 }`}
-                title="Clique para ver o diagrama deste acorde no braço"
+                title="Toque para abrir ou fechar o diagrama ampliado deste acorde"
               >
                 <span>{ch.display}</span>
                 {ch.isSimplified && (
@@ -373,38 +389,53 @@ export const StudyLibraryView: React.FC<StudyLibraryViewProps> = ({ onOpenMetron
 
       {/* Quick Chord Inspector Modal from ChordEngine */}
       {inspectedChordDetails && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white border border-[#D9D9D9] rounded-3xl max-w-md w-full p-6 shadow-xl space-y-4 animate-in fade-in zoom-in-95">
-            <div className="flex items-center justify-between border-b border-[#D9D9D9] pb-3">
-              <div className="flex items-center gap-2">
-                <Music className="w-5 h-5 text-[#7B1E2B]" />
-                <h3 className="text-lg font-black text-[#25252A]">
-                  Acorde: {inspectedChord}
-                </h3>
-              </div>
+        <div
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setInspectedChord(null)}
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white dark:bg-[#22141A] border border-[#D9D9D9] dark:border-[#422933] rounded-3xl max-w-md w-full max-h-[90dvh] overflow-y-auto p-5 sm:p-6 shadow-2xl space-y-4"
+          >
+            <div className="flex items-center justify-between border-b border-[#D9D9D9] dark:border-[#422933] pb-3">
               <button
+                type="button"
                 onClick={() => setInspectedChord(null)}
-                className="w-8 h-8 rounded-full flex items-center justify-center text-[#666672] hover:bg-[#F5E8EA] hover:text-[#7B1E2B] transition"
+                className="flex items-center gap-2.5 text-left hover:opacity-80 transition"
+                title="Toque novamente no nome do acorde para fechar"
               >
-                <X className="w-4 h-4" />
+                <Music className="w-5 h-5 text-[#7B1E2B] dark:text-[#FF6B81]" />
+                <h3 className="text-2xl font-black font-mono-code text-[#7B1E2B] dark:text-[#FF6B81]">
+                  {inspectedChord}
+                </h3>
+              </button>
+              <button
+                type="button"
+                onClick={() => setInspectedChord(null)}
+                aria-label="Fechar janela do acorde"
+                className="min-w-[44px] min-h-[44px] rounded-2xl flex items-center justify-center text-[#666672] hover:bg-[#F5E8EA] hover:text-[#7B1E2B] transition"
+              >
+                <X className="w-5 h-5" />
               </button>
             </div>
 
             {inspectedChordDetails.chord && (
               <div className="space-y-3 text-xs">
-                <div className="grid grid-cols-2 gap-2 bg-[#F8F7F4] p-3 rounded-2xl border border-[#D9D9D9]">
+                <div className="grid grid-cols-2 gap-2 bg-[#F8F7F4] dark:bg-[#1A1216] p-3 rounded-2xl border border-[#D9D9D9] dark:border-[#422933]">
                   <div>
                     <span className="text-[10px] uppercase font-bold text-[#666672] block">Fundamental</span>
-                    <span className="font-bold text-[#25252A]">{inspectedChordDetails.chord.root}</span>
+                    <span className="font-bold text-[#25252A] dark:text-[#F8F7F4]">{inspectedChordDetails.chord.root}</span>
                   </div>
                   <div>
                     <span className="text-[10px] uppercase font-bold text-[#666672] block">Qualidade</span>
-                    <span className="font-bold text-[#25252A]">{inspectedChordDetails.chord.qualityName}</span>
+                    <span className="font-bold text-[#25252A] dark:text-[#F8F7F4]">{inspectedChordDetails.chord.qualityName}</span>
                   </div>
                   <div className="col-span-2">
-                    <span className="text-[10px] uppercase font-bold text-[#666672] block">Notas Teóricas</span>
-                    <span className="font-bold text-[#7B1E2B] font-mono-code">
-                      {inspectedChordDetails.chord.notes.join(' - ')}
+                    <span className="text-[10px] uppercase font-bold text-[#666672] block">Notas do Acorde</span>
+                    <span className="font-bold text-[#7B1E2B] dark:text-[#FF6B81] font-mono-code">
+                      {inspectedChordDetails.chord.notes.join(' · ')} ({inspectedChordDetails.chord.notes.map((n) => CIPHER_TO_PT[n as NoteCipher] || n).join(', ')})
                     </span>
                   </div>
                 </div>
@@ -412,27 +443,23 @@ export const StudyLibraryView: React.FC<StudyLibraryViewProps> = ({ onOpenMetron
                 {/* Finger shapes on guitar */}
                 {inspectedChordDetails.shapes.length > 0 ? (
                   <div className="space-y-2">
-                    <span className="text-[10px] uppercase font-bold text-[#7B1E2B] tracking-wider block">
-                      Digitação Recomendada na Guitarra (Giannini 101 HSS):
+                    <span className="text-[10px] uppercase font-bold text-[#7B1E2B] dark:text-[#FF6B81] tracking-wider block">
+                      Desenho Completo na Guitarra / Violão:
                     </span>
-                    {inspectedChordDetails.shapes.slice(0, 2).map((shape, sIdx) => (
-                      <div key={sIdx} className="p-3 rounded-xl bg-white border border-[#D9D9D9] space-y-1.5">
-                        <div className="flex items-center justify-between text-[11px] font-bold">
-                          <span className="text-[#25252A]">
-                            Forma {shape.cagedForm ? `CAGED (${shape.cagedForm})` : `${shape.position}`}
-                          </span>
-                          <span className="text-[#666672]">
-                            Casa Base: {shape.baseFret}ª casa
-                          </span>
-                        </div>
-                        <div className="flex justify-center my-2">
-                          <ChordDiagram
-                            chord={shape}
-                            size="xs"
-                            showAudio={true}
-                            showTitle={false}
-                          />
-                        </div>
+                    {inspectedChordDetails.shapes.slice(0, 1).map((shape, sIdx) => (
+                      <div key={sIdx} className="space-y-1.5">
+                        <ChordDiagram
+                          chord={shape}
+                          notes={inspectedChordDetails.chord?.notes}
+                          notesPt={inspectedChordDetails.chord?.notes.map((n) => CIPHER_TO_PT[n as NoteCipher] || n)}
+                          size="lg"
+                          showAudio={true}
+                          showTitle={false}
+                          showDetails={false}
+                          showStringLabels={true}
+                          showFretNumbers={true}
+                          showFingerLegend={true}
+                        />
                       </div>
                     ))}
                   </div>
@@ -445,10 +472,11 @@ export const StudyLibraryView: React.FC<StudyLibraryViewProps> = ({ onOpenMetron
             )}
 
             <button
+              type="button"
               onClick={() => setInspectedChord(null)}
-              className="w-full py-2.5 rounded-xl bg-[#7B1E2B] text-white hover:bg-[#B52A3A] font-bold text-xs transition"
+              className="w-full min-h-[44px] py-2.5 rounded-2xl bg-[#7B1E2B] text-white hover:bg-[#B52A3A] font-bold text-xs sm:text-sm transition"
             >
-              Fechar Detalhes do Acorde
+              Fechar Diagrama do Acorde
             </button>
           </div>
         </div>

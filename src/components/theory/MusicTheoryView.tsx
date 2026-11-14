@@ -3,6 +3,8 @@ import { CIRCLE_OF_FIFTHS, INTERVALS, CHROMATIC_NOTES, CIPHER_TO_PT, STANDARD_TU
 import { NoteCipher } from '../../types';
 import { audioEngine } from '../../audio/audioEngine';
 import { Compass, Layers, Sparkles, Music, Play, Square, ArrowRight, Wand2, BookOpen } from 'lucide-react';
+import { ChordNameButton } from '../chords/ChordNameButton';
+import { findChordTokensInText } from '../../services/chordLookupService';
 
 interface MusicTheoryViewProps {
   initialKey?: string;
@@ -653,15 +655,33 @@ E|----------------------------------|
                             <span className="w-2.5 h-2.5 rounded-full bg-[#7B1E2B] animate-pulse" />
                           )}
                         </div>
-                        <h4 className="text-3xl font-black font-mono-code text-[#25252A] mt-1">
-                          {chord.symbol}
-                        </h4>
+                        <div className="mt-1.5">
+                          <ChordNameButton
+                            chord={chord.symbol}
+                            variant="chip"
+                            className="text-2xl sm:text-3xl px-3 py-1"
+                          />
+                        </div>
                       </div>
 
                       <div className="space-y-1.5 pt-2 border-t border-[#D9D9D9] text-xs">
                         <div>
                           <span className="text-[10px] text-[#7B1E2B] uppercase font-bold block">Enriquecimento Acústico:</span>
-                          <span className="font-extrabold text-[#B52A3A] font-mono-code">{chord.enriched}</span>
+                          <div className="flex flex-wrap items-center gap-1 mt-0.5">
+                            {findChordTokensInText(chord.enriched).map((seg, sIdx) =>
+                              seg.isChord ? (
+                                <ChordNameButton
+                                  key={`enr-${idx}-${sIdx}`}
+                                  chord={seg.text}
+                                  variant="inline"
+                                />
+                              ) : (
+                                <span key={`enr-${idx}-${sIdx}`} className="text-[11px] font-medium text-[#666672]">
+                                  {seg.text}
+                                </span>
+                              )
+                            )}
+                          </div>
                         </div>
                         <div>
                           <span className="text-[10px] text-[#666672] uppercase font-bold block">Movimento do Baixo:</span>
@@ -754,12 +774,11 @@ E|----------------------------------|
                   </h4>
                   <div className="flex flex-wrap gap-2">
                     {currentStyle.chords.map((c) => (
-                      <span
+                      <ChordNameButton
                         key={`st-chord-${c}`}
-                        className="px-3 py-1.5 rounded-xl bg-[#F8F7F4] border border-[#D9D9D9] font-mono-code font-bold text-sm text-[#25252A]"
-                      >
-                        {c}
-                      </span>
+                        chord={c}
+                        variant="chip"
+                      />
                     ))}
                   </div>
 

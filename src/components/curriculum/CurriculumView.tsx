@@ -37,6 +37,9 @@ import {
   getPrimaryCourseId,
   getCatalogCoursesStatus
 } from '../../academia/progress/unlockGate';
+import { useChordModal } from '../../contexts/ChordModalContext';
+import { CourseVisualBanner } from './CourseVisualBanner';
+import { getCourseModuleVisual } from '../../data/courseLessonVisuals';
 
 interface CurriculumViewProps {
   progress: UserProgress;
@@ -44,6 +47,7 @@ interface CurriculumViewProps {
 }
 
 export const CurriculumView: React.FC<CurriculumViewProps> = ({ progress, onSelectLesson }) => {
+  const { toggleChord, isChordOpen } = useChordModal();
   const primaryCourseId = getPrimaryCourseId(progress);
   const catalogStatus = getCatalogCoursesStatus(progress);
 
@@ -225,6 +229,11 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({ progress, onSele
               {currentCourseLevel.description}
             </p>
           </div>
+
+          <CourseVisualBanner
+            visual={getCourseModuleVisual(courseId, currentCourseLevel.level)}
+            variant="module"
+          />
 
           {/* Lessons List in this Level */}
           <div className="space-y-3">
@@ -567,6 +576,11 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({ progress, onSele
                   </p>
                 </div>
 
+                <CourseVisualBanner
+                  visual={getCourseModuleVisual('violao', activeViolaoMod.moduleNumber)}
+                  variant="module"
+                />
+
                 {/* Lista das 5 Aulas do Módulo */}
                 <div className="space-y-3">
                   <label className="text-xs font-bold text-[#7B1E2B] dark:text-[#FF6B81] uppercase tracking-wider block">
@@ -613,9 +627,33 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({ progress, onSele
                               </span>
 
                               {lesson.chordDiagrams && lesson.chordDiagrams.length > 0 && (
-                                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[#25252A] dark:text-[#F8F7F4] bg-stone-100 dark:bg-stone-800 px-2 py-0.5 rounded-md border border-stone-200 dark:border-stone-700">
-                                  🎸 {lesson.chordDiagrams.map((c) => c.symbol || c.name).join(', ')}
-                                </span>
+                                <div
+                                  className="inline-flex flex-wrap items-center gap-1"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  {lesson.chordDiagrams.map((c, cIdx) => {
+                                    const chordSymbol = c.symbol || c.name || '';
+                                    const open = isChordOpen({ chordData: c, symbol: chordSymbol });
+                                    return (
+                                      <button
+                                        key={`${lesson.id}-chord-${cIdx}`}
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          toggleChord({ chordData: c, symbol: chordSymbol });
+                                        }}
+                                        title={`Toque para ver ou fechar o diagrama do acorde ${chordSymbol}`}
+                                        className={`inline-flex items-center px-2 py-0.5 rounded-md border font-mono-code text-[11px] font-bold transition cursor-pointer ${
+                                          open
+                                            ? 'bg-[#7B1E2B] text-white border-[#7B1E2B]'
+                                            : 'bg-stone-100 dark:bg-stone-800 text-[#7B1E2B] dark:text-[#FF6B81] border-stone-200 dark:border-stone-700 hover:bg-[#F5E8EA] dark:hover:bg-[#381A25]'
+                                        }`}
+                                      >
+                                        {chordSymbol}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
                               )}
 
                               <span className="inline-flex items-center gap-1 text-[10px] font-mono-code font-bold text-[#7B1E2B] dark:text-[#FF6B81] bg-[#F5E8EA] dark:bg-[#3A1E24] px-2 py-0.5 rounded-md border border-[#E8D3D6] dark:border-[#4D2830]">
@@ -737,6 +775,11 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({ progress, onSele
                     {activeStage.description}
                   </p>
                 </div>
+
+                <CourseVisualBanner
+                  visual={getCourseModuleVisual('solo', activeStage.stageNumber)}
+                  variant="module"
+                />
 
                 {/* Lista das 4 Aulas da Etapa */}
                 <div className="space-y-3">

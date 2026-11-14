@@ -16,6 +16,7 @@ import { getChordShapes } from '../../chords/shapes';
 import { parseChordSymbol } from '../../chords/chord-builder';
 import { storageService } from '../../services/storageService';
 import { createInitialPedagogicalProfile, recordSkillEvidence } from '../../pedagogy/adaptiveEngine';
+import { useChordModal } from '../../contexts/ChordModalContext';
 import { 
   Play, 
   Square, 
@@ -105,6 +106,7 @@ export const GuitarCoachView: React.FC<GuitarCoachViewProps> = ({
   onUpdateProgress,
   onNavigateTab
 }) => {
+  const { toggleChord, isChordOpen } = useChordModal();
   // Configuração do Exercício
   const [drillSets, setDrillSets] = useState<DrillSet[]>(DEFAULT_DRILL_SETS);
   const [selectedSetId, setSelectedSetId] = useState<string>('worship-open');
@@ -553,13 +555,22 @@ export const GuitarCoachView: React.FC<GuitarCoachViewProps> = ({
             {drillSets.map(drill => {
               const isSelected = selectedSetId === drill.id;
               return (
-                <button
+                <div
                   key={drill.id}
+                  role="button"
+                  tabIndex={0}
                   onClick={() => {
                     if (isRunning) stopCoachSession();
                     setSelectedSetId(drill.id);
                   }}
-                  className={`p-3.5 rounded-xl text-left transition border ${
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      if (isRunning) stopCoachSession();
+                      setSelectedSetId(drill.id);
+                    }
+                  }}
+                  className={`p-3.5 rounded-xl text-left transition border cursor-pointer ${
                     isSelected
                       ? 'bg-[#7B1E2B]/5 border-[#7B1E2B] ring-2 ring-[#7B1E2B]/15'
                       : 'bg-white border-[#D9D9D9] hover:bg-[#F9F9F9]'
@@ -571,22 +582,37 @@ export const GuitarCoachView: React.FC<GuitarCoachViewProps> = ({
                       {drill.genre}
                     </span>
                   </div>
-                  <div className="flex items-center gap-1.5 mt-2">
-                    {drill.chords.map((ch, idx) => (
-                      <React.Fragment key={idx}>
-                        <span className="px-2 py-0.5 rounded bg-white border border-[#D9D9D9] text-xs font-black text-[#7B1E2B]">
-                          {ch}
-                        </span>
-                        {idx < drill.chords.length - 1 && (
-                          <span className="text-[10px] text-[#A6A6B2]">→</span>
-                        )}
-                      </React.Fragment>
-                    ))}
+                  <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                    {drill.chords.map((ch, idx) => {
+                      const open = isChordOpen({ symbol: ch });
+                      return (
+                        <React.Fragment key={idx}>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleChord({ symbol: ch });
+                            }}
+                            title={`Toque para ver ou fechar o diagrama do acorde ${ch}`}
+                            className={`px-2 py-0.5 rounded border text-xs font-black transition cursor-pointer ${
+                              open
+                                ? 'bg-[#7B1E2B] text-white border-[#7B1E2B]'
+                                : 'bg-white border-[#D9D9D9] text-[#7B1E2B] hover:bg-[#F5E8EA]'
+                            }`}
+                          >
+                            {ch}
+                          </button>
+                          {idx < drill.chords.length - 1 && (
+                            <span className="text-[10px] text-[#A6A6B2]">→</span>
+                          )}
+                        </React.Fragment>
+                      );
+                    })}
                   </div>
                   <p className="text-[11px] text-[#666672] mt-2 line-clamp-1">
                     {drill.description}
                   </p>
-                </button>
+                </div>
               );
             })}
           </div>
@@ -756,9 +782,14 @@ export const GuitarCoachView: React.FC<GuitarCoachViewProps> = ({
             <span className="text-xs uppercase font-extrabold tracking-widest text-[#B52A3A]">
               Tocar Agora
             </span>
-            <div className="text-6xl sm:text-7xl font-black text-white tracking-tighter drop-shadow-[0_0_25px_rgba(255,255,255,0.25)]">
+            <button
+              type="button"
+              onClick={() => toggleChord({ symbol: currentChordDetails.symbol, chordData: currentChordDetails })}
+              title={`Toque para ampliar ou fechar o diagrama do acorde ${currentChordDetails.symbol}`}
+              className="text-6xl sm:text-7xl font-black text-white tracking-tighter drop-shadow-[0_0_25px_rgba(255,255,255,0.25)] hover:text-[#FF8FA3] transition cursor-pointer"
+            >
               {currentChordDetails.symbol}
-            </div>
+            </button>
             <div className="text-sm font-semibold text-[#D9D9D9]">
               {currentChordDetails.namePt}
             </div>
@@ -794,9 +825,14 @@ export const GuitarCoachView: React.FC<GuitarCoachViewProps> = ({
             <span className="text-xs uppercase font-extrabold tracking-widest text-[#A6A6B2]">
               Preparar Dedos
             </span>
-            <div className="text-4xl sm:text-5xl font-black text-[#E8D3D6] tracking-tight">
+            <button
+              type="button"
+              onClick={() => toggleChord({ symbol: nextChordDetails.symbol, chordData: nextChordDetails })}
+              title={`Toque para ampliar ou fechar o diagrama do acorde ${nextChordDetails.symbol}`}
+              className="text-4xl sm:text-5xl font-black text-[#E8D3D6] tracking-tight hover:text-white transition cursor-pointer"
+            >
               {nextChordDetails.symbol}
-            </div>
+            </button>
             <div className="text-sm font-semibold text-[#A6A6B2]">
               {nextChordDetails.namePt}
             </div>

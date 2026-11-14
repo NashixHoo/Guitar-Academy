@@ -34,6 +34,11 @@ import {
   Compass
 } from 'lucide-react';
 import { LESSON_TO_SKILL_MAP, createInitialPedagogicalProfile } from '../../pedagogy/adaptiveEngine';
+import { useChordModal } from '../../contexts/ChordModalContext';
+import { ChordNameButton } from '../chords/ChordNameButton';
+import { findChordTokensInText } from '../../services/chordLookupService';
+import { CourseVisualBanner } from './CourseVisualBanner';
+import { getLessonVisual } from '../../data/courseLessonVisuals';
 
 interface LessonViewerProps {
   lesson: Lesson;
@@ -58,6 +63,7 @@ export const LessonViewer: React.FC<LessonViewerProps> = ({
   const violaoLesson = isViolaoLesson ? (lesson as unknown as ViolaoLesson) : null;
   const extendedLesson = soloLesson || violaoLesson;
   const currentLog = progress.practiceLogs?.[lesson.id];
+  const { toggleChord, isChordOpen } = useChordModal();
   const [selectedAnswers, setSelectedAnswers] = useState<Record<string, number>>({});
   const [quizSubmitted, setQuizSubmitted] = useState<boolean>(false);
   const [activeSection, setActiveSection] = useState<string>('part-0');
@@ -336,6 +342,21 @@ export const LessonViewer: React.FC<LessonViewerProps> = ({
   const isBassLesson = lesson.id.startsWith('baixo-');
   const isKeyboardLesson = lesson.id.startsWith('teclado-');
   const isDrumsLesson = lesson.id.startsWith('bateria-');
+  const lessonVisual = getLessonVisual(lesson);
+
+  const renderTextWithChords = (text: string, keyPrefix: string) => {
+    if (isBassLesson || isKeyboardLesson || isDrumsLesson) {
+      return text;
+    }
+    const segments = findChordTokensInText(text);
+    return segments.map((seg, sIdx) =>
+      seg.isChord ? (
+        <ChordNameButton key={`${keyPrefix}-c-${sIdx}`} chord={seg.text} variant="inline" />
+      ) : (
+        <React.Fragment key={`${keyPrefix}-t-${sIdx}`}>{seg.text}</React.Fragment>
+      )
+    );
+  };
 
   const allLessons = isViolaoLesson
     ? VIOLAO_LESSONS
@@ -504,39 +525,43 @@ export const LessonViewer: React.FC<LessonViewerProps> = ({
 
       {/* SECTION 1: Lesson Theoretical Content Parts */}
       {activeSection.startsWith('part-') && currentPartIndex < lesson.parts.length && (
-        <div className="bg-white border border-[#D9D9D9] rounded-3xl p-6 sm:p-8 shadow-xs space-y-6">
-          <div className="flex items-center justify-between pb-3 border-b border-[#D9D9D9]">
-            <h2 className="text-xl font-bold text-[#25252A]">
+        <div className="bg-white dark:bg-[#22141A] border border-[#D9D9D9] dark:border-[#422933] rounded-3xl p-6 sm:p-8 shadow-xs space-y-6">
+          <div className="flex items-center justify-between pb-3 border-b border-[#D9D9D9] dark:border-[#422933]">
+            <h2 className="text-xl font-bold text-[#25252A] dark:text-[#F8F7F4]">
               {lesson.parts[currentPartIndex].title}
             </h2>
-            <span className="text-xs text-[#666672] font-semibold">
+            <span className="text-xs text-[#666672] dark:text-[#B8B3C0] font-semibold">
               Passo {currentPartIndex + 1} de {lesson.parts.length}
             </span>
           </div>
 
+          {currentPartIndex === 0 && (
+            <CourseVisualBanner visual={lessonVisual} variant="lesson" />
+          )}
+
           {/* Interactive Audio Examples for Lesson 1 */}
           {lesson.id === 'lesson-1' && currentPartIndex === 0 && (
-            <div className="bg-[#F8F7F4] p-4 rounded-2xl border border-[#D9D9D9] space-y-3">
-              <span className="text-xs font-bold text-[#7B1E2B] flex items-center gap-1.5">
-                <Volume2 className="w-4 h-4 text-[#B52A3A]" />
+            <div className="bg-[#F8F7F4] dark:bg-[#1A1216] p-4 rounded-2xl border border-[#D9D9D9] dark:border-[#422933] space-y-3">
+              <span className="text-xs font-bold text-[#7B1E2B] dark:text-[#FF6B81] flex items-center gap-1.5">
+                <Volume2 className="w-4 h-4 text-[#B52A3A] dark:text-[#FF6B81]" />
                 Demonstração Auditiva: Tom vs Semitom
               </span>
-              <p className="text-xs text-[#666672] font-medium">
+              <p className="text-xs text-[#666672] dark:text-[#B8B3C0] font-medium">
                 Ouça com atenção a diferença de distância sonora entre duas notas separadas por um tom e por um semitom:
               </p>
               <div className="flex flex-wrap gap-3">
                 <button
                   onClick={playToneExample}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white hover:bg-[#F5E8EA] text-xs font-bold text-[#25252A] transition border border-[#D9D9D9] shadow-xs"
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white dark:bg-[#25252A] hover:bg-[#F5E8EA] text-xs font-bold text-[#25252A] dark:text-[#F8F7F4] transition border border-[#D9D9D9] dark:border-[#422933] shadow-xs"
                 >
-                  <Volume2 className="w-3.5 h-3.5 text-[#7B1E2B]" />
+                  <Volume2 className="w-3.5 h-3.5 text-[#7B1E2B] dark:text-[#FF6B81]" />
                   <span>Ouvir 1 Tom (Dó para Ré)</span>
                 </button>
                 <button
                   onClick={playSemitoneExample}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white hover:bg-[#F5E8EA] text-xs font-bold text-[#25252A] transition border border-[#D9D9D9] shadow-xs"
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white dark:bg-[#25252A] hover:bg-[#F5E8EA] text-xs font-bold text-[#25252A] dark:text-[#F8F7F4] transition border border-[#D9D9D9] dark:border-[#422933] shadow-xs"
                 >
-                  <Volume2 className="w-3.5 h-3.5 text-[#B52A3A]" />
+                  <Volume2 className="w-3.5 h-3.5 text-[#B52A3A] dark:text-[#FF6B81]" />
                   <span>Ouvir 1 Semitom (Mi para Fá)</span>
                 </button>
               </div>
@@ -571,28 +596,28 @@ export const LessonViewer: React.FC<LessonViewerProps> = ({
           )}
 
           {/* Educational Content Markdown */}
-          <div className="prose max-w-none text-[#25252A] text-sm sm:text-base leading-relaxed space-y-4">
+          <div className="prose max-w-none text-[#25252A] dark:text-[#E0DDE5] text-sm sm:text-base leading-relaxed space-y-4">
             {lesson.parts[currentPartIndex].contentMarkdown.split('\n\n').map((paragraph, pIdx) => {
               if (paragraph.startsWith('### ')) {
                 return (
-                  <h3 key={pIdx} className="text-lg font-black text-[#7B1E2B] mt-4 mb-2 tracking-tight">
+                  <h3 key={pIdx} className="text-lg font-black text-[#7B1E2B] dark:text-[#FF6B81] mt-4 mb-2 tracking-tight">
                     {paragraph.replace('### ', '')}
                   </h3>
                 );
               }
               if (paragraph.startsWith('* ')) {
                 return (
-                  <ul key={pIdx} className="list-disc list-inside space-y-1.5 text-[#25252A]">
+                  <ul key={pIdx} className="list-disc list-inside space-y-1.5 text-[#25252A] dark:text-[#E0DDE5]">
                     {paragraph.split('\n').map((item, itemIdx) => (
-                      <li key={itemIdx}>{item.replace('* ', '')}</li>
+                      <li key={itemIdx}>{renderTextWithChords(item.replace('* ', ''), `p-${pIdx}-li-${itemIdx}`)}</li>
                     ))}
                   </ul>
                 );
               }
               if (paragraph.startsWith('> ')) {
                 return (
-                  <div key={pIdx} className="p-3.5 rounded-xl bg-[#F5E8EA] border-l-4 border-[#7B1E2B] text-xs sm:text-sm text-[#25252A] font-medium">
-                    {paragraph.replace('> ', '')}
+                  <div key={pIdx} className="p-3.5 rounded-xl bg-[#F5E8EA] dark:bg-[#381A25] border-l-4 border-[#7B1E2B] text-xs sm:text-sm text-[#25252A] dark:text-[#F8F7F4] font-medium">
+                    {renderTextWithChords(paragraph.replace('> ', ''), `p-${pIdx}-q`)}
                   </div>
                 );
               }
@@ -604,8 +629,8 @@ export const LessonViewer: React.FC<LessonViewerProps> = ({
                 );
               }
               return (
-                <p key={pIdx} className="text-[#666672] leading-relaxed font-medium">
-                  {paragraph}
+                <p key={pIdx} className="text-[#4D4D54] dark:text-[#D1CDD8] leading-relaxed font-medium">
+                  {renderTextWithChords(paragraph, `p-${pIdx}-p`)}
                 </p>
               );
             })}
@@ -987,52 +1012,72 @@ export const LessonViewer: React.FC<LessonViewerProps> = ({
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {violaoLesson.chordDiagrams.map((chord, cIdx) => (
-                  <div key={cIdx} className="bg-white dark:bg-[#25252A] p-4 rounded-xl border border-[#E8D3D6] dark:border-[#4D2830] space-y-2">
-                    <div className="flex items-center justify-between border-b pb-1.5 border-stone-200 dark:border-stone-700">
-                      <div className="flex items-baseline gap-1.5">
-                        <span className="text-base font-black text-[#7B1E2B] dark:text-[#FF6B81]">
-                          {chord.symbol || chord.name}
-                        </span>
-                        {chord.namePt && (
-                          <span className="text-xs font-semibold text-[#666672] dark:text-[#B8B3C0]">
-                            ({chord.namePt})
+                {violaoLesson.chordDiagrams.map((chord, cIdx) => {
+                  const chordLabel = chord.symbol || chord.name;
+                  const isOpen = isChordOpen({ symbol: chordLabel, chordData: chord });
+                  return (
+                    <div
+                      key={cIdx}
+                      className={`bg-white dark:bg-[#25252A] p-4 rounded-xl border space-y-2 transition ${
+                        isOpen
+                          ? 'border-[#7B1E2B] ring-2 ring-[#7B1E2B]/25'
+                          : 'border-[#E8D3D6] dark:border-[#4D2830]'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between border-b pb-1.5 border-stone-200 dark:border-stone-700">
+                        <button
+                          type="button"
+                          onClick={() => toggleChord({ symbol: chordLabel, chordData: chord })}
+                          title={`Toque para ampliar ou fechar o diagrama do acorde ${chordLabel}`}
+                          className="flex items-baseline gap-1.5 text-left hover:opacity-80 transition cursor-pointer"
+                        >
+                          <span className="text-base font-black text-[#7B1E2B] dark:text-[#FF6B81] underline decoration-dotted underline-offset-4">
+                            {chordLabel}
                           </span>
-                        )}
+                          {chord.namePt && (
+                            <span className="text-xs font-semibold text-[#666672] dark:text-[#B8B3C0]">
+                              ({chord.namePt})
+                            </span>
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => toggleChord({ symbol: chordLabel, chordData: chord })}
+                          className="text-[10px] font-mono-code bg-[#F5E8EA] dark:bg-[#381A25] text-[#7B1E2B] dark:text-[#FF6B81] px-2 py-0.5 rounded font-bold hover:bg-[#7B1E2B] hover:text-white transition"
+                        >
+                          {chord.baseFret ? `Casa base ${chord.baseFret}` : chord.category || 'Ampliar'}
+                        </button>
                       </div>
-                      <span className="text-[10px] font-mono-code bg-[#F5E8EA] dark:bg-[#381A25] text-[#7B1E2B] dark:text-[#FF6B81] px-2 py-0.5 rounded font-bold">
-                        {chord.baseFret ? `Casa base ${chord.baseFret}` : chord.category || 'Acorde Aberto'}
-                      </span>
+
+                      {/* Visual Cifra Club Standard Chord Diagram */}
+                      <div className="flex justify-center my-2">
+                        <ChordDiagram
+                          chord={chord}
+                          size="sm"
+                          showTitle={false}
+                          showDetails={false}
+                          showAudio={true}
+                        />
+                      </div>
+
+                      {chord.barre && (
+                        <div className="text-[10px] font-bold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 p-1.5 rounded border border-amber-200 dark:border-amber-900/50">
+                          Pestana na casa {chord.barre.fret} (cordas {chord.barre.fromString}ª a {chord.barre.toString}ª)
+                        </div>
+                      )}
+
+                      {chord.notes && (
+                        <div className="text-[10px] text-[#666672] dark:text-[#B8B3C0]">
+                          Notas: {chord.notes.join(' - ')}
+                        </div>
+                      )}
+
+                      <p className="text-[11px] text-[#4D4D54] dark:text-[#B8B3C0] italic leading-tight">
+                        💡 {chord.tips}
+                      </p>
                     </div>
-
-                    {/* Visual Cifra Club Standard Chord Diagram */}
-                    <div className="flex justify-center my-2">
-                      <ChordDiagram
-                        chord={chord}
-                        size="sm"
-                        showTitle={false}
-                        showDetails={false}
-                        showAudio={true}
-                      />
-                    </div>
-
-                    {chord.barre && (
-                      <div className="text-[10px] font-bold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 p-1.5 rounded border border-amber-200 dark:border-amber-900/50">
-                        Pestana na casa {chord.barre.fret} (cordas {chord.barre.fromString}ª a {chord.barre.toString}ª)
-                      </div>
-                    )}
-
-                    {chord.notes && (
-                      <div className="text-[10px] text-[#666672] dark:text-[#B8B3C0]">
-                        Notas: {chord.notes.join(' - ')}
-                      </div>
-                    )}
-
-                    <p className="text-[11px] text-[#4D4D54] dark:text-[#B8B3C0] italic leading-tight">
-                      💡 {chord.tips}
-                    </p>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}

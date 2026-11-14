@@ -47,6 +47,8 @@ import { TeacherDashboardView } from './components/teacher/TeacherDashboardView'
 import { StudentJoinClassModal } from './components/teacher/StudentJoinClassModal';
 import { StudentPrivacyNotice } from './components/teacher/StudentPrivacyNotice';
 import { AdminPortalView } from './components/admin/AdminPortalView';
+import { ChordModalProvider } from './contexts/ChordModalContext';
+import { ChordPreviewModal } from './components/chords/ChordPreviewModal';
 
 function MainAppContent() {
   const { user, loading, isAdmin, isTeacher, adminPreviewMode, showLegacyModal } = useAuth();
@@ -355,6 +357,10 @@ function MainAppContent() {
   }
 
   return (
+    <ChordModalProvider
+      favoriteChords={progress.favoriteChords}
+      onToggleFavorite={handleToggleFavoriteChord}
+    >
     <div className="relative h-screen h-[100dvh] max-h-screen max-h-[100dvh] text-[#25252A] flex flex-col font-sans bg-transparent overflow-hidden">
       {/* 1. PAPEL DE PAREDE FIXO GLOBAL (Estúdio Cinematográfico com Guitarra Elétrica e Bateria) */}
       <div 
@@ -616,7 +622,11 @@ function MainAppContent() {
           setProgress(updated);
         }}
       />
+
+      {/* Modal Central Ampliado de Acordes (acessível de qualquer seção com nome de acorde) */}
+      <ChordPreviewModal />
     </div>
+    </ChordModalProvider>
   );
 }
 
