@@ -20,6 +20,10 @@ import {
   evaluateMonophonicChordStep,
   computeCoachSessionSummary,
 } from './src/components/coach/GuitarCoachView';
+import {
+  ExerciseNoteEvaluator,
+  evaluatePitchFrameSequence,
+} from './src/audio/noteEvaluator';
 import { suggestSmartKey } from './src/music/smart-key';
 import { MusicIntelligence } from './src/music/music-intelligence';
 import { simplifyChord } from './src/music/easy-play';
@@ -73,6 +77,7 @@ import { TunerSmoother } from './src/audio/tunerSmoother';
 import {
   ALL_INSTRUMENTS,
   calculateFrequency,
+  calculateExactFrequency,
   saveCustomTuning,
   loadCustomTunings,
   deleteCustomTuning,
@@ -5768,6 +5773,344 @@ assert(
   '34.09 Coach nunca fabrica 50%/100% sem evidência sonora; DiagnosticsView checa res.success; telas exibem "Não foi possível identificar a nota"'
 );
 
+// =============================================================
+// GRUPO 35 — MASTER TUNER V2.1: PRECISÃO, ESTABILIDADE, HARMÔNICOS,
+// REJEIÇÃO DE INVÁLIDOS E AVALIADOR SEPARADO (CATEGORIAS A..G)
+// =============================================================
+console.log('\n--- GRUPO 35: MASTER TUNER V2.1 (CATEGORIAS A..G) ---');
+
+const v21Detector = new GuitarPitchDetector({
+  lowCutoff: 25,
+  highCutoff: 1600,
+  silenceThreshold: 0.004,
+  confidenceThreshold: 0.60,
+  bufferSize: 4096,
+});
+
+// Categoria A — Detecção de Frequência Fundamental (Guitarra, Violão, Baixo, Arco, Ukulele) & Multi-SampleRate
+const catAStrings: Array<{ note: string; octave: number; freq: number; sr: number; len: number }> = [
+  { note: 'B', octave: 0, freq: 30.87, sr: 44100, len: 8192 },
+  { note: 'E', octave: 1, freq: 41.20, sr: 44100, len: 8192 },
+  { note: 'B', octave: 1, freq: 61.74, sr: 44100, len: 4096 },
+  { note: 'C', octave: 2, freq: 65.41, sr: 44100, len: 4096 },
+  { note: 'E', octave: 2, freq: 82.41, sr: 44100, len: 4096 },
+  { note: 'A', octave: 2, freq: 110.00, sr: 48000, len: 4096 },
+  { note: 'D', octave: 3, freq: 146.83, sr: 48000, len: 4096 },
+  { note: 'G', octave: 3, freq: 196.00, sr: 44100, len: 4096 },
+  { note: 'B', octave: 3, freq: 246.94, sr: 96000, len: 8192 },
+  { note: 'E', octave: 4, freq: 329.63, sr: 96000, len: 8192 },
+  { note: 'E', octave: 5, freq: 659.25, sr: 48000, len: 4096 },
+];
+
+const catAFailures: string[] = [];
+for (const tc of catAStrings) {
+  const det = v21Detector.detectPitchFromBuffer(generateSineBuffer(tc.freq, tc.sr, tc.len, 0.35), tc.sr);
+  if (
+    !det ||
+    det.detectionType !== 'monophonic_note' ||
+    det.note !== tc.note ||
+    det.octave !== tc.octave ||
+    Math.abs(det.frequency - tc.freq) > 0.35
+  ) {
+    catAFailures.push(`${tc.note}${tc.octave}@${tc.sr}Hz -> ${det?.note}${det?.octave} ${det?.frequency}`);
+  }
+}
+assert(
+  catAFailures.length === 0,
+  `35.A1 Multi-instrumento (B0..E5) e taxas 44.1/48/96 kHz detectam nota, oitava e Hz real (<0.35Hz): ${catAFailures.join('; ') || 'OK'}`
+);
+
+// Categoria B — Precisão em Cents para todos os 15 desvios obrigatórios sem arredondamento precoce
+const requiredCentDeviations = [-50, -20, -10, -5, -3, -2, -1, 0, 1, 2, 3, 5, 10, 20, 50];
+const a4RefTarget = { stringNumber: 1, note: 'A', octave: 4, freq: 440 };
+const e2RefTarget = { stringNumber: 6, note: 'E', octave: 2, freq: calculateExactFrequency('E', 2, 440) };
+
+const centErrorsA4: string[] = [];
+for (const dc of requiredCentDeviations) {
+  const exactFreq = calculateExactFrequency('A', 4, 440, dc);
+  const det = v21Detector.detectPitchFromBuffer(generateSineBuffer(exactFreq, 44100, 4096, 0.35), 44100, {
+    targetString: a4RefTarget,
+  });
+  const measuredRawCents = det?.rawCents ?? det?.cents ?? 999;
+  if (!det || Math.abs(measuredRawCents - dc) > 0.6 || Math.abs(det.frequency - exactFreq) > 0.20) {
+    centErrorsA4.push(`${dc}¢ -> raw=${measuredRawCents.toFixed(3)}¢ (${det?.frequency?.toFixed(3)}Hz)`);
+  }
+}
+
+const fracTestFreq = calculateExactFrequency('E', 2, 440, 2.4);
+const fracDet = v21Detector.detectPitchFromBuffer(generateSineBuffer(fracTestFreq, 44100, 4096, 0.35), 44100, {
+  targetString: e2RefTarget,
+});
+
+assert(
+  centErrorsA4.length === 0 &&
+  typeof fracDet?.rawCents === 'number' &&
+  Math.abs((fracDet?.rawCents ?? 0) - 2.4) < 0.6 &&
+  fracDet?.rawCents !== Math.round(fracDet?.rawCents ?? 0),
+  `35.B1 Precisão contínua em todos os 15 desvios (-50..+50¢) e preservação fracionária interna (+2.4¢ -> ${fracDet?.rawCents?.toFixed(3)}¢)`
+);
+
+// Categoria C — Harmônicos e Imunidade a Erro de Oitava
+function generateHarmonicTone(
+  f0: number,
+  weights: [number, number, number],
+  sr = 44100,
+  len = 4096,
+  envelope?: 'decay' | 'none',
+  noiseAmp = 0
+): Float32Array {
+  const buf = new Float32Array(len);
+  let seed = 424242;
+  for (let i = 0; i < len; i++) {
+    const t = i / sr;
+    const env = envelope === 'decay' ? Math.exp(-3.0 * (i / len)) : 1.0;
+    let s =
+      weights[0] * Math.sin(2 * Math.PI * f0 * t) +
+      weights[1] * Math.sin(2 * Math.PI * (2 * f0) * t) +
+      weights[2] * Math.sin(2 * Math.PI * (3 * f0) * t);
+    s *= env;
+    if (noiseAmp > 0) {
+      seed = (seed * 1664525 + 1013904223) >>> 0;
+      const rand = (seed / 0xffffffff) * 2 - 1;
+      s += noiseAmp * rand;
+    }
+    buf[i] = s;
+  }
+  return buf;
+}
+
+const hStrongF0 = v21Detector.detectPitchFromBuffer(generateHarmonicTone(82.41, [0.50, 0.25, 0.12]), 44100);
+const hStrong2nd = v21Detector.detectPitchFromBuffer(generateHarmonicTone(82.41, [0.22, 0.42, 0.15]), 44100);
+const hStrong3rd = v21Detector.detectPitchFromBuffer(generateHarmonicTone(82.41, [0.22, 0.18, 0.42]), 44100);
+const hWeakF0 = v21Detector.detectPitchFromBuffer(generateHarmonicTone(82.41, [0.08, 0.35, 0.20]), 44100);
+const hDecayEnv = v21Detector.detectPitchFromBuffer(generateHarmonicTone(110.0, [0.35, 0.22, 0.10], 44100, 4096, 'decay'), 44100);
+const hNoisySnr = v21Detector.detectPitchFromBuffer(generateHarmonicTone(146.83, [0.35, 0.18, 0.08], 44100, 4096, 'none', 0.03), 44100);
+
+assert(
+  hStrongF0?.note === 'E' && hStrongF0?.octave === 2 &&
+  hStrong2nd?.note === 'E' && hStrong2nd?.octave === 2 &&
+  hStrong3rd?.note === 'E' && hStrong3rd?.octave === 2 &&
+  hWeakF0?.note === 'E' && hWeakF0?.octave === 2 &&
+  hDecayEnv?.note === 'A' && hDecayEnv?.octave === 2 &&
+  hNoisySnr?.note === 'D' && hNoisySnr?.octave === 3,
+  `35.C1 Harmônicos fortes (2º/3º), fundamental fraca (0.08*F0), variação de envelope e ruído moderado convergem para F0 correta (weakF0=${hWeakF0?.note}${hWeakF0?.octave}@${hWeakF0?.frequency?.toFixed(2)}Hz)`
+);
+
+// Categoria D — Estabilidade Temporal, Ataque, Decaimento, Vibrato, Transições, Outliers & 5 Estágios
+const v21Smoother = new TunerSmoother({
+  alpha: 0.28,
+  confidenceThreshold: 0.60,
+  inTuneTolerance: 5.0,
+  deadZone: 2.0,
+  minStableReadingsForInTune: 3,
+  medianWindowSize: 5,
+  outlierThresholdCents: 22
+});
+let tSim = 10000;
+const makePitchFrame = (
+  note: string,
+  octave: number,
+  rawCents: number,
+  opts?: Partial<{ isTransient: boolean; phase: 'attack' | 'steady' | 'decay'; stability: number; intensity: number }>
+) => {
+  const exactExp = calculateExactFrequency(note, octave, 440);
+  const freq = exactExp * Math.pow(2, rawCents / 1200);
+  return {
+    frequency: freq,
+    note,
+    notePt: note,
+    octave,
+    cents: Math.round(rawCents),
+    rawCents,
+    confidence: 0.96,
+    intensity: opts?.intensity ?? 0.65,
+    isSilence: false,
+    isWeakSignal: false,
+    isOnset: Boolean(opts?.isTransient),
+    signalPhase: opts?.phase ?? 'steady',
+    isTransientContaminated: Boolean(opts?.isTransient),
+    detectionType: 'monophonic_note' as const,
+    isReliable: true,
+    stability: opts?.stability ?? 92,
+    stabilityLabel: 'Boa',
+    expectedFreq: parseFloat(exactExp.toFixed(2)),
+    exactExpectedFreq: exactExp,
+    diffHz: freq - exactExp,
+    exactDiffHz: freq - exactExp,
+    timestamp: tSim
+  };
+};
+
+// D1: Ataque transitório + 1 leitura isolada NUNCA entram em IN_TUNE
+v21Smoother.feedPitch(makePitchFrame('E', 2, 0.2, { isTransient: true, phase: 'attack', stability: 60 }), tSim);
+const afterAttack = v21Smoother.step(tSim + 16);
+tSim += 32;
+v21Smoother.feedPitch(makePitchFrame('E', 2, 0.3, { isTransient: false, phase: 'steady', stability: 85 }), tSim);
+const after1Stable = v21Smoother.step(tSim + 16); // só 1 leitura estável < 3!
+
+assert(
+  afterAttack.isInTune === false &&
+  afterAttack.tunerStage !== 'in_tune' &&
+  after1Stable.isInTune === false,
+  '35.D1 Ataque transitório e leitura isolada nunca acionam IN_TUNE prematuramente'
+);
+
+// D2: Confirmação multi-leitura entra em IN_TUNE; pico outlier isolado (+35¢) é amortecido pela mediana móvel
+tSim += 32;
+v21Smoother.feedPitch(makePitchFrame('E', 2, 0.4), tSim);
+v21Smoother.step(tSim + 16);
+tSim += 32;
+v21Smoother.feedPitch(makePitchFrame('E', 2, -0.2), tSim);
+const confirmedInTune = v21Smoother.step(tSim + 16);
+
+// Injeta 1 pico outlier isolado (+34¢) e verifica que mediana mantém centro sem pular nota nem perder centro
+tSim += 32;
+v21Smoother.feedPitch(makePitchFrame('E', 2, 34.0), tSim);
+const afterOutlier = v21Smoother.step(tSim + 16);
+
+assert(
+  confirmedInTune.isInTune === true &&
+  confirmedInTune.tunerStage === 'in_tune' &&
+  Math.abs(afterOutlier.displayedCents) < 6.0,
+  `35.D2 Confirmação multi-leitura entra em tunerStage=in_tune e mediana móvel rejeita pico outlier isolado (${afterOutlier.displayedCents}¢)`
+);
+
+// D3: Vibrato (±6¢), troca rápida de nota (E2 -> A2) com reset controlado de histórico, salto de oitava (A2 -> A3) e silêncio
+const vibratoOffsets = [-6, -2, 4, 6, 3, -3];
+for (const vc of vibratoOffsets) {
+  tSim += 32;
+  v21Smoother.feedPitch(makePitchFrame('E', 2, vc), tSim);
+  v21Smoother.step(tSim + 16);
+}
+const vibratoOut = v21Smoother.step(tSim + 20);
+
+// Troca rápida para A2 (+18¢)
+tSim += 32;
+v21Smoother.feedPitch(makePitchFrame('A', 2, 18.0), tSim);
+v21Smoother.step(tSim + 16);
+tSim += 32;
+v21Smoother.feedPitch(makePitchFrame('A', 2, 18.0), tSim);
+const switchedToA2 = v21Smoother.step(tSim + 16);
+
+// Troca de oitava para A3 e recuperação de silêncio
+tSim += 32;
+v21Smoother.feedPitch(makePitchFrame('A', 3, 0.0), tSim);
+v21Smoother.step(tSim + 16);
+tSim += 32;
+v21Smoother.feedPitch(makePitchFrame('A', 3, 0.0), tSim);
+const switchedToA3 = v21Smoother.step(tSim + 16);
+
+tSim += 1200; // silêncio prolongado (> 380ms + 600ms)
+const silenceRecovery = v21Smoother.step(tSim);
+
+assert(
+  vibratoOut.note === 'E' &&
+  switchedToA2.note === 'A' &&
+  switchedToA2.octave === 2 &&
+  switchedToA2.isInTune === false &&
+  switchedToA3.octave === 3 &&
+  silenceRecovery.tunerStage === 'inconclusive' &&
+  silenceRecovery.note === null,
+  '35.D3 Vibrato suave, troca rápida com reset controlado (E2->A2->A3) e recuperação limpa ao silêncio validados'
+);
+
+// Categoria E — Sinais Inválidos, Ruído Ambiente, Clipped, Polifonia e Fora de Faixa
+const ambientNoiseBuf = new Float32Array(4096);
+let ambSeed = 998877;
+for (let i = 0; i < 4096; i++) {
+  ambSeed = (ambSeed * 1664525 + 1013904223) >>> 0;
+  const r = (ambSeed / 0xffffffff) * 2 - 1;
+  ambientNoiseBuf[i] = 0.05 * r + 0.015 * Math.sin(2 * Math.PI * 60 * i / 44100);
+}
+const ambientRes = v21Detector.detectPitchFromBuffer(ambientNoiseBuf, 44100);
+
+const clippedE2 = new Float32Array(4096);
+for (let i = 0; i < 4096; i++) {
+  clippedE2[i] = Math.tanh(8.0 * Math.sin(2 * Math.PI * 82.41 * i / 44100));
+}
+const clippedRes = v21Detector.detectPitchFromBuffer(clippedE2, 44100);
+
+const dyadE2B2 = generatePolyphonicBuffer([82.41, 123.47], 44100, 4096);
+const dyadRes = v21Detector.detectPitchFromBuffer(dyadE2B2, 44100);
+
+const infraRes = v21Detector.detectPitchFromBuffer(generateSineBuffer(12.0, 44100, 4096, 0.35), 44100);
+const ultraRes = v21Detector.detectPitchFromBuffer(generateSineBuffer(2800.0, 44100, 4096, 0.35), 44100);
+
+assert(
+  ambientRes?.note === null && ambientRes?.isReliable === false &&
+  clippedRes?.note === 'E' && clippedRes?.octave === 2 &&
+  dyadRes?.detectionType === 'polyphonic_ambiguous' && dyadRes?.note === null &&
+  infraRes?.note === null && infraRes?.isReliable === false &&
+  ultraRes?.note === null && ultraRes?.isReliable === false,
+  `35.E1 Ruído ambiente rejeitado, onda clipada E2 identificada sem oitava falsa, díade E2+B2 bloqueada como polifonia e 12Hz/2800Hz rejeitados`
+);
+
+// Categoria F — Calibração A4 (432 / 440 / 442 Hz) & Preservação Integral de Presets Oficiais
+const det432 = v21Detector.detectPitchFromBuffer(generateSineBuffer(432.0, 44100, 4096, 0.35), 44100, { a4: 432 });
+const det442 = v21Detector.detectPitchFromBuffer(generateSineBuffer(442.0, 44100, 4096, 0.35), 44100, { a4: 442 });
+assert(
+  Math.abs((det432?.rawCents ?? 99)) < 0.25 &&
+  Math.abs((det442?.rawCents ?? 99)) < 0.25 &&
+  calculateExactFrequency('A', 4, 432) === 432 &&
+  calculateExactFrequency('A', 4, 442) === 442 &&
+  ALL_INSTRUMENTS.length === 10 &&
+  Boolean(findPresetById('eg_standard') && findPresetById('eg_drop_d') && findPresetById('eg_dadgad')),
+  '35.F1 Calibração A4 (432/440/442 Hz) e todos os 10 instrumentos/presets oficiais preservados sem perda'
+);
+
+// Categoria G — ExerciseNoteEvaluator (CORRECT / INCORRECT / INCONCLUSIVE sem penalização injusta)
+const evalOkFrames = [
+  makePitchFrame('E', 2, 1.5, { isTransient: true, phase: 'attack' }), // ataque ignorado
+  makePitchFrame('E', 2, 1.2),
+  makePitchFrame('E', 2, 0.8),
+  makePitchFrame('E', 2, 0.9),
+];
+const evalOkSeq = evaluatePitchFrameSequence(evalOkFrames, ['E'], {
+  requiredConsecutiveCorrectFrames: 3,
+  requiredConsecutiveWrongFrames: 3,
+  toleranceCents: 35,
+});
+
+const evalInconclusiveFrames = [
+  v21Detector.detectPitchFromBuffer(new Float32Array(4096), 44100), // silêncio
+  ambientRes, // ruído ambiente
+  dyadRes, // polifonia
+  makePitchFrame('E', 2, 0.5, { isTransient: true, phase: 'attack' }), // ataque
+  makePitchFrame('E', 2, -20),
+  makePitchFrame('E', 2, 22), // oscilação > 25¢
+  makePitchFrame('E', 2, -18),
+];
+const evalIncSeq = evaluatePitchFrameSequence(evalInconclusiveFrames, ['E'], {
+  requiredConsecutiveCorrectFrames: 3,
+  requiredConsecutiveWrongFrames: 3,
+  maxOscillationCents: 25,
+});
+
+const evalWrongSeq = evaluatePitchFrameSequence(
+  [makePitchFrame('F#', 2, 0.2), makePitchFrame('F#', 2, -0.4), makePitchFrame('F#', 2, 0.1)],
+  ['E'],
+  { requiredConsecutiveCorrectFrames: 3, requiredConsecutiveWrongFrames: 3 }
+);
+
+const tunerViewSrc35 = fs.readFileSync('src/components/tuner/TunerView.tsx', 'utf-8');
+const coachViewSrc35 = fs.readFileSync('src/components/coach/GuitarCoachView.tsx', 'utf-8');
+
+assert(
+  evalOkSeq.finalResult.verdict === 'CORRECT' &&
+  evalOkSeq.finalResult.shouldCountHit === true &&
+  evalOkSeq.incorrectCount === 0 &&
+  evalIncSeq.finalResult.verdict === 'INCONCLUSIVE' &&
+  evalIncSeq.incorrectCount === 0 &&
+  evalIncSeq.correctCount === 0 &&
+  evalWrongSeq.finalResult.verdict === 'INCORRECT' &&
+  evalWrongSeq.finalResult.shouldCountError === true &&
+  tunerViewSrc35.includes('Intensidade do Sinal') &&
+  tunerViewSrc35.includes('Estabilidade da Nota') &&
+  tunerViewSrc35.includes('minStableReadingsForInTune') &&
+  coachViewSrc35.includes('ExerciseNoteEvaluator'),
+  '35.G1 ExerciseNoteEvaluator separa CORRECT/INCORRECT/INCONCLUSIVE sem jamais penalizar ruído, silêncio, polifonia, ataque ou oscilação; UI exibe barras de estabilidade/intensidade'
+);
+
 console.log('\n===========================================================');
 console.log(`TOTAL DE TESTES: ${totalTests}`);
 console.log(`PASSOU: ${passedTests}`);
@@ -5777,7 +6120,7 @@ console.log('===========================================================');
 if (failedTests > 0) {
   process.exit(1);
 } else {
-  console.log('✓ Todos os testes de integração do motor musical, detector, currículo, Central de Prática, Busca Global, Diagramas Cifra Club, Autenticação Obrigatória, Separação de Ambientes Aluno/Admin, Backend Hardening, SMART TUNER V1.2, AUTENTICAÇÃO ADMINISTRATIVA DEFINITIVA, CORREÇÃO GERAL DEFINITIVA, MODAL/IMAGENS DOS CURSOS e AUDITORIA DE RECONHECIMENTO DE ÁUDIO foram APROVADOS com sucesso!\n');
+  console.log('✓ Todos os testes de integração do motor musical, detector, currículo, Central de Prática, Busca Global, Diagramas Cifra Club, Autenticação Obrigatória, Separação de Ambientes Aluno/Admin, Backend Hardening, SMART TUNER V1.2, AUTENTICAÇÃO ADMINISTRATIVA DEFINITIVA, CORREÇÃO GERAL DEFINITIVA, MODAL/IMAGENS DOS CURSOS, AUDITORIA DE ÁUDIO e MASTER TUNER V2.1 foram APROVADOS com sucesso!\n');
   process.exit(0);
 }
 

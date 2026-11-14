@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { guitarPitchDetector, PitchDetectionResult, TargetStringRef } from '../../audio/guitarPitchDetector';
-import { TunerSmoother, TunerSmoothedOutput } from '../../audio/tunerSmoother';
+import { TunerSmoother, TunerSmoothedOutput, TunerStage } from '../../audio/tunerSmoother';
 import {
   ALL_INSTRUMENTS,
   TunerPreset,
   TunerString,
   InstrumentDefinition,
   calculateFrequency,
+  calculateExactFrequency,
   loadCustomTunings,
   saveCustomTuning,
   deleteCustomTuning,
@@ -83,9 +84,15 @@ export const TunerView: React.FC<TunerViewProps> = ({ onOpenLessonTuning }) => {
     { note: 'E', octave: 4 },
   ]);
 
-  // Smoother de física do ponteiro
+  // Smoother de física do ponteiro (V2.1: exige confirmação multi-leitura antes de IN_TUNE)
   const smootherRef = useRef<TunerSmoother>(
-    new TunerSmoother({ alpha: 0.28, confidenceThreshold: 0.60, inTuneTolerance: 5.0, deadZone: 2.0 })
+    new TunerSmoother({
+      alpha: 0.28,
+      confidenceThreshold: 0.60,
+      inTuneTolerance: 5.0,
+      deadZone: 2.0,
+      minStableReadingsForInTune: 3
+    })
   );
 
   const [rawSignalFeedback, setRawSignalFeedback] = useState<{
@@ -96,6 +103,7 @@ export const TunerView: React.FC<TunerViewProps> = ({ onOpenLessonTuning }) => {
 
   const [displayState, setDisplayState] = useState<TunerSmoothedOutput>({
     displayedCents: 0,
+    rawDisplayedCents: 0,
     displayedFreq: 0,
     displayedAngle: 0,
     displayedDiffHz: 0,
@@ -103,10 +111,15 @@ export const TunerView: React.FC<TunerViewProps> = ({ onOpenLessonTuning }) => {
     notePt: null,
     octave: null,
     state: 'idle',
+    tunerStage: 'inconclusive',
     isInTune: false,
     isNearTune: false,
     isWeakSignal: false,
+    isPolyphonic: false,
+    isTransient: false,
     confidence: 0,
+    signalIntensity: 0,
+    stability: 0,
     expectedFreq: 0,
     stableFramesCount: 0
   });
@@ -133,7 +146,8 @@ export const TunerView: React.FC<TunerViewProps> = ({ onOpenLessonTuning }) => {
   const activeStrings = useMemo(() => {
     return currentPreset.strings.map((s) => ({
       ...s,
-      freq: calculateFrequency(s.note, s.octave, a4Calibration)
+      freq: calculateFrequency(s.note, s.octave, a4Calibration),
+      exactFreq: calculateExactFrequency(s.note, s.octave, a4Calibration)
     }));
   }, [currentPreset, a4Calibration]);
 
@@ -146,7 +160,7 @@ export const TunerView: React.FC<TunerViewProps> = ({ onOpenLessonTuning }) => {
     smootherRef.current.setTolerance(tuningTolerance);
   }, [a4Calibration, currentPreset, tuningTolerance]);
 
-  // Configuração da corda alvo no detector
+  // Configuração da corda alvo no detector (preserva frequência exata em ponto flutuante)
   useEffect(() => {
     if (manualStringNumber !== null && !isChromaticMode) {
       const target = activeStrings.find((s) => s.stringNumber === manualStringNumber);
@@ -156,7 +170,7 @@ export const TunerView: React.FC<TunerViewProps> = ({ onOpenLessonTuning }) => {
           note: target.note,
           notePt: target.notePt,
           octave: target.octave,
-          freq: target.freq
+          freq: target.exactFreq
         });
         return;
       }
@@ -312,10 +326,22 @@ export const TunerView: React.FC<TunerViewProps> = ({ onOpenLessonTuning }) => {
     }
   };
 
+  // Rótulo amigável para os 5 estágios do Master Tuner V2.1
+  const stageLabels: Record<TunerStage, { label: string; badgeClass: string }> = {
+    detected: { label: 'Nota detectada', badgeClass: 'bg-sky-50 text-sky-700 border-sky-200' },
+    stabilizing: { label: 'Estabilizando sinal...', badgeClass: 'bg-amber-50 text-amber-700 border-amber-200' },
+    stable: { label: 'Leitura estável', badgeClass: 'bg-slate-100 text-[#25252A] border-[#D9D9D9]' },
+    in_tune: { label: '✓ Afinada e confirmada', badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-300' },
+    inconclusive: { label: 'Sinal inconclusivo / aguardando', badgeClass: 'bg-[#F8F7F4] text-[#666672] border-[#D9D9D9]' }
+  };
+  const currentStageMeta = stageLabels[displayState.tunerStage || 'inconclusive'];
+  const intensityPercent = Math.round(Math.max(0, Math.min(1, displayState.signalIntensity || 0)) * 100);
+  const stabilityPercent = Math.round(Math.max(0, Math.min(100, displayState.stability || 0)));
+
   // Status visual da afinação
   let statusBadge = {
     text: 'Aguardando som do instrumento...',
-    subtext: 'Toque uma corda firme e isolada',
+    subtext: 'Toque uma corda por vez com firmeza',
     bg: 'bg-[#F8F7F4] text-[#666672] border-[#D9D9D9]',
     color: '#666672',
     actionPrompt: 'Aguardando'
@@ -337,10 +363,10 @@ export const TunerView: React.FC<TunerViewProps> = ({ onOpenLessonTuning }) => {
       color: '#B52A3A',
       actionPrompt: 'Verifique o mic'
     };
-  } else if (rawSignalFeedback.detectionType === 'polyphonic_ambiguous' && !displayState.note) {
+  } else if (displayState.isPolyphonic || (rawSignalFeedback.detectionType === 'polyphonic_ambiguous' && !displayState.note)) {
     statusBadge = {
-      text: 'Múltiplas cordas detectadas',
-      subtext: 'Toque apenas uma corda isolada para afinar com precisão',
+      text: 'Múltiplas cordas detectadas — toque uma corda por vez',
+      subtext: 'Abafe as cordas vizinhas para que a leitura fique estável e precisa',
       bg: 'bg-amber-50 text-amber-700 border-amber-300',
       color: '#D97706',
       actionPrompt: 'Uma corda por vez'
@@ -351,7 +377,7 @@ export const TunerView: React.FC<TunerViewProps> = ({ onOpenLessonTuning }) => {
         ? 'Não foi possível identificar a nota'
         : 'Sinal sonoro fraco',
       subtext: rawSignalFeedback.detectionType === 'noise_or_unidentified'
-        ? 'Ruído ou sinal instável — toque uma corda limpa próximo ao microfone'
+        ? 'Ruído ou sinal inconclusivo — toque uma corda limpa próximo ao microfone'
         : 'Toque a corda mais firme próximo ao microfone',
       bg: 'bg-amber-50 text-amber-700 border-amber-300',
       color: '#D97706',
@@ -360,7 +386,7 @@ export const TunerView: React.FC<TunerViewProps> = ({ onOpenLessonTuning }) => {
   } else if (displayState.isInTune) {
     statusBadge = {
       text: '✓ AFINADA!',
-      subtext: `No centro exato (tolerância ±${tuningTolerance}¢)`,
+      subtext: `No centro exato com estabilidade confirmada (tolerância ±${tuningTolerance}¢)`,
       bg: 'bg-emerald-50 text-emerald-700 border-emerald-300 shadow-xs ring-2 ring-emerald-200',
       color: '#10B981',
       actionPrompt: '✓ AFINADA'
@@ -369,7 +395,7 @@ export const TunerView: React.FC<TunerViewProps> = ({ onOpenLessonTuning }) => {
     const isFlat = displayState.displayedCents < 0;
     statusBadge = {
       text: isFlat ? '▲ APERTAR (Ajuste fino)' : '▼ AFROUXAR (Ajuste fino)',
-      subtext: `${displayState.displayedCents > 0 ? '+' : ''}${displayState.displayedCents}¢ — quase no centro`,
+      subtext: `${displayState.displayedCents > 0 ? '+' : ''}${displayState.displayedCents}¢ — ${displayState.isTransient ? 'estabilizando ataque...' : 'quase no centro'}`,
       bg: 'bg-amber-50 text-amber-700 border-amber-300',
       color: '#F59E0B',
       actionPrompt: isFlat ? '▲ APERTAR' : '▼ AFROUXAR'
@@ -683,16 +709,65 @@ export const TunerView: React.FC<TunerViewProps> = ({ onOpenLessonTuning }) => {
             </div>
           )}
 
-          {/* Status Badge */}
-          <div className="pt-2">
-            <span
-              className={`inline-block px-5 py-2 rounded-full text-xs font-bold border transition ${statusBadge.bg}`}
-            >
-              {statusBadge.text}
-            </span>
+          {/* Status Badge + Tuner Stage Pill */}
+          <div className="pt-2 space-y-2">
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <span
+                className={`inline-block px-5 py-2 rounded-full text-xs font-bold border transition ${statusBadge.bg}`}
+              >
+                {statusBadge.text}
+              </span>
+              {isListening && (
+                <span
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold border ${currentStageMeta.badgeClass}`}
+                >
+                  <Activity className="w-3 h-3" />
+                  <span>{currentStageMeta.label}</span>
+                </span>
+              )}
+            </div>
             <p className="text-[11px] text-[#666672] mt-1 font-medium">
               {statusBadge.subtext}
             </p>
+          </div>
+        </div>
+
+        {/* Visual Signal Intensity & Stability Bars */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-2xl mx-auto text-left">
+          <div className="bg-[#F8F7F4] p-3 rounded-2xl border border-[#D9D9D9] space-y-1.5">
+            <div className="flex items-center justify-between text-[11px] font-bold text-[#666672]">
+              <span className="uppercase tracking-wide">Intensidade do Sinal</span>
+              <span className="font-mono-code text-[#25252A]">{isListening ? `${intensityPercent}%` : '--'}</span>
+            </div>
+            <div className="h-2 w-full bg-white rounded-full overflow-hidden border border-[#E5E5E5]">
+              <div
+                className={`h-full rounded-full transition-all duration-100 ${
+                  intensityPercent > 15 ? 'bg-emerald-500' : 'bg-amber-400'
+                }`}
+                style={{ width: `${isListening ? intensityPercent : 0}%` }}
+              />
+            </div>
+          </div>
+
+          <div className="bg-[#F8F7F4] p-3 rounded-2xl border border-[#D9D9D9] space-y-1.5">
+            <div className="flex items-center justify-between text-[11px] font-bold text-[#666672]">
+              <span className="uppercase tracking-wide">Estabilidade da Nota</span>
+              <span className="font-mono-code text-[#25252A]">
+                {isListening && displayState.note ? `${stabilityPercent}%` : '--'}
+              </span>
+            </div>
+            <div className="h-2 w-full bg-white rounded-full overflow-hidden border border-[#E5E5E5]">
+              <div
+                className={`h-full rounded-full transition-all duration-150 ${
+                  stabilityPercent >= 80
+                    ? 'bg-emerald-500'
+                    : stabilityPercent >= 55
+                    ? 'bg-amber-500'
+                    : 'bg-[#7B1E2B]'
+                }`}
+                style={{ width: `${isListening && displayState.note ? stabilityPercent : 0}%` }}
+              />
+            </div>
           </div>
         </div>
 

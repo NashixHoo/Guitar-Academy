@@ -73,19 +73,25 @@ export const ENHARMONIC_EQUIVALENTS: Record<string, string> = {
 };
 
 /**
- * Calcula a frequência exata de uma nota e oitava baseada na calibração de A4.
+ * Calcula a frequência exata em ponto flutuante (sem arredondamento) de uma nota e oitava baseada em A4.
  */
-export function calculateFrequency(note: string, octave: number, a4 = 440, cents = 0): number {
+export function calculateExactFrequency(note: string, octave: number, a4 = 440, cents = 0): number {
   let normalized = note.trim();
   if (ENHARMONIC_EQUIVALENTS[normalized]) {
     normalized = ENHARMONIC_EQUIVALENTS[normalized];
   }
-  const noteIndex = NOTE_NAMES.indexOf(normalized as any);
+  const noteIndex = NOTE_NAMES.indexOf(normalized as (typeof NOTE_NAMES)[number]);
   if (noteIndex === -1) return 440;
 
   const midi = (octave + 1) * 12 + noteIndex;
-  const freq = a4 * Math.pow(2, (midi - 69 + cents / 100) / 12);
-  return parseFloat(freq.toFixed(2));
+  return a4 * Math.pow(2, (midi - 69 + cents / 100) / 12);
+}
+
+/**
+ * Calcula a frequência formatada (2 casas decimais) para exibição na UI e compatibilidade.
+ */
+export function calculateFrequency(note: string, octave: number, a4 = 440, cents = 0): number {
+  return parseFloat(calculateExactFrequency(note, octave, a4, cents).toFixed(2));
 }
 
 // -------------------------------------------------------------

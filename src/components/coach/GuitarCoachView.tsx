@@ -17,6 +17,7 @@ import {
   validateDetectedNoteAgainstExpected,
   ChordEvaluationResult
 } from '../../audio/guitarPitchDetector';
+import { ExerciseNoteEvaluator } from '../../audio/noteEvaluator';
 import { CHORD_DATABASE } from '../../data/chordDatabase';
 import { ChordDiagram } from '../chords/ChordDiagram';
 import { getChordShapes } from '../../chords/shapes';
@@ -221,9 +222,10 @@ export function evaluateMonophonicChordStep(
 
   const normDetected = normalizeNoteName(pitch.note);
   const inChord = expectedNotes.includes(normDetected);
+  const exactRawCents = pitch.rawCents !== undefined ? pitch.rawCents : pitch.cents;
 
   if (inChord) {
-    if (Math.abs(pitch.cents) > tolCents) {
+    if (Math.abs(exactRawCents) > tolCents) {
       return {
         outcome: 'out_of_tune',
         detectedNote: normDetected,
@@ -340,8 +342,19 @@ export const GuitarCoachView: React.FC<GuitarCoachViewProps> = ({
   const harmonicMismatchesRef = useRef<number>(0);
   const elapsedSecondsRef = useRef<number>(0);
   const confirmedNotesForWindowRef = useRef<string[]>([]);
-  const frameConfirmStreakRef = useRef<{ note: string | null; count: number }>({ note: null, count: 0 });
-  const wrongStreakRef = useRef<{ note: string | null; count: number }>({ note: null, count: 0 });
+  const lastCountedWrongNoteRef = useRef<string | null>(null);
+  const noteEvaluatorRef = useRef<ExerciseNoteEvaluator>(
+    new ExerciseNoteEvaluator({
+      toleranceCents: 35,
+      minConfidence: 0.65,
+      requiredConsecutiveCorrectFrames: 2,
+      requiredConsecutiveWrongFrames: 3,
+      maxOscillationCents: 25,
+      ignoreAttackTransients: true,
+      minPlausibleOctave: 1,
+      maxPlausibleOctave: 6
+    })
+  );
   const chordEvalThrottleRef = useRef<number>(0);
 
   // Determina número de compassos por acorde baseado no nível
@@ -416,8 +429,8 @@ export const GuitarCoachView: React.FC<GuitarCoachViewProps> = ({
   useEffect(() => {
     confirmedNotesForWindowRef.current = [];
     setConfirmedChordNotes([]);
-    frameConfirmStreakRef.current = { note: null, count: 0 };
-    wrongStreakRef.current = { note: null, count: 0 };
+    lastCountedWrongNoteRef.current = null;
+    noteEvaluatorRef.current.reset();
     switchWindowHitRef.current = false;
   }, [currentChordIndex, currentChordSymbol]);
 
@@ -468,8 +481,8 @@ export const GuitarCoachView: React.FC<GuitarCoachViewProps> = ({
     }
 
     if (pitch.isSilence || pitch.detectionType === 'silence') {
-      frameConfirmStreakRef.current = { note: null, count: 0 };
-      wrongStreakRef.current = { note: null, count: 0 };
+      noteEvaluatorRef.current.evaluateFrame(pitch, currentChordDetailsRef.current.notes);
+      lastCountedWrongNoteRef.current = null;
       return;
     }
 
@@ -514,39 +527,31 @@ export const GuitarCoachView: React.FC<GuitarCoachViewProps> = ({
       return;
     }
 
-    // MODO A (Padrão Seguro): Validação Nota por Nota / Arpejo — aprova o acorde SOMENTE após confirmar todas as notas esperadas
-    const step = evaluateMonophonicChordStep(pitch, expectedNotes, confirmedNotesForWindowRef.current, {
-      toleranceCents: 35,
-      minConfidence: 0.65,
-    });
+    // MODO A (Padrão Seguro via ExerciseNoteEvaluator):
+    // Leituras inconclusivas (ruído, sinal fraco, ataque, polifonia, oscilação) NUNCA penalizam o estudante.
+    const evalResult = noteEvaluatorRef.current.evaluateFrame(pitch, expectedNotes);
 
-    if (step.outcome === 'unidentified' || step.outcome === 'polyphonic' || step.outcome === 'out_of_tune') {
-      frameConfirmStreakRef.current = { note: null, count: 0 };
-      wrongStreakRef.current = { note: null, count: 0 };
-      setLastDetectedNoteMatch('unidentified');
-      setAudioFeedbackText(step.message);
+    if (evalResult.verdict === 'INCONCLUSIVE') {
+      if (evalResult.reason !== 'insufficient_frames') {
+        setLastDetectedNoteMatch('unidentified');
+        setAudioFeedbackText(evalResult.message);
+      }
       return;
     }
 
-    if (step.outcome === 'chord_note_hit' && step.detectedNote) {
-      wrongStreakRef.current = { note: null, count: 0 };
-      if (frameConfirmStreakRef.current.note === step.detectedNote) {
-        frameConfirmStreakRef.current.count += 1;
-      } else {
-        frameConfirmStreakRef.current = { note: step.detectedNote, count: 1 };
-      }
+    if (evalResult.verdict === 'CORRECT' && evalResult.shouldCountHit && evalResult.detectedNote) {
+      lastCountedWrongNoteRef.current = null;
+      const step = evaluateMonophonicChordStep(pitch, expectedNotes, confirmedNotesForWindowRef.current, {
+        toleranceCents: 35,
+        minConfidence: 0.65,
+      });
 
-      // Exige 2 quadros consecutivos estáveis para não contar ruído ou ataque transitório
-      if (frameConfirmStreakRef.current.count < 2) {
-        return;
-      }
-
-      const wasAlreadyCountedThisNote = confirmedNotesForWindowRef.current.includes(step.detectedNote);
+      const wasAlreadyCountedThisNote = confirmedNotesForWindowRef.current.includes(evalResult.detectedNote);
       confirmedNotesForWindowRef.current = step.updatedConfirmedNotes;
       setConfirmedChordNotes(step.updatedConfirmedNotes);
 
       const normRoot = normalizeNoteName(liveChord.root);
-      setLastDetectedNoteMatch(step.detectedNote === normRoot ? 'root' : 'chord_tone');
+      setLastDetectedNoteMatch(evalResult.detectedNote === normRoot ? 'root' : 'chord_tone');
       setAudioFeedbackText(step.message);
 
       if (!wasAlreadyCountedThisNote) {
@@ -554,7 +559,6 @@ export const GuitarCoachView: React.FC<GuitarCoachViewProps> = ({
         setHarmonicMatchesCount(harmonicMatchesRef.current);
       }
 
-      // Acorde só é confirmado quando TODAS as notas esperadas tiverem sido confirmadas
       if (step.chordCompleted && !switchWindowHitRef.current) {
         switchWindowHitRef.current = true;
         confirmedSwitchesRef.current += 1;
@@ -563,18 +567,12 @@ export const GuitarCoachView: React.FC<GuitarCoachViewProps> = ({
       return;
     }
 
-    if (step.outcome === 'wrong_note' && step.detectedNote) {
-      frameConfirmStreakRef.current = { note: null, count: 0 };
-      if (wrongStreakRef.current.note === step.detectedNote) {
-        wrongStreakRef.current.count += 1;
-      } else {
-        wrongStreakRef.current = { note: step.detectedNote, count: 1 };
-      }
-
-      // Só contabiliza erro após 2 quadros consecutivos estáveis de uma nota diferente reconhecida
-      if (wrongStreakRef.current.count === 2) {
+    if (evalResult.verdict === 'INCORRECT' && evalResult.shouldCountError && evalResult.detectedNote) {
+      const wrongKey = `${evalResult.detectedNote}${evalResult.detectedOctave ?? ''}`;
+      if (lastCountedWrongNoteRef.current !== wrongKey) {
+        lastCountedWrongNoteRef.current = wrongKey;
         setLastDetectedNoteMatch('outside');
-        setAudioFeedbackText(step.message);
+        setAudioFeedbackText(evalResult.message);
         harmonicMismatchesRef.current += 1;
         setHarmonicMismatchesCount(harmonicMismatchesRef.current);
       }
@@ -604,8 +602,8 @@ export const GuitarCoachView: React.FC<GuitarCoachViewProps> = ({
     harmonicMismatchesRef.current = 0;
     elapsedSecondsRef.current = 0;
     confirmedNotesForWindowRef.current = [];
-    frameConfirmStreakRef.current = { note: null, count: 0 };
-    wrongStreakRef.current = { note: null, count: 0 };
+    lastCountedWrongNoteRef.current = null;
+    noteEvaluatorRef.current.reset();
     switchWindowHitRef.current = false;
     currentChordIdxRef.current = 0;
     currentBarRef.current = 1;
