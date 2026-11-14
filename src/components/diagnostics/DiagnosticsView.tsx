@@ -121,9 +121,18 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({
         detectorRef.current = new GuitarPitchDetector();
       }
 
-      await detectorRef.current.startListening((res) => {
-        setPitchData(res);
+      const res = await detectorRef.current.startListening((data) => {
+        setPitchData(data);
       });
+
+      if (!res.success) {
+        setMicActive(false);
+        if (res.errorType === 'permission_denied') {
+          setMicPermission('negada');
+        }
+        setMicError(res.error || 'Falha ao acessar microfone.');
+        return;
+      }
 
       setMicActive(true);
       setMicPermission('concedida');
@@ -271,7 +280,7 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({
             {/* Monitor de Sinal */}
             <div className="p-4 bg-[#F8F7F4] rounded-xl border border-[#EBEBEB] flex flex-col justify-center items-center text-center">
               <span className="text-[11px] text-[#666672] block mb-1">Nota Estimada</span>
-              {pitchData?.note ? (
+              {pitchData?.note && pitchData?.detectionType === 'monophonic_note' ? (
                 <div className="animate-fade-in">
                   <span className="text-3xl font-black text-[#7B1E2B]">
                     {pitchData.note}{pitchData.octave}
@@ -281,8 +290,16 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({
                   </span>
                 </div>
               ) : (
-                <span className="text-lg font-bold text-[#A0A0A0]">
-                  {micActive ? (pitchData?.isSilence ? 'Silêncio' : 'Aguardando Som...') : 'Microfone desligado'}
+                <span className="text-sm font-bold text-[#666672]">
+                  {!micActive
+                    ? 'Microfone desligado'
+                    : !pitchData
+                    ? 'Aguardando captura...'
+                    : pitchData.isSilence
+                    ? 'Silêncio'
+                    : pitchData.detectionType === 'polyphonic_ambiguous'
+                    ? 'Múltiplas notas (toque 1 por vez)'
+                    : 'Não foi possível identificar a nota'}
                 </span>
               )}
             </div>
@@ -292,13 +309,13 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({
               <div className="flex items-center justify-between text-xs">
                 <span className="text-[#666672]">Frequência Real:</span>
                 <span className="font-mono-code font-bold text-[#25252A]">
-                  {pitchData?.frequency ? `${pitchData.frequency.toFixed(1)} Hz` : '—'}
+                  {pitchData?.frequency && pitchData.frequency > 0 ? `${pitchData.frequency.toFixed(1)} Hz` : '—'}
                 </span>
               </div>
               <div className="flex items-center justify-between text-xs">
                 <span className="text-[#666672]">Desvio (Cents):</span>
                 <span className="font-mono-code font-bold text-[#25252A]">
-                  {pitchData?.cents !== undefined ? `${pitchData.cents > 0 ? '+' : ''}${pitchData.cents} cents` : '—'}
+                  {pitchData?.note && pitchData?.cents !== undefined ? `${pitchData.cents > 0 ? '+' : ''}${pitchData.cents} cents` : '—'}
                 </span>
               </div>
               <div className="flex items-center justify-between text-xs">
@@ -326,7 +343,15 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({
                 />
               </div>
               <span className="text-[10px] text-[#666672]">
-                {pitchData?.isSilence ? 'Status: Silêncio (Nenhuma nota computada)' : 'Status: Sinal detectado'}
+                {!micActive || !pitchData
+                  ? 'Status: Aguardando captura'
+                  : pitchData.audioGraphHealthy === false
+                  ? pitchData.diagnosticMessage || 'Status: Sem áudio válido chegando ao analisador'
+                  : pitchData.isSilence
+                  ? 'Status: Silêncio (Nenhuma nota computada)'
+                  : pitchData.detectionType === 'monophonic_note'
+                  ? `Status: Nota identificada (${Math.round(pitchData.confidence * 100)}% confiança${pitchData.sampleRate ? ` • ${pitchData.sampleRate} Hz` : ''})`
+                  : 'Status: Não foi possível identificar a nota'}
               </span>
             </div>
           </div>

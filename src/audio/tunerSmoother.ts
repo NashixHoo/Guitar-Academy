@@ -141,17 +141,26 @@ export class TunerSmoother {
   feedPitch(pitch: PitchDetectionResult | null, timestamp: number | null = null): void {
     const now = timestamp !== null ? timestamp : performance.now();
 
-    if (!pitch || pitch.isSilence || pitch.frequency === 0) {
+    if (!pitch || pitch.isSilence || pitch.frequency === 0 || !pitch.note) {
       if (now - this.lastConfidentTime > this.silenceGracePeriodMs) {
         this.currentState = TUNER_STATES.WAITING_SOUND;
+      }
+      if (pitch && (pitch.detectionType === 'noise_or_unidentified' || pitch.detectionType === 'polyphonic_ambiguous')) {
+        this.isWeakSignal = true;
+        this.currentState = TUNER_STATES.WEAK_SIGNAL;
       }
       return;
     }
 
     const confidence = pitch.confidence !== undefined ? pitch.confidence : 0;
 
-    // Alta sensibilidade: notas musicais periódicas suaves são acolhidas sem corte artificial por intensidade
-    if (confidence < this.confidenceThreshold || pitch.isWeakSignal) {
+    // Exige detecção monofônica válida acima do limiar de confiança
+    if (
+      pitch.detectionType !== 'monophonic_note' ||
+      pitch.isReliable === false ||
+      confidence < this.confidenceThreshold ||
+      pitch.isWeakSignal
+    ) {
       this.isWeakSignal = true;
       this.currentState = TUNER_STATES.WEAK_SIGNAL;
       return;
@@ -211,6 +220,14 @@ export class TunerSmoother {
       this.targetCents = 0;
       this.currentState = TUNER_STATES.WAITING_SOUND;
       this.stableInTuneCount = 0;
+      if (timeSinceLastSound > this.silenceGracePeriodMs + 600) {
+        this.targetNote = null;
+        this.targetNotePt = null;
+        this.targetOctave = null;
+        this.activeNote = null;
+        this.activeOctave = null;
+        this.targetConfidence = 0;
+      }
     }
 
     const absTarget = Math.abs(this.targetCents);
@@ -241,7 +258,7 @@ export class TunerSmoother {
     const boundedAlpha = Math.max(0.01, Math.min(1.0, 1 - Math.pow(1 - effectiveAlpha, fpsScale)));
     this.displayedCents += boundedAlpha * (this.targetCents - this.displayedCents);
 
-    if (this.targetFreq > 0) {
+    if (this.targetFreq > 0 && this.targetNote) {
       if (this.displayedFreq === 0) {
         this.displayedFreq = this.targetFreq;
       } else {

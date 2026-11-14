@@ -11,7 +11,15 @@ import { transposeChord, transposeProgression } from './src/chords/transposer';
 import { validateChordShape } from './src/chords/musical-validator';
 import { getChordShapes, generateCagedShapes } from './src/chords/shapes';
 import { INSTRUMENTS } from './src/chords/instruments';
-import { GuitarPitchDetector } from './src/audio/guitarPitchDetector';
+import {
+  GuitarPitchDetector,
+  validateDetectedNoteAgainstExpected,
+  normalizeNoteName,
+} from './src/audio/guitarPitchDetector';
+import {
+  evaluateMonophonicChordStep,
+  computeCoachSessionSummary,
+} from './src/components/coach/GuitarCoachView';
 import { suggestSmartKey } from './src/music/smart-key';
 import { MusicIntelligence } from './src/music/music-intelligence';
 import { simplifyChord } from './src/music/easy-play';
@@ -5519,6 +5527,247 @@ assert(
   `33.10 Todas as ${bannerImportMatches.length} imagens exclusivas dos cursos existem em src/assets/images/ com tamanho válido`
 );
 
+// =============================================================
+// GRUPO 34 — AUDITORIA DE RECONHECIMENTO DE NOTAS, RUÍDO, SILÊNCIO,
+// MICROFONE BLOQUEADO E VALIDAÇÃO DE ACORDES / POLIFONIA
+// =============================================================
+console.log('\n--- GRUPO 34: AUDITORIA DE RECONHECIMENTO MUSICAL & MICROFONE ---');
+
+const auditDetector = new GuitarPitchDetector({
+  lowCutoff: 25,
+  highCutoff: 1600,
+  silenceThreshold: 0.004,
+  confidenceThreshold: 0.60,
+  bufferSize: 4096,
+});
+
+// 34.01 Notas corretas com oitavas e desvios reais dentro da tolerância (±35 cents)
+const c4Buffer = generateSineBuffer(261.63, 44100, 4096, 0.35);
+const c4Det = auditDetector.detectPitchFromBuffer(c4Buffer, 44100);
+const c4Match = validateDetectedNoteAgainstExpected(c4Det, 'C', { expectedOctave: 4, toleranceCents: 35 });
+const a4SlightlySharp = generateSineBuffer(443.0, 44100, 4096, 0.35); // +12 cents
+const a4SharpDet = auditDetector.detectPitchFromBuffer(a4SlightlySharp, 44100);
+const a4Match = validateDetectedNoteAgainstExpected(a4SharpDet, 'A', { expectedOctave: 4, toleranceCents: 35 });
+
+assert(
+  c4Det?.detectionType === 'monophonic_note' &&
+  c4Det?.isReliable === true &&
+  c4Match.isMatch === true &&
+  c4Match.status === 'correct' &&
+  a4Match.isMatch === true &&
+  Math.abs(a4Match.cents) <= 15,
+  `34.01 Notas corretas (C4 e A4 +12¢) são reconhecidas com oitava exata e dentro da tolerância`
+);
+
+// 34.02 Notas erradas, oitava errada e nota desafinada fora da tolerância
+const fSharp2Buf = generateSineBuffer(92.50, 44100, 4096, 0.35); // F#2 tocado no lugar de E2
+const fSharp2Det = auditDetector.detectPitchFromBuffer(fSharp2Buf, 44100);
+const wrongNoteRes = validateDetectedNoteAgainstExpected(fSharp2Det, 'E', { expectedOctave: 2, toleranceCents: 35 });
+
+const e4WrongOctaveBuf = generateSineBuffer(329.63, 44100, 4096, 0.35); // E4 no lugar de E2
+const e4WrongOctaveDet = auditDetector.detectPitchFromBuffer(e4WrongOctaveBuf, 44100);
+const wrongOctRes = validateDetectedNoteAgainstExpected(e4WrongOctaveDet, 'E', { expectedOctave: 2, toleranceCents: 35 });
+
+const a4TooFlatBuf = generateSineBuffer(440 * Math.pow(2, -42 / 1200), 44100, 4096, 0.35);
+const a4TooFlatDet = auditDetector.detectPitchFromBuffer(a4TooFlatBuf, 44100);
+const outOfTuneRes = validateDetectedNoteAgainstExpected(a4TooFlatDet, 'A', { expectedOctave: 4, toleranceCents: 35 });
+
+assert(
+  wrongNoteRes.status === 'wrong_note' &&
+  wrongNoteRes.isWrongNote === true &&
+  wrongNoteRes.detectedNote === 'F#' &&
+  wrongOctRes.status === 'wrong_octave' &&
+  outOfTuneRes.status === 'out_of_tune' &&
+  outOfTuneRes.isMatch === false,
+  '34.02 Nota errada (F#2 vs E2), oitava errada (E4 vs E2) e desafinação (-42¢) são classificadas sem falso acerto'
+);
+
+// 34.03 Proteção de oitava contra frequências fracionárias (444 Hz nunca deve saltar 12ª para baixo como D3)
+const freq444Det = auditDetector.detectPitchFromBuffer(generateSineBuffer(444.0, 44100, 4096, 0.35), 44100);
+assert(
+  freq444Det?.note === 'A' && freq444Det?.octave === 4 && Math.abs((freq444Det?.frequency || 0) - 444.0) < 1.5,
+  `34.03 Supressão segura de oitava evita queda falsa de 444 Hz (obtido: ${freq444Det?.note}${freq444Det?.octave} @ ${freq444Det?.frequency} Hz)`
+);
+
+// 34.04 Silêncio completo e sinal abaixo do limiar: nunca contabiliza acerto nem erro
+const zeroBuf = new Float32Array(4096);
+const zeroDet = auditDetector.detectPitchFromBuffer(zeroBuf, 44100);
+const silenceStep = evaluateMonophonicChordStep(zeroDet!, ['G', 'B', 'D'], []);
+assert(
+  zeroDet?.isSilence === true &&
+  zeroDet?.note === null &&
+  zeroDet?.isReliable === false &&
+  silenceStep.outcome === 'silence' &&
+  silenceStep.chordCompleted === false,
+  '34.04 Silêncio retorna note: null, isReliable: false e não contabiliza acerto nem erro'
+);
+
+// 34.05 Ruído branco determinístico (sem periodicidade): retorna "Não foi possível identificar a nota" sem falso positivo B0/E1
+function generateWhiteNoiseBuffer(size = 4096, amplitude = 0.25): Float32Array {
+  const buf = new Float32Array(size);
+  let seed = 133742;
+  for (let i = 0; i < size; i++) {
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    const rand = (seed / 0xffffffff) * 2 - 1;
+    buf[i] = amplitude * rand;
+  }
+  return buf;
+}
+const noiseBufHigh = generateWhiteNoiseBuffer(4096, 0.25);
+const noiseBufSoft = generateWhiteNoiseBuffer(4096, 0.04);
+const noiseDetHigh = auditDetector.detectPitchFromBuffer(noiseBufHigh, 44100);
+const noiseDetSoft = auditDetector.detectPitchFromBuffer(noiseBufSoft, 44100);
+const noiseValidation = validateDetectedNoteAgainstExpected(noiseDetHigh, 'E');
+const noiseCoachStep = evaluateMonophonicChordStep(noiseDetHigh!, ['G', 'B', 'D'], []);
+const noiseSmoother = new TunerSmoother();
+noiseSmoother.feedPitch(noiseDetHigh);
+const noiseSmoothed = noiseSmoother.step();
+
+assert(
+  noiseDetHigh?.note === null &&
+  noiseDetHigh?.isReliable === false &&
+  noiseDetHigh?.detectionType !== 'monophonic_note' &&
+  noiseDetSoft?.note === null &&
+  noiseDetSoft?.isReliable === false &&
+  noiseValidation.status === 'unidentified' &&
+  noiseValidation.isMatch === false &&
+  noiseValidation.isWrongNote === false &&
+  noiseCoachStep.outcome === 'unidentified' &&
+  noiseCoachStep.message.includes('Não foi possível identificar a nota') &&
+  noiseSmoothed.note === null,
+  `34.05 Ruído branco (forte e fraco) rejeitado com "Não foi possível identificar a nota" e zero falsos positivos (det: ${noiseDetHigh?.detectionType}, nota: ${noiseDetHigh?.note})`
+);
+
+// 34.06 Microfone bloqueado (NotAllowedError), ausente (NotFoundError) e ocupado (NotReadableError)
+const origWindow = (globalThis as any).window;
+const origNavDesc = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+let blockedResult: any = null;
+let notFoundResult: any = null;
+let deviceBusyResult: any = null;
+
+try {
+  (globalThis as any).window = globalThis;
+  const micTester = new GuitarPitchDetector();
+
+  const setMockNavigator = (getUserMediaFn: () => Promise<any>) => {
+    Object.defineProperty(globalThis, 'navigator', {
+      value: { mediaDevices: { getUserMedia: getUserMediaFn } },
+      configurable: true,
+      writable: true,
+    });
+  };
+
+  setMockNavigator(async () => {
+    const err = new Error('Permission denied by user');
+    err.name = 'NotAllowedError';
+    throw err;
+  });
+  blockedResult = await micTester.startListening(() => {});
+
+  setMockNavigator(async () => {
+    const err = new Error('Requested device not found');
+    err.name = 'NotFoundError';
+    throw err;
+  });
+  notFoundResult = await micTester.startListening(() => {});
+
+  setMockNavigator(async () => {
+    const err = new Error('Could not start audio source');
+    err.name = 'NotReadableError';
+    throw err;
+  });
+  deviceBusyResult = await micTester.startListening(() => {});
+} finally {
+  (globalThis as any).window = origWindow;
+  if (origNavDesc) {
+    Object.defineProperty(globalThis, 'navigator', origNavDesc);
+  }
+}
+
+assert(
+  blockedResult?.success === false && blockedResult?.errorType === 'permission_denied' &&
+  notFoundResult?.success === false && notFoundResult?.errorType === 'not_found' &&
+  deviceBusyResult?.success === false && deviceBusyResult?.errorType === 'device_busy',
+  '34.06 Microfone bloqueado (NotAllowedError), ausente (NotFoundError) e ocupado (NotReadableError) retornam falha explícita sem simular captação'
+);
+
+// 34.07 Notas simultâneas (acordes / díades): detector monofônico NÃO aprova como nota única e avaliador de acorde exige TODAS as notas
+const triadCBuf = generatePolyphonicBuffer([261.63, 329.63, 392.00], 44100, 4096); // C4 + E4 + G4
+const triadMonoDet = auditDetector.detectPitchFromBuffer(triadCBuf, 44100);
+const triadFullEval = auditDetector.evaluateChordFromBuffer(triadCBuf, 44100, ['C', 'E', 'G']);
+
+const incompleteCBuf = generatePolyphonicBuffer([261.63, 329.63], 44100, 4096); // falta G
+const incompleteCEval = auditDetector.evaluateChordFromBuffer(incompleteCBuf, 44100, ['C', 'E', 'G']);
+
+// Proteção crítica: 1 única nota G2 (98 Hz) com harmônicos naturais em D4 (3x = 294Hz) e B4 (5x = 490Hz)
+// NÃO pode ser confundida com o acorde completo ['G', 'B', 'D']!
+const singleG2WithOvertones = new Float32Array(4096);
+for (let i = 0; i < 4096; i++) {
+  singleG2WithOvertones[i] =
+    0.35 * Math.sin((2 * Math.PI * 98.0 * i) / 44100) +
+    0.15 * Math.sin((2 * Math.PI * 196.0 * i) / 44100) +
+    0.12 * Math.sin((2 * Math.PI * 294.0 * i) / 44100) +
+    0.08 * Math.sin((2 * Math.PI * 490.0 * i) / 44100);
+}
+const singleG2ChordEval = auditDetector.evaluateChordFromBuffer(singleG2WithOvertones, 44100, ['G', 'B', 'D']);
+
+assert(
+  triadMonoDet?.detectionType === 'polyphonic_ambiguous' &&
+  triadMonoDet?.note === null &&
+  triadMonoDet?.isReliable === false &&
+  triadFullEval.isChordConfirmed === true &&
+  incompleteCEval.isChordConfirmed === false &&
+  incompleteCEval.missingNotes.includes('G') &&
+  singleG2ChordEval.isChordConfirmed === false &&
+  singleG2ChordEval.status === 'single_note_only',
+  `34.07 Notas simultâneas: monofônico acusa polifonia sem nota falsa; acorde C+E+G aprova completo, rejeita C+E (falta G) e rejeita G2 solto com harmônicos`
+);
+
+// 34.08 Validação nota-a-nota (arpejo no Guitar Coach): 1 nota NÃO aprova acorde; exige todas as notas esperadas
+const gNoteDet = auditDetector.detectPitchFromBuffer(generateSineBuffer(196.0, 44100, 4096, 0.35), 44100)!;
+const bNoteDet = auditDetector.detectPitchFromBuffer(generateSineBuffer(246.94, 44100, 4096, 0.35), 44100)!;
+const dNoteDet = auditDetector.detectPitchFromBuffer(generateSineBuffer(293.66, 44100, 4096, 0.35), 44100)!;
+
+const step1G = evaluateMonophonicChordStep(gNoteDet, ['G', 'B', 'D'], []);
+const step2B = evaluateMonophonicChordStep(bNoteDet, ['G', 'B', 'D'], step1G.updatedConfirmedNotes);
+const step3D = evaluateMonophonicChordStep(dNoteDet, ['G', 'B', 'D'], step2B.updatedConfirmedNotes);
+
+assert(
+  step1G.chordCompleted === false &&
+  step1G.missingNotes.length === 2 &&
+  step2B.chordCompleted === false &&
+  step2B.missingNotes.length === 1 &&
+  step3D.chordCompleted === true &&
+  step3D.missingNotes.length === 0 &&
+  normalizeNoteName('Bb') === 'A#',
+  '34.08 Modo arpejo do Guitar Coach exige todas as notas do acorde (G, B, D) antes de confirmar transição'
+);
+
+// 34.09 Integridade de métricas & ausência de pontuação fabricada (50%/100%) sem evidência acústica
+const emptySummary = computeCoachSessionSummary({
+  totalSwitches: 8,
+  confirmedSwitches: 0,
+  harmonicMatchesCount: 0,
+  harmonicMismatchesCount: 0,
+  durationSeconds: 60,
+  bpm: 70,
+  drillName: 'Teste Silêncio',
+});
+const diagViewSrc34 = fs.readFileSync('src/components/diagnostics/DiagnosticsView.tsx', 'utf-8');
+const coachViewSrc34 = fs.readFileSync('src/components/coach/GuitarCoachView.tsx', 'utf-8');
+const tunerViewSrc34 = fs.readFileSync('src/components/tuner/TunerView.tsx', 'utf-8');
+
+assert(
+  emptySummary.accuracyPercent === null &&
+  emptySummary.hasValidAudioEvidence === false &&
+  !coachViewSrc34.includes(': isMicActive ? 50 : 100') &&
+  coachViewSrc34.includes('currentChordDetailsRef') &&
+  diagViewSrc34.includes('if (!res.success)') &&
+  diagViewSrc34.includes('Não foi possível identificar a nota') &&
+  tunerViewSrc34.includes('Não foi possível identificar a nota'),
+  '34.09 Coach nunca fabrica 50%/100% sem evidência sonora; DiagnosticsView checa res.success; telas exibem "Não foi possível identificar a nota"'
+);
+
 console.log('\n===========================================================');
 console.log(`TOTAL DE TESTES: ${totalTests}`);
 console.log(`PASSOU: ${passedTests}`);
@@ -5528,7 +5777,7 @@ console.log('===========================================================');
 if (failedTests > 0) {
   process.exit(1);
 } else {
-  console.log('✓ Todos os testes de integração do motor musical, detector, currículo, Central de Prática, Busca Global, Diagramas Cifra Club, Autenticação Obrigatória, Separação de Ambientes Aluno/Admin, Backend Hardening, SMART TUNER V1.2, AUTENTICAÇÃO ADMINISTRATIVA DEFINITIVA, CORREÇÃO GERAL DEFINITIVA e MODAL/IMAGENS DOS CURSOS foram APROVADOS com sucesso!\n');
+  console.log('✓ Todos os testes de integração do motor musical, detector, currículo, Central de Prática, Busca Global, Diagramas Cifra Club, Autenticação Obrigatória, Separação de Ambientes Aluno/Admin, Backend Hardening, SMART TUNER V1.2, AUTENTICAÇÃO ADMINISTRATIVA DEFINITIVA, CORREÇÃO GERAL DEFINITIVA, MODAL/IMAGENS DOS CURSOS e AUDITORIA DE RECONHECIMENTO DE ÁUDIO foram APROVADOS com sucesso!\n');
   process.exit(0);
 }
 

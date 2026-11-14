@@ -85,8 +85,14 @@ export const TunerView: React.FC<TunerViewProps> = ({ onOpenLessonTuning }) => {
 
   // Smoother de física do ponteiro
   const smootherRef = useRef<TunerSmoother>(
-    new TunerSmoother({ alpha: 0.28, confidenceThreshold: 0.58, inTuneTolerance: 5.0, deadZone: 2.0 })
+    new TunerSmoother({ alpha: 0.28, confidenceThreshold: 0.60, inTuneTolerance: 5.0, deadZone: 2.0 })
   );
+
+  const [rawSignalFeedback, setRawSignalFeedback] = useState<{
+    detectionType: string;
+    message?: string;
+    audioGraphHealthy: boolean;
+  }>({ detectionType: 'silence', audioGraphHealthy: true });
 
   const [displayState, setDisplayState] = useState<TunerSmoothedOutput>({
     displayedCents: 0,
@@ -175,9 +181,17 @@ export const TunerView: React.FC<TunerViewProps> = ({ onOpenLessonTuning }) => {
     } else {
       setErrorMessage(null);
       smootherRef.current.reset();
+      setRawSignalFeedback({ detectionType: 'silence', audioGraphHealthy: true });
 
       const result = await guitarPitchDetector.startListening((rawPitch) => {
         smootherRef.current.feedPitch(rawPitch);
+        if (rawPitch) {
+          setRawSignalFeedback({
+            detectionType: rawPitch.detectionType,
+            message: rawPitch.diagnosticMessage,
+            audioGraphHealthy: rawPitch.audioGraphHealthy !== false,
+          });
+        }
       });
 
       if (!result.success) {
@@ -315,13 +329,33 @@ export const TunerView: React.FC<TunerViewProps> = ({ onOpenLessonTuning }) => {
       color: '#666672',
       actionPrompt: 'Pronto'
     };
-  } else if (displayState.isWeakSignal) {
+  } else if (!rawSignalFeedback.audioGraphHealthy && rawSignalFeedback.message) {
     statusBadge = {
-      text: 'Sinal sonoro fraco',
-      subtext: 'Toque a corda mais firme próximo ao microfone',
+      text: 'Captura de áudio indisponível',
+      subtext: rawSignalFeedback.message,
+      bg: 'bg-rose-50 text-rose-700 border-rose-300',
+      color: '#B52A3A',
+      actionPrompt: 'Verifique o mic'
+    };
+  } else if (rawSignalFeedback.detectionType === 'polyphonic_ambiguous' && !displayState.note) {
+    statusBadge = {
+      text: 'Múltiplas cordas detectadas',
+      subtext: 'Toque apenas uma corda isolada para afinar com precisão',
       bg: 'bg-amber-50 text-amber-700 border-amber-300',
       color: '#D97706',
-      actionPrompt: 'Aumente o ataque'
+      actionPrompt: 'Uma corda por vez'
+    };
+  } else if (displayState.isWeakSignal) {
+    statusBadge = {
+      text: rawSignalFeedback.detectionType === 'noise_or_unidentified'
+        ? 'Não foi possível identificar a nota'
+        : 'Sinal sonoro fraco',
+      subtext: rawSignalFeedback.detectionType === 'noise_or_unidentified'
+        ? 'Ruído ou sinal instável — toque uma corda limpa próximo ao microfone'
+        : 'Toque a corda mais firme próximo ao microfone',
+      bg: 'bg-amber-50 text-amber-700 border-amber-300',
+      color: '#D97706',
+      actionPrompt: 'Não identificado'
     };
   } else if (displayState.isInTune) {
     statusBadge = {

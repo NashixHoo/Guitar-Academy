@@ -9,7 +9,14 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { UserProgress, NavigationTab } from '../../types';
 import { audioEngine } from '../../audio/audioEngine';
-import { guitarPitchDetector, PitchDetectionResult, NOTE_NAMES_PT } from '../../audio/guitarPitchDetector';
+import {
+  guitarPitchDetector,
+  PitchDetectionResult,
+  NOTE_NAMES_PT,
+  normalizeNoteName,
+  validateDetectedNoteAgainstExpected,
+  ChordEvaluationResult
+} from '../../audio/guitarPitchDetector';
 import { CHORD_DATABASE } from '../../data/chordDatabase';
 import { ChordDiagram } from '../chords/ChordDiagram';
 import { getChordShapes } from '../../chords/shapes';
@@ -100,6 +107,173 @@ const DEFAULT_DRILL_SETS: DrillSet[] = [
 ];
 
 export type CoachDifficulty = 'Iniciante' | 'Intermediário' | 'Avançado' | 'Desafio';
+export type CoachValidationMode = 'arpeggio_all_notes' | 'simultaneous_spectrum';
+
+export interface CoachSummaryData {
+  totalSwitches: number;
+  confirmedSwitches: number;
+  harmonicMatchesCount: number;
+  harmonicMismatchesCount: number;
+  accuracyPercent: number | null;
+  durationSeconds: number;
+  bpm: number;
+  drillName: string;
+  hasValidAudioEvidence: boolean;
+}
+
+export function computeCoachSessionSummary(params: {
+  totalSwitches: number;
+  confirmedSwitches: number;
+  harmonicMatchesCount: number;
+  harmonicMismatchesCount: number;
+  durationSeconds: number;
+  bpm: number;
+  drillName: string;
+}): CoachSummaryData {
+  const totalDetections = params.harmonicMatchesCount + params.harmonicMismatchesCount;
+  const accuracyPercent = totalDetections > 0
+    ? Math.round((params.harmonicMatchesCount / totalDetections) * 100)
+    : null;
+
+  return {
+    totalSwitches: params.totalSwitches,
+    confirmedSwitches: params.confirmedSwitches,
+    harmonicMatchesCount: params.harmonicMatchesCount,
+    harmonicMismatchesCount: params.harmonicMismatchesCount,
+    accuracyPercent,
+    durationSeconds: params.durationSeconds,
+    bpm: params.bpm,
+    drillName: params.drillName,
+    hasValidAudioEvidence: totalDetections > 0 && accuracyPercent !== null,
+  };
+}
+
+export function evaluateMonophonicChordStep(
+  pitch: PitchDetectionResult,
+  expectedChordNotesRaw: string[],
+  alreadyConfirmedNotes: string[],
+  options?: { toleranceCents?: number; minConfidence?: number }
+): {
+  outcome: 'chord_note_hit' | 'wrong_note' | 'unidentified' | 'silence' | 'polyphonic' | 'out_of_tune';
+  detectedNote: string | null;
+  updatedConfirmedNotes: string[];
+  missingNotes: string[];
+  chordCompleted: boolean;
+  message: string;
+} {
+  const expectedNotes = Array.from(new Set(expectedChordNotesRaw.map(normalizeNoteName).filter(Boolean)));
+  const currentConfirmed = Array.from(new Set(alreadyConfirmedNotes.map(normalizeNoteName).filter(Boolean)));
+
+  if (!pitch || pitch.isSilence || pitch.detectionType === 'silence') {
+    return {
+      outcome: 'silence',
+      detectedNote: null,
+      updatedConfirmedNotes: currentConfirmed,
+      missingNotes: expectedNotes.filter((n) => !currentConfirmed.includes(n)),
+      chordCompleted: expectedNotes.length > 0 && expectedNotes.every((n) => currentConfirmed.includes(n)),
+      message: 'Aguardando som do instrumento...'
+    };
+  }
+
+  if (pitch.detectionType === 'polyphonic_ambiguous') {
+    return {
+      outcome: 'polyphonic',
+      detectedNote: null,
+      updatedConfirmedNotes: currentConfirmed,
+      missingNotes: expectedNotes.filter((n) => !currentConfirmed.includes(n)),
+      chordCompleted: false,
+      message: 'Várias notas simultâneas — no modo arpejo, toque uma corda de cada vez.'
+    };
+  }
+
+  const minConf = options?.minConfidence ?? 0.65;
+  const tolCents = options?.toleranceCents ?? 35;
+
+  if (
+    pitch.detectionType !== 'monophonic_note' ||
+    pitch.isWeakSignal ||
+    !pitch.note ||
+    pitch.frequency <= 0 ||
+    pitch.confidence < minConf ||
+    pitch.isReliable === false
+  ) {
+    return {
+      outcome: 'unidentified',
+      detectedNote: null,
+      updatedConfirmedNotes: currentConfirmed,
+      missingNotes: expectedNotes.filter((n) => !currentConfirmed.includes(n)),
+      chordCompleted: false,
+      message: 'Não foi possível identificar a nota'
+    };
+  }
+
+  // Valida oitava plausível de guitarra/violão (E1/E2 até C6)
+  if (pitch.octave !== null && (pitch.octave < 1 || pitch.octave > 6)) {
+    return {
+      outcome: 'unidentified',
+      detectedNote: null,
+      updatedConfirmedNotes: currentConfirmed,
+      missingNotes: expectedNotes.filter((n) => !currentConfirmed.includes(n)),
+      chordCompleted: false,
+      message: 'Não foi possível identificar a nota'
+    };
+  }
+
+  const normDetected = normalizeNoteName(pitch.note);
+  const inChord = expectedNotes.includes(normDetected);
+
+  if (inChord) {
+    if (Math.abs(pitch.cents) > tolCents) {
+      return {
+        outcome: 'out_of_tune',
+        detectedNote: normDetected,
+        updatedConfirmedNotes: currentConfirmed,
+        missingNotes: expectedNotes.filter((n) => !currentConfirmed.includes(n)),
+        chordCompleted: false,
+        message: `Nota ${normDetected} desafinada (${pitch.cents > 0 ? '+' : ''}${pitch.cents}¢) — ajuste dentro de ±${tolCents}¢`
+      };
+    }
+
+    const updatedSet = Array.from(new Set([...currentConfirmed, normDetected]));
+    const missing = expectedNotes.filter((n) => !updatedSet.includes(n));
+    const completed = expectedNotes.length > 0 && missing.length === 0;
+    return {
+      outcome: 'chord_note_hit',
+      detectedNote: normDetected,
+      updatedConfirmedNotes: updatedSet,
+      missingNotes: missing,
+      chordCompleted: completed,
+      message: completed
+        ? `Acorde completo validado! Todas as notas confirmadas (${updatedSet.join(' - ')})`
+        : `Nota ${normDetected} confirmada (${updatedSet.length}/${expectedNotes.length}). Faltam: ${missing.join(', ')}`
+    };
+  }
+
+  const validation = validateDetectedNoteAgainstExpected(pitch, expectedNotes[0] || '', {
+    toleranceCents: tolCents,
+    minConfidence: minConf
+  });
+
+  if (validation.isWrongNote && validation.detectedNote) {
+    return {
+      outcome: 'wrong_note',
+      detectedNote: validation.detectedNote,
+      updatedConfirmedNotes: currentConfirmed,
+      missingNotes: expectedNotes.filter((n) => !currentConfirmed.includes(n)),
+      chordCompleted: false,
+      message: `Nota diferente detectada: ${validation.detectedNote}${pitch.octave ?? ''} (${pitch.frequency.toFixed(1)} Hz) — esperado [${expectedNotes.join(', ')}]`
+    };
+  }
+
+  return {
+    outcome: 'unidentified',
+    detectedNote: null,
+    updatedConfirmedNotes: currentConfirmed,
+    missingNotes: expectedNotes.filter((n) => !currentConfirmed.includes(n)),
+    chordCompleted: false,
+    message: 'Não foi possível identificar a nota'
+  };
+}
 
 export const GuitarCoachView: React.FC<GuitarCoachViewProps> = ({
   progress,
@@ -132,34 +306,43 @@ export const GuitarCoachView: React.FC<GuitarCoachViewProps> = ({
   const [isMicActive, setIsMicActive] = useState<boolean>(false);
   const [micErrorMessage, setMicErrorMessage] = useState<string | null>(null);
   const [currentPitch, setCurrentPitch] = useState<PitchDetectionResult | null>(null);
+  const [validationMode, setValidationMode] = useState<CoachValidationMode>('arpeggio_all_notes');
+  const [confirmedChordNotes, setConfirmedChordNotes] = useState<string[]>([]);
 
   // Métricas Acústicas do Treino
   const [acousticallyConfirmedSwitches, setAcousticallyConfirmedSwitches] = useState<number>(0);
   const [harmonicMatchesCount, setHarmonicMatchesCount] = useState<number>(0);
   const [harmonicMismatchesCount, setHarmonicMismatchesCount] = useState<number>(0);
   const [audioFeedbackText, setAudioFeedbackText] = useState<string>('Microfone desativado');
-  const [lastDetectedNoteMatch, setLastDetectedNoteMatch] = useState<'root' | 'chord_tone' | 'outside' | null>(null);
+  const [lastDetectedNoteMatch, setLastDetectedNoteMatch] = useState<'root' | 'chord_tone' | 'outside' | 'unidentified' | null>(null);
 
   // Modal / Resumo pós-treino
   const [showSummaryModal, setShowSummaryModal] = useState<boolean>(false);
-  const [summaryData, setSummaryData] = useState<{
-    totalSwitches: number;
-    confirmedSwitches: number;
-    accuracyPercent: number;
-    durationSeconds: number;
-    bpm: number;
-    drillName: string;
-  } | null>(null);
+  const [summaryData, setSummaryData] = useState<CoachSummaryData | null>(null);
 
-  // Refs de sincronização
+  // Refs de sincronização (eliminam closures obsoletas em callbacks assíncronos de áudio e timer)
   const isRunningRef = useRef<boolean>(false);
   isRunningRef.current = isRunning;
+  const isMicActiveRef = useRef<boolean>(false);
+  isMicActiveRef.current = isMicActive;
+  const validationModeRef = useRef<CoachValidationMode>('arpeggio_all_notes');
+  validationModeRef.current = validationMode;
   const timerIntervalRef = useRef<number | null>(null);
   const currentChordIdxRef = useRef<number>(0);
   currentChordIdxRef.current = currentChordIndex;
   const currentBarRef = useRef<number>(1);
   currentBarRef.current = currentBar;
   const switchWindowHitRef = useRef<boolean>(false);
+
+  const totalSwitchesRef = useRef<number>(0);
+  const confirmedSwitchesRef = useRef<number>(0);
+  const harmonicMatchesRef = useRef<number>(0);
+  const harmonicMismatchesRef = useRef<number>(0);
+  const elapsedSecondsRef = useRef<number>(0);
+  const confirmedNotesForWindowRef = useRef<string[]>([]);
+  const frameConfirmStreakRef = useRef<{ note: string | null; count: number }>({ note: null, count: 0 });
+  const wrongStreakRef = useRef<{ note: string | null; count: number }>({ note: null, count: 0 });
+  const chordEvalThrottleRef = useRef<number>(0);
 
   // Determina número de compassos por acorde baseado no nível
   const barsPerChord = useMemo(() => {
@@ -198,10 +381,13 @@ export const GuitarCoachView: React.FC<GuitarCoachViewProps> = ({
       frets: activeShape?.frets || [-1, -1, -1, -1, -1, -1],
       fingers: activeShape?.fingers || [0, 0, 0, 0, 0, 0],
       baseFret: activeShape?.baseFret || 1,
-      barre: (activeShape as any)?.barre || fromDb?.barre,
+      barre: (activeShape as { barre?: { fret: number; fromString: number; toString: number } })?.barre || fromDb?.barre,
       description: fromDb?.description || 'Toque as cordas com clareza e ritmo firme.'
     };
   }, [currentChordSymbol]);
+
+  const currentChordDetailsRef = useRef(currentChordDetails);
+  currentChordDetailsRef.current = currentChordDetails;
 
   // Próximo acorde info
   const nextChordDetails = useMemo(() => {
@@ -214,15 +400,33 @@ export const GuitarCoachView: React.FC<GuitarCoachViewProps> = ({
       frets: activeShape?.frets || [-1, -1, -1, -1, -1, -1],
       fingers: activeShape?.fingers || [0, 0, 0, 0, 0, 0],
       baseFret: activeShape?.baseFret || 1,
-      barre: (activeShape as any)?.barre || fromDb?.barre
+      barre: (activeShape as { barre?: { fret: number; fromString: number; toString: number } })?.barre || fromDb?.barre
     };
   }, [nextChordSymbol]);
+
+  const drillNameCurrent = isCustomMode
+    ? 'Sequência Personalizada'
+    : drillSets.find(d => d.id === selectedSetId)?.name || 'Treino de Acordes';
+  const drillNameRef = useRef(drillNameCurrent);
+  drillNameRef.current = drillNameCurrent;
+  const bpmRef = useRef(bpm);
+  bpmRef.current = bpm;
+
+  // Reseta rastreamento da janela acústica ao trocar de acorde
+  useEffect(() => {
+    confirmedNotesForWindowRef.current = [];
+    setConfirmedChordNotes([]);
+    frameConfirmStreakRef.current = { note: null, count: 0 };
+    wrongStreakRef.current = { note: null, count: 0 };
+    switchWindowHitRef.current = false;
+  }, [currentChordIndex, currentChordSymbol]);
 
   // Iniciar / Parar Microfone de forma segura
   const toggleMicrophone = async () => {
     if (isMicActive) {
       guitarPitchDetector.stopListening();
       setIsMicActive(false);
+      isMicActiveRef.current = false;
       setIsMicEnabled(false);
       setCurrentPitch(null);
       setAudioFeedbackText('Microfone desligado');
@@ -232,7 +436,6 @@ export const GuitarCoachView: React.FC<GuitarCoachViewProps> = ({
     setMicErrorMessage(null);
     setAudioFeedbackText('Iniciando captura de áudio...');
 
-    // Assegura inicialização do contexto de áudio compartilhado
     const audioCtx = await audioEngine.initAudio();
 
     const result = await guitarPitchDetector.startListening((pitch) => {
@@ -243,73 +446,147 @@ export const GuitarCoachView: React.FC<GuitarCoachViewProps> = ({
 
     if (result.success) {
       setIsMicActive(true);
+      isMicActiveRef.current = true;
       setIsMicEnabled(true);
-      setAudioFeedbackText('Microfone ativo: captando frequência real...');
+      setAudioFeedbackText('Microfone ativo: aguardando som do instrumento...');
     } else {
       setIsMicActive(false);
+      isMicActiveRef.current = false;
       setIsMicEnabled(false);
       setMicErrorMessage(result.error || 'Falha ao acessar o microfone.');
       setAudioFeedbackText('Erro no microfone');
     }
   };
 
-  // Análise Acústica da Nota Tocada vs Acorde Atual
+  // Análise Acústica Real via Refs (sempre compara contra o acorde ativo no instante atual)
   const handlePitchAcousticAnalysis = (pitch: PitchDetectionResult) => {
-    if (!isRunningRef.current || pitch.isSilence || !pitch.note) {
+    if (!isRunningRef.current) return;
+
+    if (pitch.audioGraphHealthy === false && pitch.diagnosticMessage) {
+      setAudioFeedbackText(pitch.diagnosticMessage);
       return;
     }
 
-    const detectedNote = pitch.note.toUpperCase();
-    const chordRoot = currentChordDetails.root.toUpperCase();
-    const chordNotes = currentChordDetails.notes.map(n => n.toUpperCase());
-
-    // Se detectou polifonia ambígua, alerta no HUD sem punir
-    if (pitch.detectionType === 'polyphonic_ambiguous') {
-      setAudioFeedbackText('Polifonia detectada: para afinação precisa, toque a tônica isolada.');
+    if (pitch.isSilence || pitch.detectionType === 'silence') {
+      frameConfirmStreakRef.current = { note: null, count: 0 };
+      wrongStreakRef.current = { note: null, count: 0 };
       return;
     }
 
-    // 1. Tônica exata detectada (alta prioridade)
-    if (detectedNote === chordRoot) {
-      setLastDetectedNoteMatch('root');
-      setAudioFeedbackText(`Excelente! Tônica ${detectedNote} confirmada (${pitch.frequency} Hz, ${pitch.stabilityLabel})`);
-      setHarmonicMatchesCount(prev => prev + 1);
+    const liveChord = currentChordDetailsRef.current;
+    const expectedNotes = liveChord.notes;
 
-      // Marca confirmação de transição acústica na janela do primeiro tempo
-      if (!switchWindowHitRef.current) {
-        switchWindowHitRef.current = true;
-        setAcousticallyConfirmedSwitches(prev => prev + 1);
+    // MODO B: Validação Espectral Simultânea de Acordes (exige todas as notas do acorde)
+    if (validationModeRef.current === 'simultaneous_spectrum') {
+      const now = performance.now();
+      if (now - chordEvalThrottleRef.current < 160) return;
+      chordEvalThrottleRef.current = now;
+
+      const chordEval: ChordEvaluationResult = guitarPitchDetector.evaluateCurrentChord(expectedNotes);
+      setConfirmedChordNotes(chordEval.recognizedNotes);
+
+      if (chordEval.status === 'noise' || chordEval.status === 'unidentified') {
+        setLastDetectedNoteMatch('unidentified');
+        setAudioFeedbackText('Não foi possível identificar a nota');
+        return;
+      }
+
+      if (chordEval.isChordConfirmed) {
+        setLastDetectedNoteMatch('root');
+        setAudioFeedbackText(chordEval.message);
+        harmonicMatchesRef.current += 1;
+        setHarmonicMatchesCount(harmonicMatchesRef.current);
+
+        if (!switchWindowHitRef.current) {
+          switchWindowHitRef.current = true;
+          confirmedSwitchesRef.current += 1;
+          setAcousticallyConfirmedSwitches(confirmedSwitchesRef.current);
+        }
+      } else if (chordEval.unexpectedNotes.length > 0 && chordEval.recognizedNotes.length > 0) {
+        setLastDetectedNoteMatch('outside');
+        setAudioFeedbackText(chordEval.message);
+        harmonicMismatchesRef.current += 1;
+        setHarmonicMismatchesCount(harmonicMismatchesRef.current);
+      } else {
+        setLastDetectedNoteMatch('unidentified');
+        setAudioFeedbackText(chordEval.message);
       }
       return;
     }
 
-    // 2. Nota integrante do acorde (terça, quinta ou sétima)
-    if (chordNotes.includes(detectedNote)) {
-      setLastDetectedNoteMatch('chord_tone');
-      setAudioFeedbackText(`Nota do acorde: ${detectedNote} (${pitch.frequency} Hz, ${pitch.stabilityLabel})`);
-      setHarmonicMatchesCount(prev => prev + 1);
+    // MODO A (Padrão Seguro): Validação Nota por Nota / Arpejo — aprova o acorde SOMENTE após confirmar todas as notas esperadas
+    const step = evaluateMonophonicChordStep(pitch, expectedNotes, confirmedNotesForWindowRef.current, {
+      toleranceCents: 35,
+      minConfidence: 0.65,
+    });
 
-      if (!switchWindowHitRef.current) {
+    if (step.outcome === 'unidentified' || step.outcome === 'polyphonic' || step.outcome === 'out_of_tune') {
+      frameConfirmStreakRef.current = { note: null, count: 0 };
+      wrongStreakRef.current = { note: null, count: 0 };
+      setLastDetectedNoteMatch('unidentified');
+      setAudioFeedbackText(step.message);
+      return;
+    }
+
+    if (step.outcome === 'chord_note_hit' && step.detectedNote) {
+      wrongStreakRef.current = { note: null, count: 0 };
+      if (frameConfirmStreakRef.current.note === step.detectedNote) {
+        frameConfirmStreakRef.current.count += 1;
+      } else {
+        frameConfirmStreakRef.current = { note: step.detectedNote, count: 1 };
+      }
+
+      // Exige 2 quadros consecutivos estáveis para não contar ruído ou ataque transitório
+      if (frameConfirmStreakRef.current.count < 2) {
+        return;
+      }
+
+      const wasAlreadyCountedThisNote = confirmedNotesForWindowRef.current.includes(step.detectedNote);
+      confirmedNotesForWindowRef.current = step.updatedConfirmedNotes;
+      setConfirmedChordNotes(step.updatedConfirmedNotes);
+
+      const normRoot = normalizeNoteName(liveChord.root);
+      setLastDetectedNoteMatch(step.detectedNote === normRoot ? 'root' : 'chord_tone');
+      setAudioFeedbackText(step.message);
+
+      if (!wasAlreadyCountedThisNote) {
+        harmonicMatchesRef.current += 1;
+        setHarmonicMatchesCount(harmonicMatchesRef.current);
+      }
+
+      // Acorde só é confirmado quando TODAS as notas esperadas tiverem sido confirmadas
+      if (step.chordCompleted && !switchWindowHitRef.current) {
         switchWindowHitRef.current = true;
-        setAcousticallyConfirmedSwitches(prev => prev + 1);
+        confirmedSwitchesRef.current += 1;
+        setAcousticallyConfirmedSwitches(confirmedSwitchesRef.current);
       }
       return;
     }
 
-    // 3. Nota fora do acorde
-    if (pitch.confidence > 0.70 && !pitch.isWeakSignal) {
-      setLastDetectedNoteMatch('outside');
-      setAudioFeedbackText(`Nota fora: ${detectedNote} (${pitch.frequency} Hz) — Alvo do acorde: ${chordRoot} [${chordNotes.join(', ')}]`);
-      setHarmonicMismatchesCount(prev => prev + 1);
+    if (step.outcome === 'wrong_note' && step.detectedNote) {
+      frameConfirmStreakRef.current = { note: null, count: 0 };
+      if (wrongStreakRef.current.note === step.detectedNote) {
+        wrongStreakRef.current.count += 1;
+      } else {
+        wrongStreakRef.current = { note: step.detectedNote, count: 1 };
+      }
+
+      // Só contabiliza erro após 2 quadros consecutivos estáveis de uma nota diferente reconhecida
+      if (wrongStreakRef.current.count === 2) {
+        setLastDetectedNoteMatch('outside');
+        setAudioFeedbackText(step.message);
+        harmonicMismatchesRef.current += 1;
+        setHarmonicMismatchesCount(harmonicMismatchesRef.current);
+      }
     }
   };
 
   // Iniciar Sessão de Treino com Metrônomo do Guitar Academy
   const startCoachSession = async () => {
-    // Inicializa motor de áudio único
     await audioEngine.initAudio();
 
     setIsRunning(true);
+    isRunningRef.current = true;
     setCurrentChordIndex(0);
     setCurrentBar(1);
     setCurrentBeat(1);
@@ -318,77 +595,79 @@ export const GuitarCoachView: React.FC<GuitarCoachViewProps> = ({
     setAcousticallyConfirmedSwitches(0);
     setHarmonicMatchesCount(0);
     setHarmonicMismatchesCount(0);
+    setConfirmedChordNotes([]);
+    setLastDetectedNoteMatch(null);
+
+    totalSwitchesRef.current = 0;
+    confirmedSwitchesRef.current = 0;
+    harmonicMatchesRef.current = 0;
+    harmonicMismatchesRef.current = 0;
+    elapsedSecondsRef.current = 0;
+    confirmedNotesForWindowRef.current = [];
+    frameConfirmStreakRef.current = { note: null, count: 0 };
+    wrongStreakRef.current = { note: null, count: 0 };
     switchWindowHitRef.current = false;
     currentChordIdxRef.current = 0;
     currentBarRef.current = 1;
 
-    // Se o microfone estiver ativado nas opções mas ainda não aberto, tenta abrir
-    if (isMicEnabled && !isMicActive) {
+    if (isMicEnabled && !isMicActiveRef.current) {
       toggleMicrophone();
     }
 
-    // Timer cronômetro em segundos
     timerIntervalRef.current = window.setInterval(() => {
-      setElapsedSeconds(prev => {
-        const next = prev + 1;
-        if (sessionDurationMinutes > 0 && next >= sessionDurationMinutes * 60) {
-          stopCoachSession(true);
-        }
-        return next;
-      });
+      elapsedSecondsRef.current += 1;
+      const next = elapsedSecondsRef.current;
+      setElapsedSeconds(next);
+      if (sessionDurationMinutes > 0 && next >= sessionDurationMinutes * 60) {
+        stopCoachSession();
+      }
     }, 1000);
 
-    // Inicia o Metrônomo oficial do AudioEngine (zero concorrência de áudio!)
     audioEngine.startMetronome(
       bpm,
       4,
       'quarter',
       true,
-      (beatIdx, measureIdx, isAccent) => {
+      (beatIdx, _measureIdx, isAccent) => {
         const beatNum = beatIdx + 1;
         setCurrentBeat(beatNum);
         setIsBeatAccent(isAccent);
 
-        // Lógica de avanço de compasso e troca de acorde
         if (beatNum === 1) {
-          switchWindowHitRef.current = false; // reseta janela acústica para a nova batida 1
-
           setCurrentBar(prevBar => {
             const nextBar = prevBar + 1;
 
-            // Verifica se atingiu o limite de compassos do acorde
             if (barsPerChord === 0.5) {
-              // Modo Desafio: troca também no tempo 3 (tratado abaixo)
               return 1;
             } else if (nextBar > barsPerChord) {
-              // Troca para o próximo acorde na batida 1
               setCurrentChordIndex(prevIdx => {
                 const newIdx = prevIdx + 1;
                 currentChordIdxRef.current = newIdx;
                 return newIdx;
               });
-              setTotalSwitches(prev => prev + 1);
+              totalSwitchesRef.current += 1;
+              setTotalSwitches(totalSwitchesRef.current);
               return 1;
             }
             return nextBar;
           });
         } else if (barsPerChord === 0.5 && beatNum === 3) {
-          // Desafio: troca de acorde no tempo 3 do compasso
-          switchWindowHitRef.current = false;
           setCurrentChordIndex(prevIdx => {
             const newIdx = prevIdx + 1;
             currentChordIdxRef.current = newIdx;
             return newIdx;
           });
-          setTotalSwitches(prev => prev + 1);
+          totalSwitchesRef.current += 1;
+          setTotalSwitches(totalSwitchesRef.current);
         }
       }
     );
   };
 
-  // Parar Sessão
-  const stopCoachSession = (completed = false) => {
+  // Parar Sessão (lê Refs ao vivo — zero stale closures, zero precisão inventada)
+  const stopCoachSession = () => {
     setIsRunning(false);
+    isRunningRef.current = false;
     audioEngine.stopMetronome();
 
     if (timerIntervalRef.current) {
@@ -396,49 +675,43 @@ export const GuitarCoachView: React.FC<GuitarCoachViewProps> = ({
       timerIntervalRef.current = null;
     }
 
-    const currentTotalSwitches = totalSwitches;
-    const currentConfirmed = acousticallyConfirmedSwitches;
-    const totalDetections = harmonicMatchesCount + harmonicMismatchesCount;
-    const accuracy = totalDetections > 0 
-      ? Math.round((harmonicMatchesCount / totalDetections) * 100) 
-      : isMicActive ? 50 : 100;
-
-    const drillName = isCustomMode 
-      ? 'Sequência Personalizada' 
-      : drillSets.find(d => d.id === selectedSetId)?.name || 'Treino de Acordes';
-
-    setSummaryData({
-      totalSwitches: currentTotalSwitches,
-      confirmedSwitches: currentConfirmed,
-      accuracyPercent: accuracy,
-      durationSeconds: elapsedSeconds,
-      bpm,
-      drillName
+    const summary = computeCoachSessionSummary({
+      totalSwitches: totalSwitchesRef.current,
+      confirmedSwitches: confirmedSwitchesRef.current,
+      harmonicMatchesCount: harmonicMatchesRef.current,
+      harmonicMismatchesCount: harmonicMismatchesRef.current,
+      durationSeconds: elapsedSecondsRef.current,
+      bpm: bpmRef.current,
+      drillName: drillNameRef.current,
     });
 
+    setSummaryData(summary);
     setShowSummaryModal(true);
   };
 
-  // Salvar Prática no Progresso
+  // Salvar Prática no Progresso (apenas com evidência sonora válida para áudio; sem inflar métricas em silêncio/ruído)
   const handleSaveProgress = () => {
     if (!summaryData) return;
-    const timeSpent = Math.max(30, summaryData.durationSeconds);
+    const timeSpent = Math.max(10, summaryData.durationSeconds);
 
     let updatedProfile = progress.pedagogicalProfile || createInitialPedagogicalProfile();
-    // Somente atualiza métricas de áudio quando houver uma medição real disponível (Fase 3, Regra 3)
-    if (summaryData.confirmedSwitches > 0 && isMicActive) {
+    if (
+      summaryData.hasValidAudioEvidence &&
+      summaryData.accuracyPercent !== null &&
+      summaryData.confirmedSwitches > 0 &&
+      isMicActiveRef.current
+    ) {
       updatedProfile = recordSkillEvidence(updatedProfile, 'skill-chord-transitions', {
         source: 'guitar_coach_audio',
         score: summaryData.accuracyPercent,
         accuracyPercent: summaryData.accuracyPercent,
-        details: `Sessão Guitar Coach: ${summaryData.confirmedSwitches}/${summaryData.totalSwitches} trocas confirmadas acusticamente (${summaryData.accuracyPercent}% precisão a ${summaryData.bpm} BPM).`,
+        details: `Sessão Guitar Coach: ${summaryData.confirmedSwitches}/${summaryData.totalSwitches} acordes confirmados acusticamente (${summaryData.accuracyPercent}% precisão a ${summaryData.bpm} BPM).`,
       });
-    } else {
-      // Treino sem medição acústica comprovada: registra repetições motoras com metrônomo
+    } else if (!isMicActiveRef.current && summaryData.totalSwitches > 0) {
       updatedProfile = recordSkillEvidence(updatedProfile, 'skill-chord-transitions', {
         source: 'exercise_repetitions',
         score: Math.min(100, 50 + summaryData.totalSwitches * 3),
-        details: `Sessão Guitar Coach: ${summaryData.totalSwitches} trocas praticadas com metrônomo a ${summaryData.bpm} BPM.`,
+        details: `Sessão Guitar Coach sem microfone: ${summaryData.totalSwitches} trocas praticadas com metrônomo a ${summaryData.bpm} BPM.`,
       });
     }
 
@@ -459,7 +732,6 @@ export const GuitarCoachView: React.FC<GuitarCoachViewProps> = ({
     setShowSummaryModal(false);
   };
 
-  // Desmontagem: garante parada de áudio e microfone
   useEffect(() => {
     return () => {
       audioEngine.stopMetronome();
@@ -858,51 +1130,116 @@ export const GuitarCoachView: React.FC<GuitarCoachViewProps> = ({
 
         {/* Monitor Acústico em Tempo Real (Web Audio + Microfone) */}
         <div className="rounded-2xl bg-black/40 border border-white/10 p-4 text-left max-w-2xl mx-auto space-y-3">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <Activity className="w-4 h-4 text-[#10b981]" />
               <span className="text-xs font-bold text-white uppercase tracking-wider">
                 Monitor Acústico da Guitarra Real
               </span>
             </div>
-            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-              isMicActive ? 'bg-[#10b981]/20 text-[#10b981]' : 'bg-white/10 text-[#A6A6B2]'
-            }`}>
-              {isMicActive ? 'Captação Ativa' : 'Microfone Desligado'}
-            </span>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center rounded-lg bg-white/10 p-0.5 text-[10px]">
+                <button
+                  type="button"
+                  onClick={() => setValidationMode('arpeggio_all_notes')}
+                  disabled={isRunning}
+                  className={`px-2 py-0.5 rounded font-bold transition ${
+                    validationMode === 'arpeggio_all_notes'
+                      ? 'bg-[#7B1E2B] text-white'
+                      : 'text-[#A6A6B2] hover:text-white'
+                  }`}
+                >
+                  Arpejo (Nota a Nota)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setValidationMode('simultaneous_spectrum')}
+                  disabled={isRunning}
+                  className={`px-2 py-0.5 rounded font-bold transition ${
+                    validationMode === 'simultaneous_spectrum'
+                      ? 'bg-[#7B1E2B] text-white'
+                      : 'text-[#A6A6B2] hover:text-white'
+                  }`}
+                >
+                  Acorde Simultâneo (Espectro)
+                </button>
+              </div>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                isMicActive ? 'bg-[#10b981]/20 text-[#10b981]' : 'bg-white/10 text-[#A6A6B2]'
+              }`}>
+                {isMicActive ? 'Captação Ativa' : 'Microfone Desligado'}
+              </span>
+            </div>
           </div>
+
+          {/* Progresso por Nota do Acorde Atual (nunca aprova com apenas 1 nota) */}
+          {currentChordDetails.notes.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+              <span className="text-[10px] text-[#A6A6B2] mr-1">
+                Notas exigidas para confirmar {currentChordDetails.symbol}:
+              </span>
+              {currentChordDetails.notes.map((n) => {
+                const norm = normalizeNoteName(n);
+                const hit = confirmedChordNotes.includes(norm);
+                return (
+                  <span
+                    key={n}
+                    className={`px-2 py-0.5 rounded text-[11px] font-black border transition ${
+                      hit
+                        ? 'bg-[#10b981]/20 border-[#10b981] text-[#10b981]'
+                        : 'bg-white/5 border-white/15 text-[#A6A6B2]'
+                    }`}
+                  >
+                    {hit ? `✓ ${n}` : n}
+                  </span>
+                );
+              })}
+            </div>
+          )}
 
           {isMicActive && currentPitch && !currentPitch.isSilence ? (
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 text-xs">
               <div className="p-2 rounded-lg bg-white/5 border border-white/5">
                 <span className="text-[10px] text-[#A6A6B2] block">Nota Tocada:</span>
                 <strong className="text-sm font-black text-white">
-                  {currentPitch.note || '-'} {currentPitch.octave ? `(${currentPitch.octave})` : ''}
+                  {currentPitch.detectionType === 'monophonic_note' && currentPitch.note
+                    ? `${currentPitch.note}${currentPitch.octave !== null ? ` (${currentPitch.octave})` : ''}`
+                    : '—'}
                 </strong>
                 <span className="text-[10px] text-[#A6A6B2] block">
-                  {currentPitch.notePt || ''}
+                  {currentPitch.detectionType === 'monophonic_note' && currentPitch.notePt
+                    ? currentPitch.notePt
+                    : currentPitch.detectionType === 'polyphonic_ambiguous'
+                    ? 'Polifonia'
+                    : 'Não identificada'}
                 </span>
               </div>
               <div className="p-2 rounded-lg bg-white/5 border border-white/5">
                 <span className="text-[10px] text-[#A6A6B2] block">Frequência:</span>
                 <strong className="text-sm font-bold text-white">
-                  {currentPitch.frequency.toFixed(1)} Hz
+                  {currentPitch.frequency > 0 ? `${currentPitch.frequency.toFixed(1)} Hz` : '—'}
                 </strong>
                 <span className={`text-[10px] font-semibold block ${
-                  Math.abs(currentPitch.cents) <= 8 ? 'text-[#10b981]' : 'text-amber-400'
+                  currentPitch.frequency <= 0
+                    ? 'text-[#A6A6B2]'
+                    : Math.abs(currentPitch.cents) <= 15
+                    ? 'text-[#10b981]'
+                    : 'text-amber-400'
                 }`}>
-                  {currentPitch.cents > 0 ? `+${currentPitch.cents}` : currentPitch.cents} cents
+                  {currentPitch.frequency > 0
+                    ? `${currentPitch.cents > 0 ? `+${currentPitch.cents}` : currentPitch.cents} cents`
+                    : 'Sem frequência fixa'}
                 </span>
               </div>
               <div className="p-2 rounded-lg bg-white/5 border border-white/5">
-                <span className="text-[10px] text-[#A6A6B2] block">Estabilidade:</span>
+                <span className="text-[10px] text-[#A6A6B2] block">Confiança:</span>
                 <strong className={`text-sm font-bold ${
-                  currentPitch.stability >= 80 ? 'text-[#10b981]' : currentPitch.stability >= 50 ? 'text-amber-400' : 'text-red-400'
+                  currentPitch.confidence >= 0.75 ? 'text-[#10b981]' : currentPitch.confidence >= 0.60 ? 'text-amber-400' : 'text-[#A6A6B2]'
                 }`}>
                   {currentPitch.stabilityLabel}
                 </strong>
                 <span className="text-[10px] text-[#A6A6B2] block">
-                  {currentPitch.stability}% confiança
+                  {Math.round(currentPitch.confidence * 100)}% confiança
                 </span>
               </div>
               <div className="p-2 rounded-lg bg-white/5 border border-white/5">
@@ -913,13 +1250,21 @@ export const GuitarCoachView: React.FC<GuitarCoachViewProps> = ({
                     : lastDetectedNoteMatch === 'chord_tone' 
                     ? 'text-cyan-400' 
                     : lastDetectedNoteMatch === 'outside' 
-                    ? 'text-amber-400' 
+                    ? 'text-rose-400' 
                     : 'text-[#A6A6B2]'
                 }`}>
-                  {lastDetectedNoteMatch === 'root' ? 'Tônica Perfeita' : lastDetectedNoteMatch === 'chord_tone' ? 'Nota do Acorde' : lastDetectedNoteMatch === 'outside' ? 'Fora do Acorde' : 'Aguardando'}
+                  {lastDetectedNoteMatch === 'root'
+                    ? 'Tônica Confirmada'
+                    : lastDetectedNoteMatch === 'chord_tone'
+                    ? 'Nota do Acorde'
+                    : lastDetectedNoteMatch === 'outside'
+                    ? 'Nota Diferente'
+                    : lastDetectedNoteMatch === 'unidentified'
+                    ? 'Não identificada'
+                    : 'Aguardando'}
                 </strong>
                 <span className="text-[10px] text-[#A6A6B2]">
-                  Alvo: {currentChordDetails.root}
+                  {harmonicMatchesCount} ✓ • {harmonicMismatchesCount} ✗
                 </span>
               </div>
             </div>
@@ -927,9 +1272,11 @@ export const GuitarCoachView: React.FC<GuitarCoachViewProps> = ({
             <div className="text-xs text-[#A6A6B2] py-1 flex items-center gap-2">
               <Info className="w-4 h-4 text-[#A6A6B2] shrink-0" />
               <span>
-                {isMicActive 
-                  ? 'Aguardando toque na guitarra... Toque a tônica ou palhete as cordas do acorde.' 
-                  : 'Ative o microfone para comparar em tempo real a nota que você toca com o acorde alvo.'}
+                {isMicActive
+                  ? validationMode === 'arpeggio_all_notes'
+                    ? `Aguardando som... Toque cada nota do acorde (${currentChordDetails.notes.join(' - ')}) separadamente para validação rigorosa.`
+                    : `Aguardando som... Palhete todas as cordas de ${currentChordDetails.symbol} (${currentChordDetails.notes.join(' - ')}).`
+                  : 'Ative o microfone para comparar em tempo real as notas tocadas com o acorde alvo.'}
               </span>
             </div>
           )}
@@ -952,7 +1299,7 @@ export const GuitarCoachView: React.FC<GuitarCoachViewProps> = ({
             </button>
           ) : (
             <button
-              onClick={() => stopCoachSession(false)}
+              onClick={stopCoachSession}
               className="px-10 py-5 rounded-2xl bg-red-600 text-white hover:bg-red-700 active:scale-95 font-black text-lg sm:text-xl shadow-lg transition flex items-center justify-center gap-3 mx-auto w-full max-w-md"
             >
               <Square className="w-6 h-6 fill-current" />
@@ -1036,10 +1383,14 @@ export const GuitarCoachView: React.FC<GuitarCoachViewProps> = ({
                   Precisão Harmônica
                 </span>
                 <strong className="text-2xl font-black text-[#B52A3A]">
-                  {summaryData.accuracyPercent}%
+                  {summaryData.accuracyPercent !== null ? `${summaryData.accuracyPercent}%` : '—'}
                 </strong>
                 <span className="text-[9px] text-[#666672] block">
-                  {summaryData.accuracyPercent >= 80 ? 'Excelente' : 'Em evolução'}
+                  {summaryData.accuracyPercent === null
+                    ? 'Sem evidência sonora válida'
+                    : summaryData.accuracyPercent >= 80
+                    ? 'Excelente'
+                    : 'Em evolução'}
                 </span>
               </div>
             </div>
@@ -1050,9 +1401,13 @@ export const GuitarCoachView: React.FC<GuitarCoachViewProps> = ({
                 <span>Avaliação do Treinador:</span>
               </strong>
               <p>
-                {summaryData.totalSwitches >= 20
-                  ? 'Impressionante regularidade! O tempo rítmico e a memória muscular dos dedos estão sincronizados.'
-                  : 'Bom começo! Pratique diariamente por 2 minutos para consolidar a velocidade de transição.'}
+                {summaryData.hasValidAudioEvidence
+                  ? `${summaryData.harmonicMatchesCount} nota(s) confirmada(s) e ${summaryData.harmonicMismatchesCount} divergência(s) registradas com evidência acústica real.`
+                  : isMicActive
+                  ? 'Nenhuma nota pôde ser validada com segurança pelo microfone nesta sessão. O progresso não foi alterado com pontuação falsa.'
+                  : summaryData.totalSwitches >= 20
+                  ? 'Boa regularidade rítmica com o metrônomo!'
+                  : 'Pratique com o metrônomo e ative o microfone para validar suas notas.'}
               </p>
             </div>
 
