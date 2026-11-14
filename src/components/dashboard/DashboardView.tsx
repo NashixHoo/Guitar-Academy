@@ -483,29 +483,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
 
-        {/* Professor IA Quick Access */}
-        <div
-          onClick={() => onNavigateTab('professor-ai')}
-          className="bg-white dark:bg-[#1A1216] border border-[#7B1E2B]/40 hover:border-[#7B1E2B] dark:border-[#FF6B81]/40 dark:hover:border-[#FF6B81] p-5 rounded-2xl cursor-pointer transition shadow-2xs group flex flex-col justify-between bg-gradient-to-b from-white to-[#FAF6F6] dark:from-[#1A1216] dark:to-[#22141A]"
-        >
-          <div>
-            <div className="w-10 h-10 rounded-xl bg-[#7B1E2B] flex items-center justify-center text-white mb-3 group-hover:scale-105 transition-transform shadow-xs">
-              <Sparkles className="w-5 h-5 text-white" />
-            </div>
-            <h3 className="font-bold text-[#25252A] dark:text-[#F8F7F4] text-base group-hover:text-[#7B1E2B] dark:group-hover:text-[#FF6B81] transition-colors flex items-center gap-1.5">
-              <span>Professor IA</span>
-              <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-[#7B1E2B]/15 text-[#7B1E2B] dark:bg-[#FF6B81]/15 dark:text-[#FF6B81] font-bold">Gemini</span>
-            </h3>
-            <p className="text-xs text-[#666672] dark:text-[#B8B3C0] mt-1 leading-relaxed">
-              Tira-dúvidas de harmonia, exercícios estruturados com correção e recomendação didática.
-            </p>
-          </div>
-          <div className="mt-4 flex items-center gap-1 text-xs font-bold text-[#7B1E2B] dark:text-[#FF6B81]">
-            <span>Consultar Professor</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </div>
-        </div>
-
         {/* Tuner Pro Quick Access */}
         <div
           onClick={() => onNavigateTab('tuner')}

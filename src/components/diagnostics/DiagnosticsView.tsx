@@ -9,9 +9,7 @@ import {
 import { CURRICULUM_LEVELS } from '../../data/curriculum';
 import { GuitarPitchDetector, PitchDetectionResult } from '../../audio/guitarPitchDetector';
 import { 
-  Activity, 
   HardDrive, 
-  Sparkles, 
   Mic, 
   MicOff, 
   Volume2, 
@@ -21,8 +19,7 @@ import {
   ShieldCheck, 
   GraduationCap, 
   ArrowRight,
-  Database,
-  Cpu
+  Database
 } from 'lucide-react';
 
 interface DiagnosticsViewProps {
@@ -82,76 +79,6 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({
     testLocalStorage();
   }, []);
 
-  // --- 2. AI Server & Endpoint Diagnostics ---
-  const [apiStatus, setApiStatus] = useState<{
-    tested: boolean;
-    loading: boolean;
-    serverOnline: boolean;
-    modelAvailable: boolean;
-    modelName: string;
-    latencyMs: number;
-    message: string;
-    details?: string;
-  }>({
-    tested: false,
-    loading: false,
-    serverOnline: false,
-    modelAvailable: false,
-    modelName: 'gemini-2.5-flash',
-    latencyMs: 0,
-    message: 'Clique para testar conectividade com a API',
-  });
-
-  const testApiAvailability = async () => {
-    setApiStatus((prev) => ({ ...prev, loading: true }));
-    const start = performance.now();
-
-    try {
-      const res = await fetch('/api/professor/status', {
-        headers: { 'Accept': 'application/json' },
-      });
-      const latency = Math.round(performance.now() - start);
-
-      if (res.ok) {
-        const data = await res.json();
-        setApiStatus({
-          tested: true,
-          loading: false,
-          serverOnline: true,
-          modelAvailable: data.available !== false,
-          modelName: data.model || 'gemini-2.5-flash',
-          latencyMs: latency,
-          message: data.available !== false
-            ? 'Servidor Express online e modelo Gemini ativo'
-            : 'Servidor Express online (Chave API não configurada; modo pedagógico resiliente ativo)',
-          details: data.message || 'Pronto para atendimento',
-        });
-      } else {
-        setApiStatus({
-          tested: true,
-          loading: false,
-          serverOnline: true,
-          modelAvailable: false,
-          modelName: 'gemini-2.5-flash',
-          latencyMs: latency,
-          message: `Endpoint respondeu com HTTP ${res.status}`,
-          details: 'Modo contingência local operante',
-        });
-      }
-    } catch {
-      const latency = Math.round(performance.now() - start);
-      setApiStatus({
-        tested: true,
-        loading: false,
-        serverOnline: false,
-        modelAvailable: false,
-        modelName: 'Modo Local',
-        latencyMs: latency,
-        message: 'Servidor não acessível no momento. Modo autônomo offline em operação.',
-        details: 'Todos os recursos locais, afinador, metrônomo e currículo continuam 100% funcionais.',
-      });
-    }
-  };
 
   // --- 3. Microphone & Pitch Detector Diagnostics ---
   const [micActive, setMicActive] = useState<boolean>(false);
@@ -248,19 +175,18 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({
             </span>
           </div>
           <p className="text-xs sm:text-sm text-[#666672] mt-1 font-medium">
-            Verificação transparente em tempo real: armazenamento, conectividade com IA, microfone, perfil pedagógico e consistência do currículo.
+            Verificação transparente em tempo real: armazenamento local, microfone, perfil pedagógico e consistência do currículo.
           </p>
         </div>
 
         <button
           onClick={() => {
             testLocalStorage();
-            testApiAvailability();
           }}
           className="px-4 py-2 rounded-xl bg-[#F8F7F4] hover:bg-[#F5E8EA] text-[#7B1E2B] text-xs font-bold transition border border-[#D9D9D9] flex items-center gap-2"
         >
           <RefreshCw className="w-3.5 h-3.5" />
-          <span>Atualizar Todos os Testes</span>
+          <span>Atualizar Testes Locais</span>
         </button>
       </div>
 
@@ -320,68 +246,6 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({
               <span>Testar Gravação</span>
             </button>
           </div>
-        </div>
-
-        {/* CARD 2: Conexão com API do Professor IA */}
-        <div className="bg-white border border-[#D9D9D9] rounded-2xl p-5 shadow-xs space-y-4">
-          <div className="flex items-center justify-between border-b border-[#EBEBEB] pb-3">
-            <div className="flex items-center gap-2 text-sm font-bold text-[#25252A]">
-              <Sparkles className="w-4 h-4 text-[#7B1E2B]" />
-              <span>Disponibilidade do Professor IA</span>
-            </div>
-            {apiStatus.tested && (
-              <span className={`text-[10px] font-mono-code font-bold px-2 py-0.5 rounded-full ${
-                apiStatus.serverOnline
-                  ? apiStatus.modelAvailable 
-                    ? 'bg-[#EBF7EE] text-[#1E7B34]' 
-                    : 'bg-[#FEF7E8] text-[#8C6B1F]'
-                  : 'bg-[#FDEDEC] text-[#B52A3A]'
-              }`}>
-                {apiStatus.serverOnline 
-                  ? (apiStatus.modelAvailable ? 'Online (Gemini)' : 'Resiliente (Local)')
-                  : 'Modo Offline'}
-              </span>
-            )}
-          </div>
-
-          <div className="p-3.5 bg-[#F8F7F4] rounded-xl border border-[#EBEBEB] text-xs space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-[#666672]">Modelo Configurado:</span>
-              <span className="font-mono-code font-bold text-[#25252A]">{apiStatus.modelName}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-[#666672]">Tempo de Resposta:</span>
-              <span className="font-mono-code font-bold text-[#25252A]">
-                {apiStatus.tested ? `${apiStatus.latencyMs} ms` : 'Não testado'}
-              </span>
-            </div>
-            <p className="text-[11px] text-[#25252A] font-medium leading-relaxed pt-1 border-t border-[#E8E8E8]">
-              {apiStatus.message}
-            </p>
-            {apiStatus.details && (
-              <p className="text-[10px] text-[#666672] italic">
-                {apiStatus.details}
-              </p>
-            )}
-          </div>
-
-          <button
-            onClick={testApiAvailability}
-            disabled={apiStatus.loading}
-            className="w-full py-2.5 rounded-xl bg-[#7B1E2B] hover:bg-[#601721] text-white text-xs font-bold transition flex items-center justify-center gap-2 disabled:opacity-50"
-          >
-            {apiStatus.loading ? (
-              <>
-                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                <span>Testando Endpoints /api...</span>
-              </>
-            ) : (
-              <>
-                <Cpu className="w-3.5 h-3.5" />
-                <span>Testar Conexão Real com a API</span>
-              </>
-            )}
-          </button>
         </div>
 
         {/* CARD 3: Captação de Microfone & Detecção de Pitch Real */}

@@ -8,7 +8,6 @@ import {
   ExecutablePracticeExercise,
   GeneratedRoutine 
 } from '../../pedagogy/practiceRoutineEngine';
-import { professorService } from '../../services/professorService';
 import { 
   Play, 
   Pause, 
@@ -28,7 +27,6 @@ import {
   ChevronRight,
   TrendingUp,
   TrendingDown,
-  BookOpen,
   HelpCircle,
   ShieldCheck,
   Check,
@@ -103,8 +101,7 @@ export const PracticeRoutineView: React.FC<PracticeRoutineViewProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [showExitModal, showSummaryModal]);
 
-  // Dica pedagógica do Professor IA
-  const [isAiLoading, setIsAiLoading] = useState<boolean>(false);
+  // Dica prática local de biomecânica e relaxamento
   const [aiTip, setAiTip] = useState<string | null>(null);
 
   // Feedback toast
@@ -371,34 +368,11 @@ export const PracticeRoutineView: React.FC<PracticeRoutineViewProps> = ({
     setTimeout(() => setFeedbackToast(null), 4000);
   };
 
-  // Solicitar Dica Pedagógica do Professor IA com Fallback Gracioso
-  const handleRequestAiTip = async () => {
-    setIsAiLoading(true);
-    setAiTip(null);
-
-    try {
-      const response = await professorService.askQuestion(
-        `Como guitarrista iniciante/intermediário, qual é a dica biomecânica e prática mais importante para executar com perfeição o exercício: "${activeExercise.title}" a ${currentBpm} BPM?`,
-        {
-          studentLevel: routine.level,
-          currentLessonTitle: activeExercise.title,
-          masteredSkills: [activeExercise.skillId],
-        }
-      );
-
-      if (response && response.reply) {
-        setAiTip(response.reply);
-      } else {
-        throw new Error('Sem resposta');
-      }
-    } catch {
-      // Fallback gracioso local com dicas pedagógicas determinísticas comprovadas
-      setAiTip(
-        `💡 Dica do Professor IA (Modo Resiliente Local): No andamento de ${currentBpm} BPM, foque 100% no relaxamento do polegar atrás do braço da guitarra. ${activeExercise.simplificationStrategy} Não tente acelerar enquanto o som não estiver 100% limpo e sem trastejamento.`
-      );
-    } finally {
-      setIsAiLoading(false);
-    }
+  // Exibir Dica Prática Local de Biomecânica e Execução (sem chamadas externas)
+  const handleRequestAiTip = () => {
+    setAiTip(
+      `💡 Dica Prática de Técnica: No andamento de ${currentBpm} BPM, foque 100% no relaxamento do polegar atrás do braço do instrumento. ${activeExercise.simplificationStrategy} Não tente acelerar enquanto o som não estiver 100% limpo e sem trastejamento.`
+    );
   };
 
   // Formatação de minutos e segundos
@@ -632,12 +606,12 @@ export const PracticeRoutineView: React.FC<PracticeRoutineViewProps> = ({
             </div>
           </div>
 
-          {/* Dica do Professor IA para a Etapa */}
+          {/* Dica Prática de Execução para a Etapa */}
           <div className="bg-white border border-[#D9D9D9] rounded-2xl p-4 shadow-xs space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-[#7B1E2B] uppercase tracking-wider flex items-center gap-1.5">
                 <Sparkles className="w-3.5 h-3.5 text-[#B52A3A]" />
-                <span>Mentor Didático IA</span>
+                <span>Orientação Técnica</span>
               </span>
             </div>
 
@@ -647,26 +621,16 @@ export const PracticeRoutineView: React.FC<PracticeRoutineViewProps> = ({
               </div>
             ) : (
               <p className="text-xs text-[#666672]">
-                Dificuldade técnica neste exercício? Solicite uma dica pontual de relaxamento e biomecânica.
+                Dificuldade técnica neste exercício? Confira uma dica pontual de relaxamento e biomecânica.
               </p>
             )}
 
             <button
               onClick={handleRequestAiTip}
-              disabled={isAiLoading}
-              className="w-full py-2 rounded-xl bg-[#F8F7F4] hover:bg-[#F5E8EA] border border-[#D9D9D9] text-[#7B1E2B] text-xs font-bold transition flex items-center justify-center gap-2 disabled:opacity-50"
+              className="w-full py-2 rounded-xl bg-[#F8F7F4] hover:bg-[#F5E8EA] border border-[#D9D9D9] text-[#7B1E2B] text-xs font-bold transition flex items-center justify-center gap-2"
             >
-              {isAiLoading ? (
-                <>
-                  <RotateCcw className="w-3.5 h-3.5 animate-spin" />
-                  <span>Consultando Professor...</span>
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-3.5 h-3.5" />
-                  <span>Pedir Dica para este Exercício</span>
-                </>
-              )}
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Ver Dica para este Exercício</span>
             </button>
           </div>
         </div>

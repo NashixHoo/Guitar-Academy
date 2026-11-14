@@ -516,7 +516,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ progress, onUpdatePr
               </span>
             </div>
             <p className="text-xs text-[#666672]">
-              Verifique em tempo real o estado do localStorage, conectividade com o Professor IA, captação do microfone, perfil de domínio e a consistência das 21 habilidades e 18 aulas.
+              Verifique em tempo real o estado do localStorage, captação do microfone, perfil de domínio e a consistência das 21 habilidades e 18 aulas.
             </p>
             <div className="pt-2">
               <button

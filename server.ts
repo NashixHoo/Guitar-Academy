@@ -362,9 +362,15 @@ export async function requireAdmin(
   return defaultMiddlewares.requireAdmin(req, res, next);
 }
 
+export function isProfessorIaEnabled(): boolean {
+  return process.env.ENABLE_PROFESSOR_IA === 'true';
+}
+
 // Inicialização segura do SDK Gemini no backend (process.env.GEMINI_API_KEY)
 // Chave NUNCA trafega para o navegador nem é exposta em bundles.
+// Desativada por padrão quando ENABLE_PROFESSOR_IA !== 'true' (operação custo zero).
 function createGeminiClient() {
+  if (!isProfessorIaEnabled()) return null;
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey || apiKey === 'MY_GEMINI_API_KEY') return null;
   return new GoogleGenAI({
@@ -385,7 +391,8 @@ export function createServerApp(deps: ServerAuthDependencies = {}) {
   const requireAdmin = middlewares.requireAdmin;
   const resolveSystemRole = middlewares.resolveSystemRole;
   const recordAdminLog = middlewares.recordAdminLog;
-  const ai = createGeminiClient();
+  const professorIaEnabled = isProfessorIaEnabled();
+  const ai = professorIaEnabled ? createGeminiClient() : null;
   const allowedOrigins = getAllowedOrigins();
 
   // Configuração estrita de CORS por allowlist explícita
@@ -480,25 +487,29 @@ export function createServerApp(deps: ServerAuthDependencies = {}) {
   // 1. Status do Professor IA
   app.get('/api/professor/status', (_req, res) => {
     res.json({
-      available: !!ai,
-      model: 'gemini-3.8-flash',
-      provider: 'Google Gemini',
+      available: professorIaEnabled && !!ai,
+      disabled: !professorIaEnabled,
+      model: professorIaEnabled ? 'gemini-3.8-flash' : 'desativado',
+      provider: professorIaEnabled ? 'Google Gemini' : 'Desativado',
       permissions: {
         studentRoutes: ['/api/professor/chat', '/api/professor/exercise', '/api/professor/evaluate', '/api/professor/recommend'],
         teacherRoutes: ['/api/professor/class-insights'],
         adminRoutes: ['/api/admin/overview', '/api/admin/roles/:uid'],
       },
-      message: ai
+      message: !professorIaEnabled
+        ? 'Professor IA desativado por configuração (operação sem custo de API).'
+        : ai
         ? 'Professor IA operacional via Gemini 3.8 Flash'
-        : 'GEMINI_API_KEY não configurada no ambiente. Adicione a chave nas Configurações.',
+        : 'GEMINI_API_KEY não configurada no ambiente.',
     });
   });
 
   // 2. Chat Contextualizado com Professor IA (student, teacher, admin)
   app.post('/api/professor/chat', requireAuth, requireRole(['student', 'teacher', 'admin']), rateLimiter(20, 60000), async (req, res) => {
-    if (!ai) {
+    if (!professorIaEnabled || !ai) {
       return res.status(503).json({
-        error: 'Serviço do Professor IA indisponível. Configure a chave GEMINI_API_KEY no painel de configurações.',
+        error: 'Professor IA desativado nesta versão.',
+        disabled: true,
       });
     }
 
@@ -572,8 +583,8 @@ DIRETRIZES DA RESPOSTA:
 
   // 3. Gerador de Exercícios Estruturados por Nível (student, teacher, admin)
   app.post('/api/professor/exercise', requireAuth, requireRole(['student', 'teacher', 'admin']), rateLimiter(20, 60000), async (req, res) => {
-    if (!ai) {
-      return res.status(503).json({ error: 'GEMINI_API_KEY não configurada.' });
+    if (!professorIaEnabled || !ai) {
+      return res.status(503).json({ error: 'Professor IA desativado nesta versão.', disabled: true });
     }
 
     const rawLevel = Number(req.body?.level);
@@ -619,8 +630,8 @@ Responda ESTRITAMENTE em formato JSON com o seguinte schema:
 
   // 4. Avaliação e Correção de Respostas / Desempenho (student, teacher, admin)
   app.post('/api/professor/evaluate', requireAuth, requireRole(['student', 'teacher', 'admin']), rateLimiter(20, 60000), async (req, res) => {
-    if (!ai) {
-      return res.status(503).json({ error: 'GEMINI_API_KEY não configurada.' });
+    if (!professorIaEnabled || !ai) {
+      return res.status(503).json({ error: 'Professor IA desativado nesta versão.', disabled: true });
     }
 
     const { question, studentAnswer, correctAnswer, explanation, level = 0 } = req.body || {};
@@ -672,8 +683,8 @@ Responda ESTRITAMENTE em formato JSON com o seguinte schema:
 
   // 5. Recomendação de Próxima Atividade baseada no Progresso (student, teacher, admin)
   app.post('/api/professor/recommend', requireAuth, requireRole(['student', 'teacher', 'admin']), rateLimiter(20, 60000), async (req, res) => {
-    if (!ai) {
-      return res.status(503).json({ error: 'GEMINI_API_KEY não configurada.' });
+    if (!professorIaEnabled || !ai) {
+      return res.status(503).json({ error: 'Professor IA desativado nesta versão.', disabled: true });
     }
 
     const progress = req.body?.progress;
@@ -728,8 +739,8 @@ Responda ESTRITAMENTE em formato JSON com o seguinte schema:
 
   // 6. Análise Pedagógica Agregada de Turmas (EXIGE papel teacher ou admin — bloqueia student com HTTP 403)
   app.post('/api/professor/class-insights', requireAuth, requireRole(['teacher', 'admin']), rateLimiter(15, 60000), async (req, res) => {
-    if (!ai) {
-      return res.status(503).json({ error: 'GEMINI_API_KEY não configurada.' });
+    if (!professorIaEnabled || !ai) {
+      return res.status(503).json({ error: 'Professor IA desativado nesta versão.', disabled: true });
     }
 
     const className = typeof req.body?.className === 'string' ? req.body.className.trim().slice(0, 100) : 'Turma Geral';

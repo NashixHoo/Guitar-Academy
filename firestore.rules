@@ -426,10 +426,11 @@ service cloud.firestore {
     }
 
     // 11. Papéis do Sistema (system_roles):
-    // Acesso de leitura restrito EXCLUSIVAMENTE a administradores (Zero-Trust).
-    // Escrita estritamente bloqueada para todos os clientes (somente via Firebase Admin SDK no servidor).
+    // Leitura individual permitida exclusivamente para o próprio usuário autenticado (seu UID) ou administradores.
+    // Listagem restrita exclusivamente a administradores (Zero-Trust).
+    // Escrita estritamente bloqueada para todos os clientes (somente via Firebase Admin SDK / Console).
     match /system_roles/{userId} {
-      allow get: if isAdmin() && isValidId(userId);
+      allow get: if (isOwner(userId) || isAdmin()) && isValidId(userId);
       allow list: if isAdmin();
       allow write: if false;
     }

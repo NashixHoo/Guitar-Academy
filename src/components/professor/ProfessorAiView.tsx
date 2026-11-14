@@ -13,7 +13,7 @@ import {
   MasteryLevel,
   AdaptiveRecommendation,
 } from '../../types';
-import { professorService, ProfessorStatus } from '../../services/professorService';
+import { professorService, ProfessorStatus, PROFESSOR_IA_ENABLED } from '../../services/professorService';
 import { storageService } from '../../services/storageService';
 import { CURRICULUM_LEVELS } from '../../data/curriculum';
 import {
@@ -155,8 +155,19 @@ export const ProfessorAiView: React.FC<ProfessorAiViewProps> = ({
   const pedagogicalProfile = progress.pedagogicalProfile || createInitialPedagogicalProfile();
   const deterministicRec = getAdaptiveRecommendation(pedagogicalProfile, progress);
 
-  // Check backend status on mount
+  // Check backend status on mount (somente quando o recurso estiver habilitado)
   useEffect(() => {
+    if (!PROFESSOR_IA_ENABLED) {
+      setStatus({
+        available: false,
+        model: 'desativado',
+        provider: 'Desativado',
+        message: 'Recurso desativado para operação estática sem custo de API.',
+      });
+      setStatusLoading(false);
+      return;
+    }
+
     let isMounted = true;
     professorService.checkStatus().then((s) => {
       if (isMounted) {

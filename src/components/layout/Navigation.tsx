@@ -16,7 +16,6 @@ import {
   TecnicaIcon,
   OuvidoIcon,
   ConquistasIcon,
-  ProfessorAIIcon,
   DiagnosticoIcon,
   ConfiguracoesIcon,
 } from '../common/GuitarIcons';
@@ -67,7 +66,6 @@ export const Navigation: React.FC<NavigationProps> = ({
       title: '3. Evoluir',
       items: [
         { id: 'progress', label: 'Meu Progresso', icon: ConquistasIcon },
-        { id: 'professor-ai', label: 'Professor IA', icon: ProfessorAIIcon, badge: 'Gemini' },
         { id: 'diagnostics', label: 'Diagnóstico do Sistema', icon: DiagnosticoIcon, badge: 'Auditoria' },
         { id: 'settings', label: 'Configurações', icon: ConfiguracoesIcon },
       ],

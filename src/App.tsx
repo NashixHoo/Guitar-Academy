@@ -32,7 +32,6 @@ import { EarTrainingView } from './components/eartraining/EarTrainingView';
 import { TechniqueView } from './components/technique/TechniqueView';
 import { TunerView } from './components/tuner/TunerView';
 import { GuitarCoachView } from './components/coach/GuitarCoachView';
-import { ProfessorAiView } from './components/professor/ProfessorAiView';
 import { StudyLibraryView } from './components/library/StudyLibraryView';
 import { ProgressView } from './components/progress/ProgressView';
 import { SettingsView } from './components/settings/SettingsView';
@@ -84,9 +83,10 @@ function MainAppContent() {
     const handlePopState = (e: PopStateEvent) => {
       const restored = navigationService.handlePopState(e.state);
       if (restored) {
-        setCurrentTab(restored.tab);
-        setPrimaryTab(navigationService.getPrimaryTab(restored.tab));
-        setSelectedLessonId(restored.lessonId);
+        const safeTab: NavigationTab = restored.tab === 'professor-ai' ? 'home' : restored.tab;
+        setCurrentTab(safeTab);
+        setPrimaryTab(navigationService.getPrimaryTab(safeTab));
+        setSelectedLessonId(safeTab === restored.tab ? restored.lessonId : null);
       }
     };
 
@@ -147,6 +147,14 @@ function MainAppContent() {
     if (tab === 'teacher-dashboard' && !isTeacher) {
       setCurrentTab('home');
       setPrimaryTab('estudar');
+      return;
+    }
+
+    // Recurso Professor IA desativado: redireciona de forma transparente para o início
+    if (tab === 'professor-ai') {
+      setCurrentTab('home');
+      setPrimaryTab('estudar');
+      setSelectedLessonId(null);
       return;
     }
 
@@ -439,15 +447,6 @@ function MainAppContent() {
               {/* TAB 4: Guitar Coach (Treino com Microfone & Metrônomo) */}
               {currentTab === 'guitar-coach' && (
                 <GuitarCoachView
-                  progress={progress}
-                  onUpdateProgress={setProgress}
-                  onNavigateTab={(tab) => navigateToTab(tab, null)}
-                />
-              )}
-
-              {/* TAB 5: Professor IA (Mentor Didático Gemini) */}
-              {currentTab === 'professor-ai' && (
-                <ProfessorAiView
                   progress={progress}
                   onUpdateProgress={setProgress}
                   onNavigateTab={(tab) => navigateToTab(tab, null)}

@@ -528,12 +528,12 @@ assert(recPhysical.actionType === 'instrumental_practice', 'Erros motores recorr
 assert(recPhysical.targetTab === 'guitar-coach' || recPhysical.targetTab === 'practice-routine', 'Direciona para Guitar Coach ou Prática');
 assert(recPhysical.difficultyAdjustment === 'easier', 'Ajusta dificuldade para modo facilitado/lento');
 
-// Cenário C: Erros Recorrentes em Teoria/Harmonia -> Reexplicar Conceito com Professor IA
+// Cenário C: Erros Recorrentes em Teoria/Harmonia -> Revisão Conceitual em Teoria Musical
 const profileTheoryError = createInitialPedagogicalProfile();
 profileTheoryError.skills['skill-triads-tetrads'].recurringErrors = { 'confundiu-terca-maior-menor': 3 };
 const recTheory = getAdaptiveRecommendation(profileTheoryError, legacyData);
 assert(recTheory.actionType === 'reexplain_concept', 'Erros conceituais sugerem "reexplain_concept"');
-assert(recTheory.targetTab === 'professor-ai', 'Direciona aluno para o Professor IA');
+assert(recTheory.targetTab === 'theory', 'Direciona aluno para revisão no módulo de Teoria Musical');
 
 // Cenário D: Pré-Requisito Não Dominado para a Aula Atual
 const profilePrereq = createInitialPedagogicalProfile();
@@ -5260,9 +5260,67 @@ try {
     headers: { Authorization: 'Bearer jwt-admin' },
   });
   assert(admResp.status === 200, '32.06 Backend autoriza administrador confirmado em system_roles com HTTP 200');
+
+  // 32.06b Desativação segura do Professor IA (custo zero, sem chamadas Gemini)
+  const profStatusResp = await fetch(`${phase7Url}/api/professor/status`);
+  const profStatusData = (await profStatusResp.json()) as { available: boolean; disabled?: boolean };
+  const stuChatBlockedResp = await fetch(`${phase7Url}/api/professor/chat`, {
+    method: 'POST',
+    headers: { Authorization: 'Bearer jwt-student', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message: 'Teste de custo zero' }),
+  });
+  assert(
+    profStatusResp.status === 200 &&
+    profStatusData.available === false &&
+    profStatusData.disabled === true &&
+    stuChatBlockedResp.status === 503,
+    '32.06b Endpoints /api/professor/* permanecem desativados por padrão (available: false, disabled: true, HTTP 503)'
+  );
 } finally {
   await new Promise<void>((resolve) => phase7Server.close(() => resolve()));
 }
+
+// 32.06c Cliente frontend não realiza nenhuma chamada ao Professor IA nem expõe acesso nos menus
+const { PROFESSOR_IA_ENABLED, professorService } = await import('./src/services/professorService');
+const originalFetchRef = globalThis.fetch;
+let profFetchCalls = 0;
+globalThis.fetch = (async (...args: Parameters<typeof fetch>) => {
+  profFetchCalls += 1;
+  return originalFetchRef(...args);
+}) as typeof fetch;
+try {
+  const clientStatus = await professorService.checkStatus();
+  let askFailed = false;
+  try {
+    await professorService.askQuestion('Teste sem chamada externa', {});
+  } catch {
+    askFailed = true;
+  }
+  assert(
+    PROFESSOR_IA_ENABLED === false &&
+    clientStatus.available === false &&
+    askFailed &&
+    profFetchCalls === 0,
+    '32.06c professorService desativado por flag impede 100% de chamadas HTTP/fetch para /api/professor/*'
+  );
+} finally {
+  globalThis.fetch = originalFetchRef;
+}
+
+const navMenuSource = fs.readFileSync('src/components/layout/Navigation.tsx', 'utf-8');
+const subNavSource = fs.readFileSync('src/components/layout/SubNavBar.tsx', 'utf-8');
+const dashSource = fs.readFileSync('src/components/dashboard/DashboardView.tsx', 'utf-8');
+const diagSource = fs.readFileSync('src/components/diagnostics/DiagnosticsView.tsx', 'utf-8');
+const routineSource = fs.readFileSync('src/components/routine/PracticeRoutineView.tsx', 'utf-8');
+assert(
+  !navMenuSource.includes('professor-ai') &&
+  !subNavSource.includes('professor-ai') &&
+  !dashSource.includes('professor-ai') &&
+  !diagSource.includes('/api/professor') &&
+  !routineSource.includes('professorService') &&
+  !appCodeAudit.includes('<ProfessorAiView'),
+  '32.06d Menus, Dashboard, Diagnóstico, Prática e App.tsx não expõem nem chamam o Professor IA'
+);
 
 // 32.07 Fail-closed em erro de consulta de papel
 assert(

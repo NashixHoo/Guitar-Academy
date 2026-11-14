@@ -16,7 +16,6 @@ import {
   TecnicaIcon,
   OuvidoIcon,
   ConquistasIcon,
-  ProfessorAIIcon,
   DiagnosticoIcon,
   ConfiguracoesIcon,
 } from '../common/GuitarIcons';
@@ -56,7 +55,6 @@ const SUB_TABS_BY_PRIMARY: Record<PrimaryTab, SubTabItem[]> = {
   ],
   evoluir: [
     { id: 'progress', label: 'Meu Progresso', icon: ConquistasIcon },
-    { id: 'professor-ai', label: 'Professor IA', icon: ProfessorAIIcon },
     { id: 'diagnostics', label: 'Diagnóstico', icon: DiagnosticoIcon },
     { id: 'settings', label: 'Configurações', icon: ConfiguracoesIcon },
   ],

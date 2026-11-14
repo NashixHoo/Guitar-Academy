@@ -441,8 +441,8 @@ export const AdminPortalView: React.FC = () => {
                     <span>Database: ai-studio-guitaracademyfor-e7ce9efa-82d3-4dd1-8b8e-58aa69749913</span>
                   </div>
                   <div className="p-3 rounded-xl bg-[#141417] border border-[#27272A]">
-                    <span className="block text-white font-semibold mb-0.5">Professor IA Backend</span>
-                    <span>Express + Firebase Admin SDK + Google GenAI 3.8 Flash</span>
+                    <span className="block text-white font-semibold mb-0.5">Modo Estático / Custo Zero</span>
+                    <span>Professor IA desativado por padrão (sem consumo de API externa)</span>
                   </div>
                   <div className="p-3 rounded-xl bg-[#141417] border border-[#27272A]">
                     <span className="block text-white font-semibold mb-0.5">Segurança de Papéis</span>
@@ -761,8 +761,8 @@ export const AdminPortalView: React.FC = () => {
                     <h3 className="text-sm font-bold">Backend & Tokens de Acesso</h3>
                   </div>
                   <ul className="text-xs text-[#A1A1AA] space-y-2 list-disc list-inside">
-                    <li><strong className="text-white">Bearer Token:</strong> Todas as rotas /api/professor e /api/admin requerem Firebase ID Token.</li>
-                    <li><strong className="text-white">GEMINI_API_KEY:</strong> Estritamente no servidor Express, nunca no bundle do cliente.</li>
+                    <li><strong className="text-white">Bearer Token:</strong> Todas as rotas /api/admin e protegidas requerem Firebase ID Token.</li>
+                    <li><strong className="text-white">Chave Gemini:</strong> Não requerida em operação normal (Professor IA desativado).</li>
                     <li><strong className="text-white">Cloud Run Ready:</strong> Porta 3000 configurada e pronta para deploy no GCP.</li>
                     <li><strong className="text-white">Fail-Closed:</strong> Falhas de rede revertem para o menor privilégio (student).</li>
                   </ul>

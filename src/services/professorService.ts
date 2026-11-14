@@ -14,6 +14,8 @@ import {
 } from '../types';
 import { auth } from './firebase';
 
+export const PROFESSOR_IA_ENABLED = false;
+
 export interface ProfessorStatus {
   available: boolean;
   model: string;
@@ -41,6 +43,16 @@ export function getProfessorApiBaseUrl(): string {
  * Cliente HTTP centralizado com injeção automática de Firebase ID Token
  */
 async function authorizedApiFetch(endpoint: string, options: RequestInit = {}): Promise<Response> {
+  if (!PROFESSOR_IA_ENABLED) {
+    return new Response(
+      JSON.stringify({ error: 'Professor IA desativado.', disabled: true }),
+      {
+        status: 503,
+        headers: { 'Content-Type': 'application/json' },
+      }
+    );
+  }
+
   const baseUrl = getProfessorApiBaseUrl();
   const url = `${baseUrl}${endpoint}`;
 
@@ -100,6 +112,15 @@ export const professorService = {
    * Checa o status e a disponibilidade do serviço de IA no servidor.
    */
   async checkStatus(): Promise<ProfessorStatus> {
+    if (!PROFESSOR_IA_ENABLED) {
+      return {
+        available: false,
+        model: 'desativado',
+        provider: 'Desativado',
+        message: 'Professor IA desativado por configuração (modo custo zero).',
+      };
+    }
+
     try {
       const res = await authorizedApiFetch('/api/professor/status');
       if (!res.ok) {

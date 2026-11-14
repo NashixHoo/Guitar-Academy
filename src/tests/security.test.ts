@@ -86,12 +86,33 @@ describe('Zero-Trust RBAC Role Resolution (Client Fail-Closed Unit Tests)', () =
     assert.equal(resolved, 'student');
   });
 
-  it('grants admin role exclusively when system_roles/{uid} explicitly has role === "admin"', async () => {
-    const resolved = await fetchSystemRole('admin-uid-1', async () => ({
+  it('grants admin or teacher role exclusively from explicit system_roles/{uid} without Express HTTP fallback', async () => {
+    const resolvedAdmin = await fetchSystemRole('admin-uid-1', async () => ({
       role: 'admin',
     }));
+    assert.equal(resolvedAdmin, 'admin');
 
-    assert.equal(resolved, 'admin');
+    const resolvedTeacher = await fetchSystemRole('teacher-uid-1', async () => ({
+      role: 'teacher',
+    }));
+    assert.equal(resolvedTeacher, 'teacher');
+
+    // Verify fetchSystemRole fails closed without issuing HTTP requests to /api/auth/role on Firestore failure
+    const originalFetch = globalThis.fetch;
+    let fetchCalled = 0;
+    globalThis.fetch = (async (...args: Parameters<typeof fetch>) => {
+      fetchCalled += 1;
+      return originalFetch(...args);
+    }) as typeof fetch;
+    try {
+      const failClosed = await fetchSystemRole('teacher-offline-uid', async () => {
+        throw new Error('PERMISSION_DENIED: Simulated Firestore error');
+      });
+      assert.equal(failClosed, 'student');
+      assert.equal(fetchCalled, 0);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 
   it('filters admin_logs accurately by auth, database_access, and role_change groups', () => {
@@ -118,6 +139,7 @@ describe('Firebase Emulator — Firestore Security Rules (Student vs Admin)', ()
   const STUDENT_UID = 'student-uid-1';
   const OTHER_STUDENT_UID = 'student-uid-2';
   const TEACHER_UID = 'teacher-uid-1';
+  const TEACHER_2_UID = 'teacher-uid-2';
   const ADMIN_UID = 'admin-uid-1';
 
   before(async () => {
@@ -170,6 +192,10 @@ describe('Firebase Emulator — Firestore Security Rules (Student vs Admin)', ()
         uid: TEACHER_UID,
         role: 'teacher',
       });
+      await setDoc(doc(adminDb, 'system_roles', TEACHER_2_UID), {
+        uid: TEACHER_2_UID,
+        role: 'teacher',
+      });
       await setDoc(doc(adminDb, 'system_roles', STUDENT_UID), {
         uid: STUDENT_UID,
         role: 'student',
@@ -184,6 +210,11 @@ describe('Firebase Emulator — Firestore Security Rules (Student vs Admin)', ()
         uid: OTHER_STUDENT_UID,
         displayName: 'Outro Aluno',
         email: 'aluno2@guitaracademy.test',
+      });
+      await setDoc(doc(adminDb, 'users', TEACHER_UID), {
+        uid: TEACHER_UID,
+        displayName: 'Professor Teste',
+        email: 'prof1@guitaracademy.test',
       });
 
       await setDoc(doc(adminDb, 'students', OTHER_STUDENT_UID), {
@@ -261,11 +292,14 @@ describe('Firebase Emulator — Firestore Security Rules (Student vs Admin)', ()
     return testEnv;
   }
 
-  it('prevents an authenticated student from writing to system_roles (set, update, delete)', async (t) => {
+  it('prevents any user (student, teacher, admin, unauthenticated) from writing to system_roles', async (t) => {
     const env = requireEmulator(t);
     if (!env) return;
 
     const studentDb = env.authenticatedContext(STUDENT_UID).firestore();
+    const teacherDb = env.authenticatedContext(TEACHER_UID).firestore();
+    const adminDb = env.authenticatedContext(ADMIN_UID).firestore();
+    const unauthDb = env.unauthenticatedContext().firestore();
 
     // Student cannot create or overwrite their own system_roles doc to gain admin
     await assertFails(
@@ -275,14 +309,12 @@ describe('Firebase Emulator — Firestore Security Rules (Student vs Admin)', ()
       })
     );
 
-    // Student cannot update their existing system_roles doc
+    // Student cannot update or delete their existing system_roles doc
     await assertFails(
       updateDoc(doc(studentDb, 'system_roles', STUDENT_UID), {
         role: 'admin',
       })
     );
-
-    // Student cannot delete their system_roles doc
     await assertFails(deleteDoc(doc(studentDb, 'system_roles', STUDENT_UID)));
 
     // Student cannot create a brand new system_roles entry or overwrite admin's entry
@@ -299,11 +331,44 @@ describe('Firebase Emulator — Firestore Security Rules (Student vs Admin)', ()
       })
     );
 
-    // Even an authenticated admin cannot write system_roles from the client SDK
-    const adminDb = env.authenticatedContext(ADMIN_UID).firestore();
+    // Teacher cannot create, update, or delete system_roles entries (self or others)
+    await assertFails(
+      setDoc(doc(teacherDb, 'system_roles', TEACHER_UID), {
+        uid: TEACHER_UID,
+        role: 'admin',
+      })
+    );
+    await assertFails(
+      updateDoc(doc(teacherDb, 'system_roles', TEACHER_UID), {
+        role: 'admin',
+      })
+    );
+    await assertFails(deleteDoc(doc(teacherDb, 'system_roles', TEACHER_UID)));
+    await assertFails(
+      setDoc(doc(teacherDb, 'system_roles', STUDENT_UID), {
+        uid: STUDENT_UID,
+        role: 'teacher',
+      })
+    );
+
+    // Even an authenticated admin cannot create, update, or delete system_roles from the client SDK
     await assertFails(
       setDoc(doc(adminDb, 'system_roles', 'promoted-uid'), {
         uid: 'promoted-uid',
+        role: 'admin',
+      })
+    );
+    await assertFails(
+      updateDoc(doc(adminDb, 'system_roles', STUDENT_UID), {
+        role: 'teacher',
+      })
+    );
+    await assertFails(deleteDoc(doc(adminDb, 'system_roles', STUDENT_UID)));
+
+    // Unauthenticated requests cannot write system_roles
+    await assertFails(
+      setDoc(doc(unauthDb, 'system_roles', 'anon-admin'), {
+        uid: 'anon-admin',
         role: 'admin',
       })
     );
@@ -400,10 +465,13 @@ describe('Firebase Emulator — Firestore Security Rules (Student vs Admin)', ()
 
     const studentDb = env.authenticatedContext(STUDENT_UID).firestore();
 
-    // Blocked from reading/listing system_roles (admin-only access)
+    // Student can read ONLY their own system_roles doc, never list collection or read another user's role
+    const ownRoleSnap = await assertSucceeds(getDoc(doc(studentDb, 'system_roles', STUDENT_UID)));
+    assert.equal(ownRoleSnap.data()?.role, 'student');
     await assertFails(getDocs(collection(studentDb, 'system_roles')));
     await assertFails(getDoc(doc(studentDb, 'system_roles', ADMIN_UID)));
-    await assertFails(getDoc(doc(studentDb, 'system_roles', STUDENT_UID)));
+    await assertFails(getDoc(doc(studentDb, 'system_roles', TEACHER_UID)));
+    await assertFails(getDoc(doc(studentDb, 'system_roles', OTHER_STUDENT_UID)));
 
     // Blocked from listing users or reading/modifying another student's profile
     await assertFails(getDocs(collection(studentDb, 'users')));
@@ -496,13 +564,15 @@ describe('Firebase Emulator — Firestore Security Rules (Student vs Admin)', ()
     const adminDb = env.authenticatedContext(ADMIN_UID).firestore();
     const teacherDb = env.authenticatedContext(TEACHER_UID).firestore();
 
-    // Verified admin can list and get system_roles and users
+    // Verified admin can list and get all system_roles, users, and admin_logs
     const rolesSnap = await assertSucceeds(getDocs(collection(adminDb, 'system_roles')));
     assert.ok(rolesSnap.size >= 3);
     await assertSucceeds(getDoc(doc(adminDb, 'system_roles', ADMIN_UID)));
+    await assertSucceeds(getDoc(doc(adminDb, 'system_roles', TEACHER_UID)));
+    await assertSucceeds(getDoc(doc(adminDb, 'system_roles', STUDENT_UID)));
 
     const usersSnap = await assertSucceeds(getDocs(collection(adminDb, 'users')));
-    assert.ok(usersSnap.size >= 2);
+    assert.ok(usersSnap.size >= 3);
 
     const logsSnap = await assertSucceeds(getDocs(collection(adminDb, 'admin_logs')));
     assert.ok(logsSnap.size >= 1);
@@ -510,17 +580,57 @@ describe('Firebase Emulator — Firestore Security Rules (Student vs Admin)', ()
       updateDoc(doc(adminDb, 'admin_logs', 'log-seed-1'), { action: 'Overwrite immutable' })
     );
 
-    // Teacher is blocked from reading system_roles and admin_logs and cannot self-promote
-    await assertFails(getDoc(doc(teacherDb, 'system_roles', TEACHER_UID)));
+    // Teacher can read ONLY their own system_roles doc (serverless role resolution)
+    const teacherOwnRoleSnap = await assertSucceeds(getDoc(doc(teacherDb, 'system_roles', TEACHER_UID)));
+    assert.equal(teacherOwnRoleSnap.data()?.role, 'teacher');
+
+    // Teacher is blocked from reading other users' system_roles, listing system_roles, or reading admin_logs
+    await assertFails(getDoc(doc(teacherDb, 'system_roles', STUDENT_UID)));
+    await assertFails(getDoc(doc(teacherDb, 'system_roles', OTHER_STUDENT_UID)));
+    await assertFails(getDoc(doc(teacherDb, 'system_roles', ADMIN_UID)));
     await assertFails(getDocs(collection(teacherDb, 'system_roles')));
     await assertFails(getDocs(collection(teacherDb, 'admin_logs')));
+
+    // Teacher can query/manage own classes and read class students & events, but cannot modify other classes
     await assertSucceeds(
       getDocs(query(collection(teacherDb, 'classes'), where('teacherId', '==', TEACHER_UID)))
     );
+    await assertSucceeds(
+      getDocs(collection(teacherDb, 'classes', 'class-101', 'students'))
+    );
+    await assertSucceeds(
+      getDoc(doc(teacherDb, 'classes', 'class-101', 'events', 'evt-1'))
+    );
+    await assertSucceeds(
+      setDoc(doc(teacherDb, 'classes', 'class-102'), {
+        id: 'class-102',
+        name: 'Turma Guitarra Solo',
+        code: 'GA-102',
+        teacherId: TEACHER_UID,
+        active: true,
+      })
+    );
+
+    // Teacher cannot promote their own account via system_roles, users, or courses
     await assertFails(
       setDoc(doc(teacherDb, 'system_roles', TEACHER_UID), {
         uid: TEACHER_UID,
         role: 'admin',
+      })
+    );
+    await assertFails(
+      updateDoc(doc(teacherDb, 'system_roles', TEACHER_UID), {
+        role: 'admin',
+      })
+    );
+    await assertFails(
+      updateDoc(doc(teacherDb, 'users', TEACHER_UID), {
+        role: 'admin',
+      })
+    );
+    await assertFails(
+      updateDoc(doc(teacherDb, 'users', TEACHER_UID), {
+        isAdmin: true,
       })
     );
     await assertFails(
@@ -536,7 +646,8 @@ describe('Firebase Emulator — Firestore Security Rules (Student vs Admin)', ()
     if (!env) return;
 
     const studentDb = env.authenticatedContext(STUDENT_UID).firestore();
-    const otherTeacherDb = env.authenticatedContext('teacher-uid-2').firestore();
+    const otherStudentDb = env.authenticatedContext(OTHER_STUDENT_UID).firestore();
+    const otherTeacherDb = env.authenticatedContext(TEACHER_2_UID).firestore();
 
     // Enrollments: student cannot create enrollment for another user, non-existent class, or forged approval
     await assertFails(
@@ -575,6 +686,23 @@ describe('Firebase Emulator — Firestore Security Rules (Student vs Admin)', ()
       })
     );
 
+    // Student can join an active class via classes/{classId}/students/{studentId} and then read that class
+    await assertSucceeds(
+      setDoc(doc(studentDb, 'classes', 'class-101', 'students', STUDENT_UID), {
+        studentId: STUDENT_UID,
+        classId: 'class-101',
+        teacherId: TEACHER_UID,
+        studentName: 'Aluno Teste',
+      })
+    );
+    await assertSucceeds(getDoc(doc(studentDb, 'classes', 'class-101')));
+    await assertSucceeds(getDoc(doc(studentDb, 'classes', 'class-101', 'students', STUDENT_UID)));
+
+    // Non-enrolled student cannot read class or other student's class enrollment/profile
+    await assertFails(getDoc(doc(otherStudentDb, 'classes', 'class-101')));
+    await assertFails(getDoc(doc(otherStudentDb, 'classes', 'class-101', 'students', STUDENT_UID)));
+    await assertFails(getDoc(doc(otherStudentDb, 'users', STUDENT_UID)));
+
     // Student cannot tamper with another student's enrollment or reassign teacherId
     await assertFails(
       updateDoc(doc(studentDb, 'enrollments', 'enroll-other'), {
@@ -583,13 +711,22 @@ describe('Firebase Emulator — Firestore Security Rules (Student vs Admin)', ()
     );
     await assertFails(
       updateDoc(doc(studentDb, 'enrollments', 'enroll-legit-1'), {
-        teacherId: 'teacher-uid-2',
+        teacherId: TEACHER_2_UID,
       })
     );
-    // Unrelated teacher cannot modify another teacher's enrollment
+    // Verified unrelated teacher (TEACHER_2_UID) cannot read or modify another teacher's class, students, events, or role
+    await assertFails(getDoc(doc(otherTeacherDb, 'system_roles', TEACHER_UID)));
+    await assertFails(getDoc(doc(otherTeacherDb, 'classes', 'class-101')));
+    await assertFails(getDocs(collection(otherTeacherDb, 'classes', 'class-101', 'students')));
+    await assertFails(getDoc(doc(otherTeacherDb, 'classes', 'class-101', 'events', 'evt-1')));
     await assertFails(
       updateDoc(doc(otherTeacherDb, 'enrollments', 'enroll-other'), {
         status: 'suspended',
+      })
+    );
+    await assertFails(
+      updateDoc(doc(otherTeacherDb, 'classes', 'class-101'), {
+        name: 'Turma Hijacked',
       })
     );
 
