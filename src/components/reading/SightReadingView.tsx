@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { audioEngine } from '../../audio/audioEngine';
 import { Volume2, CheckCircle2, XCircle, Trophy, BookOpen, Music } from 'lucide-react';
+import { IllustrativeCard } from '../common/IllustrativeCard';
+import { SCREEN_ARTWORKS } from '../../data/visualGallery';
 
 interface StaffNoteQuiz {
   nameCipher: string;
@@ -90,6 +92,8 @@ export const SightReadingView: React.FC = () => {
           </button>
         </div>
       </div>
+
+      <IllustrativeCard artwork={SCREEN_ARTWORKS.reading} variant="strip" />
 
       {activeTab === 'guide' ? (
         <div className="space-y-6">

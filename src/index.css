@@ -436,8 +436,7 @@
   overflow: hidden;
   background-color: var(--ga-bg, #F8F7F4);
   background-image:
-    var(--ga-wallpaper-overlay, linear-gradient(rgba(248, 247, 244, 0.76), rgba(248, 247, 244, 0.84))),
-    url("/images/backgrounds/guitar-academy-background.webp");
+    var(--ga-wallpaper-overlay, linear-gradient(rgba(248, 247, 244, 0.76), rgba(248, 247, 244, 0.84)));
   background-size: cover;
   background-position: center top;
   background-repeat: no-repeat;

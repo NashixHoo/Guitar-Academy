@@ -36,6 +36,8 @@ import {
   X,
   Volume1
 } from 'lucide-react';
+import { IllustrativeCard } from '../common/IllustrativeCard';
+import { SCREEN_ARTWORKS } from '../../data/visualGallery';
 
 interface TunerViewProps {
   onOpenLessonTuning?: () => void;
@@ -1027,6 +1029,8 @@ export const TunerView: React.FC<TunerViewProps> = ({ onOpenLessonTuning }) => {
           })}
         </div>
       </div>
+
+      <IllustrativeCard artwork={SCREEN_ARTWORKS.tuner} variant="strip" />
 
       {/* Practical Tuning Rules */}
       <div className="bg-[#F8F7F4] border border-[#D9D9D9] rounded-3xl p-6 space-y-3">

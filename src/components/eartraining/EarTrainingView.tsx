@@ -3,6 +3,8 @@ import { audioEngine } from '../../audio/audioEngine';
 import { INTERVALS, CHROMATIC_NOTES, CIPHER_TO_PT } from '../../data/musicTheory';
 import { Volume2, CheckCircle2, XCircle, Trophy, Headphones, RefreshCw, ShieldAlert, Guitar } from 'lucide-react';
 import { NoteCipher } from '../../types';
+import { IllustrativeCard } from '../common/IllustrativeCard';
+import { SCREEN_ARTWORKS } from '../../data/visualGallery';
 
 export const EarTrainingView: React.FC = () => {
   const [mode, setMode] = useState<'intervals' | 'chords' | 'tonic'>('intervals');
@@ -171,6 +173,8 @@ export const EarTrainingView: React.FC = () => {
           </button>
         </div>
       </div>
+
+      <IllustrativeCard artwork={SCREEN_ARTWORKS.earTraining} variant="strip" />
 
       {/* Honest Pedagogical Notice about Audio Capabilities */}
       <div className="p-4 rounded-2xl bg-white border border-[#D9D9D9] shadow-xs flex items-start gap-3">

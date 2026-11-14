@@ -3,6 +3,8 @@ import { audioEngine } from '../../audio/audioEngine';
 import { storageService } from '../../services/storageService';
 import { MetronomeConfig } from '../../types';
 import { Play, Pause, Square, Volume2, Timer, Flame, RefreshCw, Zap, Minus, Plus, Activity, Sparkles } from 'lucide-react';
+import { IllustrativeCard } from '../common/IllustrativeCard';
+import { SCREEN_ARTWORKS } from '../../data/visualGallery';
 
 export const MetronomeView: React.FC = () => {
   const [config, setConfig] = useState<MetronomeConfig>(() => storageService.loadMetronome());
@@ -531,6 +533,8 @@ export const MetronomeView: React.FC = () => {
           </div>
         </div>
       </div>
+
+      <IllustrativeCard artwork={SCREEN_ARTWORKS.metronome} variant="strip" />
 
       {/* Dica técnica de execução mobile */}
       <div className="bg-[#F8F7F4] border border-[#D9D9D9] rounded-2xl p-4 text-xs text-[#666672] flex items-start gap-3">

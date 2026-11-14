@@ -16,6 +16,8 @@ import {
   Sparkles,
   Check
 } from 'lucide-react';
+import { IllustrativeCard } from '../common/IllustrativeCard';
+import { SCREEN_ARTWORKS } from '../../data/visualGallery';
 
 interface ProgressViewProps {
   progress: UserProgress;
@@ -108,15 +110,6 @@ export const ProgressView: React.FC<ProgressViewProps> = ({
 
       {/* Header with Evoluir Banner */}
       <div className="bg-white dark:bg-[#22141A] border border-[#D9D9D9] dark:border-[#422933] rounded-3xl p-6 sm:p-8 shadow-xs flex flex-wrap items-center justify-between gap-4 relative overflow-hidden">
-        {/* Subtle pillar banner background */}
-        <div className="absolute right-0 top-0 bottom-0 w-2/5 pointer-events-none opacity-20 hidden md:block">
-          <img
-            src="./images/backgrounds/banner-evoluir.svg"
-            alt=""
-            aria-hidden="true"
-            className="w-full h-full object-cover object-right"
-          />
-        </div>
         <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-[#7B1E2B] via-[#B52A3A] to-[#F5C542]" />
 
         <div className="relative z-10">
@@ -157,6 +150,8 @@ export const ProgressView: React.FC<ProgressViewProps> = ({
           />
         </div>
       </div>
+
+      <IllustrativeCard artwork={SCREEN_ARTWORKS.progress} variant="strip" />
 
       {/* Main Stats Metric Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

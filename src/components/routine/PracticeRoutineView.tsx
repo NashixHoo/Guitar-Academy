@@ -32,6 +32,8 @@ import {
   Check,
   X
 } from 'lucide-react';
+import { IllustrativeCard } from '../common/IllustrativeCard';
+import { SCREEN_ARTWORKS } from '../../data/visualGallery';
 
 interface PracticeRoutineViewProps {
   progress: UserProgress;
@@ -393,15 +395,6 @@ export const PracticeRoutineView: React.FC<PracticeRoutineViewProps> = ({
 
       {/* TOP BANNER: CENTRAL DE PRÁTICA DIÁRIA */}
       <div className="bg-white dark:bg-[#22141A] border border-[#D9D9D9] dark:border-[#422933] rounded-3xl p-6 sm:p-8 shadow-xs relative overflow-hidden">
-        {/* Subtle pillar banner background */}
-        <div className="absolute right-0 top-0 bottom-0 w-2/5 pointer-events-none opacity-20 hidden md:block">
-          <img
-            src="./images/backgrounds/banner-praticar.svg"
-            alt=""
-            aria-hidden="true"
-            className="w-full h-full object-cover object-right"
-          />
-        </div>
         <div className="absolute top-0 left-0 right-0 h-1.5 bg-[#7B1E2B]" />
 
         <div className="relative z-10 flex flex-wrap items-center justify-between gap-4">
@@ -466,6 +459,8 @@ export const PracticeRoutineView: React.FC<PracticeRoutineViewProps> = ({
           </button>
         </div>
       </div>
+
+      <IllustrativeCard artwork={SCREEN_ARTWORKS.practice} variant="strip" />
 
       {/* PAINEL DE CONTROLE DA SESSÃO ATIVA (STICKY OU DESTACADO) */}
       <div className="bg-[#25252A] text-white rounded-3xl p-5 sm:p-6 shadow-md flex flex-wrap items-center justify-between gap-4">

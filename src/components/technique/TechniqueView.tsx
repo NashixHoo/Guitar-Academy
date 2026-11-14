@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { GUITAR_TECHNIQUES } from '../../data/techniqueData';
 import { Activity, Flame, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { IllustrativeCard } from '../common/IllustrativeCard';
+import { SCREEN_ARTWORKS } from '../../data/visualGallery';
 
 interface TechniqueViewProps {
   onOpenMetronomeAtBpm: (bpm: number) => void;
@@ -25,6 +27,8 @@ export const TechniqueView: React.FC<TechniqueViewProps> = ({ onOpenMetronomeAtB
           </p>
         </div>
       </div>
+
+      <IllustrativeCard artwork={SCREEN_ARTWORKS.technique} variant="strip" />
 
       {/* Technique Selector Tabs */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1">

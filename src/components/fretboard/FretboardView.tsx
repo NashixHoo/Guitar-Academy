@@ -4,6 +4,8 @@ import { CHROMATIC_NOTES, CIPHER_TO_PT, SCALES, STANDARD_TUNING, getFretNote } f
 import { NoteCipher } from '../../types';
 import { audioEngine } from '../../audio/audioEngine';
 import { Guitar, Eye, Music, Layers, Sparkles, Award, Target, CheckCircle2, RotateCcw } from 'lucide-react';
+import { IllustrativeCard } from '../common/IllustrativeCard';
+import { SCREEN_ARTWORKS } from '../../data/visualGallery';
 
 export const FretboardView: React.FC = () => {
   const [notation, setNotation] = useState<'cipher' | 'portuguese' | 'both'>('both');
@@ -145,6 +147,8 @@ export const FretboardView: React.FC = () => {
           </div>
         </div>
       </div>
+
+      <IllustrativeCard artwork={SCREEN_ARTWORKS.scales} variant="strip" />
 
       {/* Control Strip: Scale Selector, Single Note Finder, Max Frets */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

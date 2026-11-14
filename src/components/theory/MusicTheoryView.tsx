@@ -5,6 +5,8 @@ import { audioEngine } from '../../audio/audioEngine';
 import { Compass, Layers, Sparkles, Music, Play, Square, ArrowRight, Wand2, BookOpen } from 'lucide-react';
 import { ChordNameButton } from '../chords/ChordNameButton';
 import { findChordTokensInText } from '../../services/chordLookupService';
+import { IllustrativeCard } from '../common/IllustrativeCard';
+import { SCREEN_ARTWORKS } from '../../data/visualGallery';
 
 interface MusicTheoryViewProps {
   initialKey?: string;
@@ -356,6 +358,8 @@ E|----------------------------------|
           </button>
         </div>
       </div>
+
+      <IllustrativeCard artwork={SCREEN_ARTWORKS.theory} variant="strip" />
 
       {/* TAB 1: Círculo de Quintas & Intervalos */}
       {activeTab === 'circle' && (

@@ -7,6 +7,8 @@ import { ChordEngine } from '../../chords/chord-engine';
 import { audioEngine } from '../../audio/audioEngine';
 import { useChordModal } from '../../contexts/ChordModalContext';
 import { Search, BookOpen, Star, Sparkles, Layers, CheckCircle2, AlertCircle, Volume2, Music, Wand2, Maximize2 } from 'lucide-react';
+import { IllustrativeCard } from '../common/IllustrativeCard';
+import { SCREEN_ARTWORKS } from '../../data/visualGallery';
 
 interface ChordDictionaryViewProps {
   favoriteChords: string[];
@@ -417,6 +419,8 @@ export const ChordDictionaryView: React.FC<ChordDictionaryViewProps> = ({
           </button>
         </div>
       </div>
+
+      <IllustrativeCard artwork={SCREEN_ARTWORKS.chords} variant="strip" />
 
       {/* MODE: Laboratório de Cifras (NOVO LAB) */}
       {activeTabMode === 'lab' && (

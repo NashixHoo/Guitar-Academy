@@ -337,7 +337,7 @@ function MainAppContent() {
     return (
       <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#F8F7F4] text-[#25252A]">
         <div className="w-16 h-16 rounded-2xl bg-white border border-[#D9D9D9] shadow-md flex items-center justify-center p-2.5 mb-4 ring-4 ring-[#7B1E2B]/5">
-          <img src="./icon.svg" alt="Guitar Academy" className="w-full h-full object-contain" />
+          <img src={`${import.meta.env.BASE_URL}icon.svg`} alt="Guitar Academy" className="w-full h-full object-contain" />
         </div>
         <div className="w-6 h-6 border-2 border-[#7B1E2B] border-t-transparent rounded-full animate-spin" />
         <span className="text-xs text-[#666672] font-mono-code mt-3">Verificando sessão de estudos...</span>
@@ -367,7 +367,7 @@ function MainAppContent() {
         aria-hidden="true" 
         className="ga-wallpaper fixed inset-0 pointer-events-none -z-10"
         style={{
-          backgroundImage: `var(--ga-wallpaper-overlay), url("${import.meta.env.BASE_URL}images/backgrounds/guitar-academy-background.webp"), url("./images/backgrounds/guitar-academy-background.webp"), url("/images/backgrounds/guitar-academy-background.webp")`
+          backgroundImage: `var(--ga-wallpaper-overlay), url("${import.meta.env.BASE_URL}images/backgrounds/guitar-academy-background.webp")`
         }}
       />
 

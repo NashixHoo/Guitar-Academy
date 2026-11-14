@@ -40,6 +40,8 @@ import {
 import { useChordModal } from '../../contexts/ChordModalContext';
 import { CourseVisualBanner } from './CourseVisualBanner';
 import { getCourseModuleVisual } from '../../data/courseLessonVisuals';
+import { COURSE_TRACK_VISUALS } from '../../data/visualGallery';
+import { IllustrativeCard } from '../common/IllustrativeCard';
 
 interface CurriculumViewProps {
   progress: UserProgress;
@@ -362,57 +364,79 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({ progress, onSele
           </div>
         </div>
 
-        {/* Barra Seletora dos 6 Cursos */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-1.5 bg-[#F8F7F4] dark:bg-[#1A1A20] p-1.5 rounded-2xl border border-[#D9D9D9] dark:border-[#33333E]">
+        {/* Barra Seletora dos 6 Cursos (com miniatura visual de cada instrumento) */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 bg-[#F8F7F4] dark:bg-[#1A1A20] p-2 rounded-2xl border border-[#D9D9D9] dark:border-[#33333E]">
           {courseList.map((cId) => {
             const meta = COURSE_METADATA_MAP[cId];
             const status = catalogStatus[cId];
             const isSelected = activeTrack === cId;
             const isPrimary = cId === primaryCourseId;
+            const trackVisual = COURSE_TRACK_VISUALS[cId];
 
             return (
               <button
                 key={cId}
                 onClick={() => setActiveTrack(cId)}
-                className={`flex flex-col p-2.5 rounded-xl text-left transition-all relative ${
+                className={`flex flex-col overflow-hidden rounded-xl text-left transition-all relative border ${
                   isSelected
-                    ? 'bg-[#7B1E2B] text-white shadow-xs'
-                    : 'bg-white dark:bg-[#25252A] text-[#666672] dark:text-[#B8B3C0] hover:text-[#25252A] dark:hover:text-white border border-[#D9D9D9] dark:border-[#33333E]'
+                    ? 'bg-[#7B1E2B] text-white border-[#7B1E2B] shadow-sm ring-2 ring-[#7B1E2B]/25'
+                    : 'bg-white dark:bg-[#25252A] text-[#666672] dark:text-[#B8B3C0] hover:text-[#25252A] dark:hover:text-white border-[#D9D9D9] dark:border-[#33333E]'
                 }`}
               >
-                <div className="flex items-center justify-between w-full mb-1">
-                  <div className="flex items-center gap-1.5">
+                {/* Instrument thumbnail strip */}
+                <div className="relative w-full h-14 sm:h-16 overflow-hidden bg-[#25252A]">
+                  <img
+                    src={trackVisual.src}
+                    alt={trackVisual.alt}
+                    loading="lazy"
+                    referrerPolicy="no-referrer"
+                    className={`w-full h-full object-cover transition-transform duration-300 ${
+                      isSelected ? 'scale-105 opacity-95' : 'opacity-85 hover:scale-105'
+                    }`}
+                  />
+                  <div
+                    aria-hidden="true"
+                    className={`absolute inset-0 bg-gradient-to-t ${
+                      isSelected ? 'from-[#7B1E2B]/85 via-black/20 to-transparent' : 'from-black/65 via-black/15 to-transparent'
+                    }`}
+                  />
+                  <div className="absolute top-1.5 right-1.5">
+                    {isPrimary ? (
+                      <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-black/55 text-[#F5C542] backdrop-blur-xs">
+                        Base
+                      </span>
+                    ) : !status.isUnlocked ? (
+                      <span className="w-5 h-5 rounded-full bg-black/55 flex items-center justify-center">
+                        <Lock className="w-3 h-3 text-amber-300" />
+                      </span>
+                    ) : (
+                      <span className="w-5 h-5 rounded-full bg-black/55 flex items-center justify-center">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-300" />
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="p-2.5 flex-1 flex flex-col justify-between w-full">
+                  <div className="flex items-center gap-1.5 w-full">
                     {getCourseTabIcon(cId)}
-                    <span className={`text-[10px] font-extrabold uppercase tracking-wide truncate ${
+                    <span className={`text-[11px] font-extrabold uppercase tracking-wide truncate ${
                       isSelected ? 'text-white' : 'text-[#25252A] dark:text-[#F8F7F4]'
                     }`}>
                       {meta.instrumentName}
                     </span>
                   </div>
 
-                  {/* Indicador de Cadeado ou Principal */}
-                  {isPrimary ? (
-                    <span className={`text-[9px] font-black uppercase px-1 py-0.2 rounded ${
-                      isSelected ? 'bg-white/20 text-white' : 'bg-[#7B1E2B]/10 text-[#7B1E2B] dark:text-[#FF6B81]'
-                    }`}>
-                      Base
+                  <div className="flex items-center justify-between text-[10px] font-medium mt-1.5">
+                    <span className={isSelected ? 'text-white/85' : 'text-[#666672] dark:text-[#B8B3C0]'}>
+                      {meta.totalLessons} aulas
                     </span>
-                  ) : !status.isUnlocked ? (
-                    <Lock className={`w-3 h-3 ${isSelected ? 'text-white/80' : 'text-amber-600'}`} />
-                  ) : (
-                    <CheckCircle2 className={`w-3 h-3 ${isSelected ? 'text-white' : 'text-emerald-600'}`} />
-                  )}
-                </div>
-
-                <div className="flex items-center justify-between text-[10px] font-medium mt-1">
-                  <span className={isSelected ? 'text-white/80' : 'text-[#666672] dark:text-[#B8B3C0]'}>
-                    {meta.totalLessons} aulas
-                  </span>
-                  <span className={`font-mono-code font-bold ${
-                    isSelected ? 'text-white' : status.isUnlocked ? 'text-[#7B1E2B] dark:text-[#FF6B81]' : 'text-amber-700 dark:text-amber-400'
-                  }`}>
-                    {status.isUnlocked ? `${status.progressPercentage}%` : '50% nec.'}
-                  </span>
+                    <span className={`font-mono-code font-bold ${
+                      isSelected ? 'text-white' : status.isUnlocked ? 'text-[#7B1E2B] dark:text-[#FF6B81]' : 'text-amber-700 dark:text-amber-400'
+                    }`}>
+                      {status.isUnlocked ? `${status.progressPercentage}%` : '50% nec.'}
+                    </span>
+                  </div>
                 </div>
               </button>
             );
@@ -425,9 +449,14 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({ progress, onSele
       {/* ======================================================== */}
       {!isTrackUnlocked ? (
         <div className="bg-white dark:bg-[#25252A] border border-[#D9D9D9] dark:border-[#33333E] rounded-3xl p-6 sm:p-10 shadow-xs space-y-6 text-center">
-          <div className="max-w-xl mx-auto space-y-4">
-            <div className="w-16 h-16 rounded-3xl bg-[#F5E8EA] dark:bg-[#3A1E24] border border-[#E8D3D6] dark:border-[#4D2830] flex items-center justify-center mx-auto text-[#7B1E2B] dark:text-[#FF6B81] shadow-xs">
-              <Lock className="w-8 h-8" />
+          <div className="max-w-xl mx-auto space-y-5">
+            <IllustrativeCard
+              artwork={COURSE_TRACK_VISUALS[activeTrack]}
+              variant="banner"
+              className="text-left"
+            />
+            <div className="w-12 h-12 rounded-2xl bg-[#F5E8EA] dark:bg-[#3A1E24] border border-[#E8D3D6] dark:border-[#4D2830] flex items-center justify-center mx-auto text-[#7B1E2B] dark:text-[#FF6B81] shadow-xs">
+              <Lock className="w-6 h-6" />
             </div>
 
             <div>

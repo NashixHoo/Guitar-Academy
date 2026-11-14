@@ -22,6 +22,8 @@ import {
   X,
   Music
 } from 'lucide-react';
+import { IllustrativeCard } from '../common/IllustrativeCard';
+import { SCREEN_ARTWORKS } from '../../data/visualGallery';
 
 interface StudyLibraryViewProps {
   onOpenMetronomeAtBpm: (bpm: number) => void;
@@ -169,6 +171,8 @@ export const StudyLibraryView: React.FC<StudyLibraryViewProps> = ({ onOpenMetron
             <span>Treinar com Metrônomo ({activeSong.bpm} BPM)</span>
           </button>
         </div>
+
+        <IllustrativeCard artwork={SCREEN_ARTWORKS.library} variant="strip" />
 
         {/* Music Intelligence & Musical Engine Bar */}
         <div className="bg-[#F8F7F4] p-4 sm:p-5 rounded-2xl border border-[#D9D9D9] space-y-3">

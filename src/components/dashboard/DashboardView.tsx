@@ -46,6 +46,7 @@ import {
   getAdaptiveRecommendation,
   createInitialPedagogicalProfile,
 } from '../../pedagogy/adaptiveEngine';
+import { COURSE_TRACK_VISUALS, SCREEN_ARTWORKS } from '../../data/visualGallery';
 
 interface DashboardViewProps {
   progress: UserProgress;
@@ -158,58 +159,79 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
       )}
 
-      {/* Hero: Conservatório & Giannini 101 HSS White with Red Tortoiseshell Accent */}
-      <div className="relative overflow-hidden rounded-3xl luxury-hero-banner p-5 sm:p-7 lg:p-10 shadow-xs">
+      {/* Hero: Conservatório & Visual Showcase */}
+      <div className="relative overflow-hidden rounded-3xl luxury-hero-banner p-5 sm:p-7 lg:p-9 shadow-xs">
         {/* Subtle decorative tortoiseshell top accent line with gold trim */}
         <div className="absolute top-0 left-0 right-0 h-1.5 tortoiseshell-badge" />
 
-        {/* Faint guitar silhouette in the background */}
-        <div className="absolute top-0 right-0 p-8 opacity-[0.05] pointer-events-none hidden md:block">
-          <Guitar className="w-64 h-64 text-[#7B1E2B]" />
-        </div>
+        <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-center">
+          <div className="lg:col-span-7 space-y-4">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-[#FAF4E6] dark:bg-[#382810] border border-[#C5A059]/40 text-[#8C5F18] dark:text-[#F5D38A] text-xs font-bold shadow-2xs">
+              <Sparkles className="w-3.5 h-3.5 text-[#C5A059]" />
+              <span className="font-display tracking-wider">Trilha de Formação Musical • Conservatório</span>
+            </div>
 
-        <div className="relative z-10 max-w-2xl space-y-4">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-[#FAF4E6] dark:bg-[#382810] border border-[#C5A059]/40 text-[#8C5F18] dark:text-[#F5D38A] text-xs font-bold shadow-2xs">
-            <Sparkles className="w-3.5 h-3.5 text-[#C5A059]" />
-            <span className="font-display tracking-wider">Trilha de Formação Musical • Conservatório</span>
+            <div>
+              <span className="text-xs text-[#7B1E2B] dark:text-[#FF6B81] font-bold uppercase tracking-wider block font-mono-code">
+                {currentLesson.moduleTitle}
+              </span>
+              <h1 className="text-xl xs:text-2xl sm:text-3xl lg:text-4xl font-display font-black text-[#25252A] dark:text-[#F8F7F4] mt-1.5 leading-tight tracking-tight">
+                {currentLesson.title}
+              </h1>
+              <p className="text-xs xs:text-sm sm:text-base text-[#4D4D54] dark:text-[#B8B3C0] mt-2 font-medium leading-relaxed">
+                {currentLesson.subtitle}
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2.5 sm:gap-3.5 pt-2">
+              <button
+                onClick={() => onSelectLesson(currentLesson.id)}
+                className="luxury-btn-primary flex items-center justify-center gap-3 px-6 sm:px-7 py-3.5 rounded-2xl active:scale-95 font-bold text-sm sm:text-base transition w-full sm:w-auto shadow-xs"
+              >
+                <IniciarIcon className="w-5 h-5 ml-0.5" />
+                <span>Continuar Aula Atual</span>
+              </button>
+
+              <button
+                onClick={() => onNavigateTab('practice-routine')}
+                className="flex items-center justify-center gap-2 px-5 sm:px-6 py-3.5 rounded-2xl bg-[#FAF1F2] hover:bg-[#F3E2E5] text-[#7B1E2B] font-bold text-xs sm:text-sm border border-[#E8D3D6] transition shadow-2xs w-full sm:w-auto"
+              >
+                <PraticarIcon className="w-4 h-4 text-[#B52A3A]" />
+                <span>Central de Prática (5/10/15/30 min)</span>
+              </button>
+
+              <button
+                onClick={() => onNavigateTab('curriculum')}
+                className="flex items-center justify-center gap-2 px-5 py-3.5 rounded-2xl bg-white hover:bg-[#FAF1F2] text-[#25252A] font-bold text-xs sm:text-sm border border-[#D9D9D9] transition shadow-2xs w-full sm:w-auto"
+              >
+                <AulasIcon className="w-4 h-4 text-[#7B1E2B]" />
+                <span>Ver Trilha (6 Níveis)</span>
+              </button>
+            </div>
           </div>
 
-          <div>
-            <span className="text-xs text-[#7B1E2B] dark:text-[#FF6B81] font-bold uppercase tracking-wider block font-mono-code">
-              {currentLesson.moduleTitle}
-            </span>
-            <h1 className="text-xl xs:text-2xl sm:text-3xl lg:text-4xl font-display font-black text-[#25252A] dark:text-[#F8F7F4] mt-1.5 leading-tight tracking-tight">
-              {currentLesson.title}
-            </h1>
-            <p className="text-xs xs:text-sm sm:text-base text-[#4D4D54] dark:text-[#B8B3C0] mt-2 font-medium leading-relaxed">
-              {currentLesson.subtitle}
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2.5 sm:gap-3.5 pt-2">
-            <button
-              onClick={() => onSelectLesson(currentLesson.id)}
-              className="luxury-btn-primary flex items-center justify-center gap-3 px-6 sm:px-7 py-3.5 rounded-2xl active:scale-95 font-bold text-sm sm:text-base transition w-full sm:w-auto shadow-xs"
-            >
-              <IniciarIcon className="w-5 h-5 ml-0.5" />
-              <span>Continuar Aula Atual</span>
-            </button>
-
-            <button
-              onClick={() => onNavigateTab('practice-routine')}
-              className="flex items-center justify-center gap-2 px-5 sm:px-6 py-3.5 rounded-2xl bg-[#FAF1F2] hover:bg-[#F3E2E5] text-[#7B1E2B] font-bold text-xs sm:text-sm border border-[#E8D3D6] transition shadow-2xs w-full sm:w-auto"
-            >
-              <PraticarIcon className="w-4 h-4 text-[#B52A3A]" />
-              <span>Central de Prática (5/10/15/30 min)</span>
-            </button>
-
-            <button
-              onClick={() => onNavigateTab('curriculum')}
-              className="flex items-center justify-center gap-2 px-5 py-3.5 rounded-2xl bg-white hover:bg-[#FAF1F2] text-[#25252A] font-bold text-xs sm:text-sm border border-[#D9D9D9] transition shadow-2xs w-full sm:w-auto"
-            >
-              <AulasIcon className="w-4 h-4 text-[#7B1E2B]" />
-              <span>Ver Trilha (6 Níveis)</span>
-            </button>
+          <div className="lg:col-span-5">
+            <div className="relative overflow-hidden rounded-2xl border border-[#C5A059]/35 shadow-md bg-[#25252A] aspect-video">
+              <img
+                src={SCREEN_ARTWORKS.homeHero.src}
+                alt={SCREEN_ARTWORKS.homeHero.alt}
+                loading="eager"
+                referrerPolicy="no-referrer"
+                className="w-full h-full object-cover object-center"
+              />
+              <div
+                aria-hidden="true"
+                className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent pointer-events-none"
+              />
+              <div className="absolute bottom-0 left-0 right-0 p-3.5 sm:p-4 text-white">
+                <span className="text-[10px] font-mono-code font-bold uppercase tracking-wider text-[#F5C542] block">
+                  {SCREEN_ARTWORKS.homeHero.eyebrow}
+                </span>
+                <p className="text-xs sm:text-sm font-black leading-snug">
+                  {SCREEN_ARTWORKS.homeHero.title}
+                </p>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -225,8 +247,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       <div className="bg-white dark:bg-[#25252A] border border-[#D9D9D9] dark:border-[#33333E] rounded-3xl p-5 sm:p-6 shadow-xs space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-[#F5E8EA] dark:bg-[#3A1E24] border border-[#E8D3D6] dark:border-[#4D2830] flex items-center justify-center text-[#7B1E2B] dark:text-[#FF6B81] shrink-0">
-              <Guitar className="w-5 h-5" />
+            <div className="w-14 h-14 rounded-2xl overflow-hidden border border-[#E8D3D6] dark:border-[#4D2830] shrink-0 bg-[#25252A] shadow-xs">
+              <img
+                src={COURSE_TRACK_VISUALS[primaryCourseId].src}
+                alt={COURSE_TRACK_VISUALS[primaryCourseId].alt}
+                loading="lazy"
+                referrerPolicy="no-referrer"
+                className="w-full h-full object-cover"
+              />
             </div>
             <div>
               <div className="flex items-center gap-2">
@@ -398,22 +426,33 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
       {/* DESTAQUE: ACADEMIA DO VIOLÃO (30 AULAS) */}
       <div className="bg-gradient-to-r from-[#1F191D] via-[#2E1620] to-[#7B1E2B] text-white p-5 sm:p-6 rounded-3xl border border-[#B52A3A]/40 shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="space-y-1 max-w-xl">
-          <div className="flex items-center gap-2">
-            <span className="px-2.5 py-0.5 rounded-full bg-[#7B1E2B] text-white text-[10px] font-extrabold uppercase tracking-wider border border-[#B52A3A]/50">
-              Formação Completa
-            </span>
-            <span className="text-xs text-amber-300 font-bold flex items-center gap-1">
-              <Sparkles className="w-3.5 h-3.5" />
-              Academia do Violão • 30 Aulas • 6 Módulos
-            </span>
+        <div className="flex flex-col sm:flex-row sm:items-center gap-4 max-w-2xl">
+          <div className="w-full sm:w-32 h-32 sm:h-24 rounded-2xl overflow-hidden border border-white/15 shrink-0 bg-[#1A1216]">
+            <img
+              src={COURSE_TRACK_VISUALS.violao.src}
+              alt={COURSE_TRACK_VISUALS.violao.alt}
+              loading="lazy"
+              referrerPolicy="no-referrer"
+              className="w-full h-full object-cover"
+            />
           </div>
-          <h2 className="text-lg sm:text-xl font-black text-white">
-            Academia do Violão: Técnica, Harmonia e Expressão
-          </h2>
-          <p className="text-xs text-stone-300 leading-relaxed">
-            Do domínio dos acordes abertos e dedilhados à harmonia funcional, pestanas sem dor e criação de arranjos para violão solo.
-          </p>
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="px-2.5 py-0.5 rounded-full bg-[#7B1E2B] text-white text-[10px] font-extrabold uppercase tracking-wider border border-[#B52A3A]/50">
+                Formação Completa
+              </span>
+              <span className="text-xs text-amber-300 font-bold flex items-center gap-1">
+                <Sparkles className="w-3.5 h-3.5" />
+                Academia do Violão • 30 Aulas • 6 Módulos
+              </span>
+            </div>
+            <h2 className="text-lg sm:text-xl font-black text-white">
+              Academia do Violão: Técnica, Harmonia e Expressão
+            </h2>
+            <p className="text-xs text-stone-300 leading-relaxed">
+              Do domínio dos acordes abertos e dedilhados à harmonia funcional, pestanas sem dor e criação de arranjos para violão solo.
+            </p>
+          </div>
         </div>
         <button
           onClick={() => {
@@ -429,22 +468,33 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
       {/* DESTAQUE: FORMAÇÃO EM GUITARRA SOLO (20 AULAS) */}
       <div className="bg-gradient-to-r from-[#25252A] to-[#3B151E] text-white p-5 sm:p-6 rounded-3xl border border-[#7B1E2B]/50 shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="space-y-1 max-w-xl">
-          <div className="flex items-center gap-2">
-            <span className="px-2.5 py-0.5 rounded-full bg-[#B52A3A] text-white text-[10px] font-extrabold uppercase tracking-wider">
-              Curso Mestre
-            </span>
-            <span className="text-xs text-amber-300 font-bold flex items-center gap-1">
-              <Sparkles className="w-3.5 h-3.5" />
-              20 Aulas • 5 Etapas Pedagógicas
-            </span>
+        <div className="flex flex-col sm:flex-row sm:items-center gap-4 max-w-2xl">
+          <div className="w-full sm:w-32 h-32 sm:h-24 rounded-2xl overflow-hidden border border-white/15 shrink-0 bg-[#1A1216]">
+            <img
+              src={COURSE_TRACK_VISUALS.solo.src}
+              alt={COURSE_TRACK_VISUALS.solo.alt}
+              loading="lazy"
+              referrerPolicy="no-referrer"
+              className="w-full h-full object-cover"
+            />
           </div>
-          <h2 className="text-lg sm:text-xl font-black text-white">
-            Formação Progressiva em Guitarra Solo
-          </h2>
-          <p className="text-xs text-stone-300 leading-relaxed">
-            Palhetada alternada, 5 padrões da pentatônica menor, bends com biomecânica de 3 dedos, legato, vibrato, notas-alvo e o projeto final de 16 compassos.
-          </p>
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="px-2.5 py-0.5 rounded-full bg-[#B52A3A] text-white text-[10px] font-extrabold uppercase tracking-wider">
+                Curso Mestre
+              </span>
+              <span className="text-xs text-amber-300 font-bold flex items-center gap-1">
+                <Sparkles className="w-3.5 h-3.5" />
+                20 Aulas • 5 Etapas Pedagógicas
+              </span>
+            </div>
+            <h2 className="text-lg sm:text-xl font-black text-white">
+              Formação Progressiva em Guitarra Solo
+            </h2>
+            <p className="text-xs text-stone-300 leading-relaxed">
+              Palhetada alternada, 5 padrões da pentatônica menor, bends com biomecânica de 3 dedos, legato, vibrato, notas-alvo e o projeto final de 16 compassos.
+            </p>
+          </div>
         </div>
         <button
           onClick={() => {
