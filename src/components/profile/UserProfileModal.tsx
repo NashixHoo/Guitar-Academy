@@ -39,7 +39,20 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   onOpenJoinClass,
   onOpenPrivacyNotice,
 }) => {
-  const { user, studentProfile, logOut, syncNow, syncStatus, lastSyncedAt, isTeacher, isAdmin } = useAuth();
+  const {
+    user,
+    studentProfile,
+    logOut,
+    syncNow,
+    syncStatus,
+    lastSyncedAt,
+    isTeacher,
+    isAdmin,
+    roleResolution,
+    isRoleChecking,
+    refreshUserProfile,
+    setAdminPreviewMode,
+  } = useAuth();
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
   const hasPrivilegedRole = isTeacher || isAdmin;
@@ -133,7 +146,12 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
               {user.email}
             </p>
             <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-              {hasPrivilegedRole ? (
+              {isAdmin ? (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono-code font-bold bg-[#7B1E2B] text-white border border-[#C5A059]/60">
+                  <ShieldCheck className="w-3 h-3 text-[#F3D17A]" />
+                  Administrador
+                </span>
+              ) : hasPrivilegedRole ? (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono-code font-bold bg-amber-100 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
                   <GraduationCap className="w-3 h-3 text-amber-600 dark:text-amber-400" />
                   Professor & Coordenador
@@ -154,6 +172,68 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
               </span>
             </div>
           </div>
+        </div>
+
+        {/* Diagnóstico de Identidade e Papel Zero-Trust */}
+        <div className="mb-4 p-3 rounded-xl bg-white dark:bg-[#251820] border border-[#E8E6E1] dark:border-[#422933] text-[11px] space-y-1.5">
+          <div className="flex items-center justify-between gap-2">
+            <span className="font-bold text-[#1F1F24] dark:text-[#F8F7F4]">
+              Identidade & Autorização (system_roles)
+            </span>
+            <button
+              onClick={() => void refreshUserProfile()}
+              disabled={isRoleChecking}
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#F8F7F4] dark:bg-[#1A1216] hover:bg-[#F5E8EA] dark:hover:bg-[#381A25] text-[#7B1E2B] dark:text-[#FF6B81] border border-[#E8E6E1] dark:border-[#422933] font-semibold transition disabled:opacity-50 cursor-pointer"
+              title="Reconsultar system_roles/{uid} no servidor"
+            >
+              <RefreshCw className={`w-3 h-3 ${isRoleChecking ? 'animate-spin' : ''}`} />
+              <span>Reverificar</span>
+            </button>
+          </div>
+          <div className="font-mono-code text-[10px] text-[#666672] dark:text-[#B8B3C0] break-all">
+            UID: <span className="text-[#1F1F24] dark:text-[#F8F7F4] select-all">{user.uid}</span>
+          </div>
+          {roleResolution && roleResolution.status !== 'resolved' && (
+            <div className="p-2 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/60 text-amber-900 dark:text-amber-200 text-[10px] leading-relaxed">
+              {roleResolution.status === 'permission_denied' && (
+                <span>
+                  <strong>Permissão negada no Firestore:</strong> as regras publicadas no banco{' '}
+                  <code className="font-mono-code">{roleResolution.databaseId}</code> bloquearam a leitura de{' '}
+                  <code className="font-mono-code">{roleResolution.path}</code> ({roleResolution.errorCode}).
+                </span>
+              )}
+              {roleResolution.status === 'missing_document' && (
+                <span>
+                  <strong>Documento não encontrado:</strong> nenhum documento existe em{' '}
+                  <code className="font-mono-code">{roleResolution.path}</code> no banco{' '}
+                  <code className="font-mono-code">{roleResolution.databaseId}</code>.
+                </span>
+              )}
+              {roleResolution.status === 'invalid_role_value' && (
+                <span>
+                  <strong>Campo role inválido:</strong> o documento{' '}
+                  <code className="font-mono-code">{roleResolution.path}</code> existe, mas{' '}
+                  <code className="font-mono-code">role</code> vale{' '}
+                  <code className="font-mono-code">{JSON.stringify(roleResolution.rawRoleValue ?? null)}</code> (esperado:{' '}
+                  <code className="font-mono-code">"admin"</code> ou <code className="font-mono-code">"teacher"</code>).
+                </span>
+              )}
+              {roleResolution.status === 'network_unavailable' && (
+                <span>
+                  <strong>Firestore indisponível/offline:</strong> não foi possível confirmar{' '}
+                  <code className="font-mono-code">{roleResolution.path}</code> no servidor ({roleResolution.errorCode}).
+                </span>
+              )}
+              {(roleResolution.status === 'invalid_config' ||
+                roleResolution.status === 'unauthenticated' ||
+                roleResolution.status === 'unknown_error') && (
+                <span>
+                  <strong>Erro na verificação de papel ({roleResolution.status}):</strong>{' '}
+                  {roleResolution.errorMessage || roleResolution.errorCode || 'falha ao consultar Firestore'}.
+                </span>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Status de Sincronização em Nuvem */}
@@ -218,6 +298,19 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
 
         {/* Ações Pedagógicas & Conta */}
         <div className="space-y-2 border-t border-[#E8E6E1] dark:border-[#422933] pt-3">
+          {isAdmin && (
+            <button
+              onClick={() => {
+                setAdminPreviewMode(false);
+                onClose();
+              }}
+              className="w-full h-10 rounded-xl bg-[#7B1E2B] hover:bg-[#5E1620] text-white font-bold text-xs transition shadow-xs flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <ShieldCheck className="w-4 h-4 text-[#F3D17A]" />
+              <span>Abrir Painel Administrativo (Admin Suite)</span>
+            </button>
+          )}
+
           {hasPrivilegedRole ? (
             <button
               onClick={() => {

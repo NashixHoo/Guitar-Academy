@@ -39,6 +39,8 @@ import { KEYBOARD_LESSONS } from '../../data/keyboardCourse';
 import { DRUMS_LESSONS } from '../../data/drumsCourse';
 import { AdminLogsPanel } from './AdminLogsPanel';
 import { logAdminSecurityEvent } from '../../services/adminLogsService';
+import { getProfessorApiBaseUrl } from '../../services/professorService';
+import { FIRESTORE_DATABASE_ID } from '../../services/firebase';
 
 type AdminTabKey = 
   | 'overview' 
@@ -63,12 +65,13 @@ interface StudentDirectoryItem {
 }
 
 export const AdminPortalView: React.FC = () => {
-  const { user, logOut, setAdminPreviewMode } = useAuth();
+  const { user, logOut, setAdminPreviewMode, refreshUserProfile } = useAuth();
   const [activeTab, setActiveTab] = useState<AdminTabKey>('overview');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive' | 'suspended'>('all');
   const [isLoading, setIsLoading] = useState(false);
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
+  const [backendAuthStatus, setBackendAuthStatus] = useState<'checking' | 'verified' | 'serverless' | 'denied'>('checking');
 
   // Estados de dados administrativos
   const [classes, setClasses] = useState<ClassGroup[]>([]);
@@ -172,6 +175,51 @@ export const AdminPortalView: React.FC = () => {
     loadAdminData();
   }, [user]);
 
+  // Verificação real de autorização administrativa junto ao backend (/api/admin/overview) quando Express estiver ativo
+  useEffect(() => {
+    let active = true;
+    const verifyBackendAdminSession = async () => {
+      if (!user) return;
+      setBackendAuthStatus('checking');
+      try {
+        const idToken = await user.getIdToken();
+        const baseUrl = getProfessorApiBaseUrl();
+        const resp = await fetch(`${baseUrl}/api/admin/overview`, {
+          headers: {
+            Authorization: `Bearer ${idToken}`,
+          },
+        });
+        if (!active) return;
+        if (resp.status === 401 || resp.status === 403) {
+          console.error(
+            `[AdminPortal] Autorização administrativa recusada pelo backend (HTTP ${resp.status}). Reverificando papel Zero-Trust.`
+          );
+          setBackendAuthStatus('denied');
+          void refreshUserProfile();
+          return;
+        }
+        const contentType = resp.headers.get('content-type') || '';
+        if (resp.ok && contentType.includes('application/json')) {
+          const payload = (await resp.json()) as { status?: string; security?: string };
+          if (payload?.status === 'ok') {
+            setBackendAuthStatus('verified');
+            return;
+          }
+        }
+        // Hospedagem estática (ex: GitHub Pages) sem Express: autorização real aplicada pelas Firestore Security Rules
+        setBackendAuthStatus('serverless');
+      } catch {
+        if (active) {
+          setBackendAuthStatus('serverless');
+        }
+      }
+    };
+    void verifyBackendAdminSession();
+    return () => {
+      active = false;
+    };
+  }, [user, refreshUserProfile]);
+
   const showToast = (msg: string) => {
     setFeedbackMessage(msg);
     setTimeout(() => setFeedbackMessage(null), 3500);
@@ -222,6 +270,29 @@ export const AdminPortalView: React.FC = () => {
     }
     setAdminPreviewMode(true);
   };
+
+  if (backendAuthStatus === 'denied') {
+    return (
+      <div className="min-h-screen w-full bg-[#18181B] text-[#F4F4F5] flex items-center justify-center p-6">
+        <div className="max-w-md w-full p-6 rounded-2xl bg-[#09090B] border border-rose-800/70 space-y-4 text-center">
+          <ShieldAlert className="w-10 h-10 text-rose-400 mx-auto" />
+          <h2 className="text-lg font-display font-black text-white">
+            Autorização Administrativa Negada pelo Backend
+          </h2>
+          <p className="text-xs text-[#A1A1AA]">
+            O servidor rejeitou o token ou não confirmou <code className="text-rose-300">role: "admin"</code> em{' '}
+            <code className="text-rose-300">system_roles/{user?.uid}</code>.
+          </p>
+          <button
+            onClick={logOut}
+            className="w-full h-10 rounded-xl bg-[#7B1E2B] hover:bg-[#992434] text-white text-xs font-bold transition cursor-pointer"
+          >
+            Encerrar Sessão
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen min-h-[100dvh] w-full bg-[#18181B] text-[#F4F4F5] font-sans flex flex-col antialiased selection:bg-[#7B1E2B] selection:text-white">
@@ -431,14 +502,26 @@ export const AdminPortalView: React.FC = () => {
                       Status Operacional de Serviços e Servidor
                     </h3>
                   </div>
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-mono-code font-bold bg-emerald-950 text-emerald-400 border border-emerald-800">
-                    Operacional
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-mono-code font-bold border ${
+                      backendAuthStatus === 'verified'
+                        ? 'bg-emerald-950 text-emerald-400 border-emerald-800'
+                        : backendAuthStatus === 'serverless'
+                        ? 'bg-amber-950/60 text-amber-300 border-amber-800'
+                        : 'bg-zinc-900 text-zinc-300 border-zinc-700'
+                    }`}
+                  >
+                    {backendAuthStatus === 'verified'
+                      ? 'Backend Express + Admin SDK Verificado'
+                      : backendAuthStatus === 'serverless'
+                      ? 'Serverless (Firestore Security Rules)'
+                      : 'Verificando Sessão...'}
                   </span>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs text-[#A1A1AA]">
                   <div className="p-3 rounded-xl bg-[#141417] border border-[#27272A]">
                     <span className="block text-white font-semibold mb-0.5">Firebase Auth & DB</span>
-                    <span>Database: ai-studio-guitaracademyfor-e7ce9efa-82d3-4dd1-8b8e-58aa69749913</span>
+                    <span>Database: {FIRESTORE_DATABASE_ID}</span>
                   </div>
                   <div className="p-3 rounded-xl bg-[#141417] border border-[#27272A]">
                     <span className="block text-white font-semibold mb-0.5">Modo Estático / Custo Zero</span>

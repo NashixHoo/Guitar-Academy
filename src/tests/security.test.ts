@@ -41,7 +41,11 @@ import {
   updateDoc,
   where,
 } from 'firebase/firestore';
-import { fetchSystemRole, parseSystemRoleDoc } from '../services/firebase';
+import {
+  fetchSystemRole,
+  fetchSystemRoleWithDiagnostics,
+  parseSystemRoleDoc,
+} from '../services/firebase';
 import { matchesAdminLogEventFilter } from '../services/adminLogsService';
 
 const DEFAULT_FIRESTORE_DATABASE_ID =
@@ -153,6 +157,48 @@ describe('Zero-Trust RBAC Role Resolution (Client Fail-Closed Unit Tests)', () =
     assert.equal(matchesAdminLogEventFilter('role_access_denied', 'role_change'), true);
     assert.equal(matchesAdminLogEventFilter('student_status_updated', 'role_change'), true);
     assert.equal(matchesAdminLogEventFilter('auth_logout', 'role_change'), false);
+  });
+
+  it('classifies system_roles diagnostics accurately while preserving fail-closed student fallback', async () => {
+    const adminRes = await fetchSystemRoleWithDiagnostics('admin-diag-1', async () => ({
+      role: 'admin',
+    }));
+    assert.equal(adminRes.status, 'resolved');
+    assert.equal(adminRes.role, 'admin');
+    assert.equal(adminRes.path, 'system_roles/admin-diag-1');
+
+    const missingRes = await fetchSystemRoleWithDiagnostics('missing-diag-1', async () => null);
+    assert.equal(missingRes.status, 'missing_document');
+    assert.equal(missingRes.role, 'student');
+
+    const invalidRoleRes = await fetchSystemRoleWithDiagnostics('invalid-diag-1', async () => ({
+      role: 'ADMIN',
+      isAdmin: true,
+    }));
+    assert.equal(invalidRoleRes.status, 'invalid_role_value');
+    assert.equal(invalidRoleRes.role, 'student');
+
+    const deniedRes = await fetchSystemRoleWithDiagnostics('denied-diag-1', async () => {
+      throw Object.assign(new Error('Missing or insufficient permissions.'), {
+        code: 'permission-denied',
+      });
+    });
+    assert.equal(deniedRes.status, 'permission_denied');
+    assert.equal(deniedRes.errorCode, 'permission-denied');
+    assert.equal(deniedRes.role, 'student');
+
+    const networkRes = await fetchSystemRoleWithDiagnostics('net-diag-1', async () => {
+      throw Object.assign(new Error('Could not reach Cloud Firestore backend.'), {
+        code: 'unavailable',
+      });
+    });
+    assert.equal(networkRes.status, 'network_unavailable');
+    assert.equal(networkRes.errorCode, 'unavailable');
+    assert.equal(networkRes.role, 'student');
+
+    const unauthRes = await fetchSystemRoleWithDiagnostics('');
+    assert.equal(unauthRes.status, 'unauthenticated');
+    assert.equal(unauthRes.role, 'student');
   });
 });
 

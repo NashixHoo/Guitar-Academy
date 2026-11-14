@@ -16,8 +16,10 @@ import {
 } from 'firebase/auth';
 import { 
   getFirestore, 
+  initializeFirestore,
   doc, 
   getDoc, 
+  getDocFromServer,
   setDoc, 
   updateDoc,
   Firestore,
@@ -35,10 +37,27 @@ if (getApps().length === 0) {
 
 export const auth: Auth = getAuth(app);
 
-// Conecta à instância do Cloud Firestore configurada
-export const db: Firestore = firebaseConfig.firestoreDatabaseId && firebaseConfig.firestoreDatabaseId !== '(default)'
-  ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
-  : getFirestore(app);
+export const FIREBASE_PROJECT_ID = firebaseConfig.projectId || '';
+export const FIRESTORE_DATABASE_ID =
+  firebaseConfig.firestoreDatabaseId && firebaseConfig.firestoreDatabaseId.trim()
+    ? firebaseConfig.firestoreDatabaseId.trim()
+    : '(default)';
+
+// Conecta à instância do Cloud Firestore configurada (banco nomeado + long-polling automático contra travamentos de WebChannel)
+function createConfiguredFirestore(firebaseApp: FirebaseApp, databaseId: string): Firestore {
+  const isNamedDb = Boolean(databaseId && databaseId !== '(default)');
+  try {
+    return isNamedDb
+      ? initializeFirestore(firebaseApp, { experimentalAutoDetectLongPolling: true }, databaseId)
+      : initializeFirestore(firebaseApp, { experimentalAutoDetectLongPolling: true });
+  } catch {
+    return isNamedDb
+      ? getFirestore(firebaseApp, databaseId)
+      : getFirestore(firebaseApp);
+  }
+}
+
+export const db: Firestore = createConfiguredFirestore(app, FIRESTORE_DATABASE_ID);
 
 // Provedor Google com escopos mínimos e seletor de contas explícito
 export const googleProvider = new GoogleAuthProvider();
@@ -216,6 +235,71 @@ export async function logOut(): Promise<void> {
   }
 }
 
+export type SystemRoleResolutionStatus =
+  | 'resolved'
+  | 'missing_document'
+  | 'invalid_role_value'
+  | 'permission_denied'
+  | 'network_unavailable'
+  | 'invalid_config'
+  | 'unauthenticated'
+  | 'unknown_error';
+
+export interface SystemRoleResolution {
+  uid: string;
+  role: UserRole;
+  status: SystemRoleResolutionStatus;
+  databaseId: string;
+  projectId: string;
+  path: string;
+  errorCode: string | null;
+  errorMessage: string | null;
+  rawRoleValue: unknown;
+  checkedAt: string;
+}
+
+function classifySystemRoleReadError(err: any): {
+  status: SystemRoleResolutionStatus;
+  code: string;
+  message: string;
+} {
+  const rawCode = typeof err?.code === 'string' ? err.code : '';
+  const message = typeof err?.message === 'string' ? err.message : String(err || 'Erro desconhecido');
+  const lower = `${rawCode} ${message}`.toLowerCase();
+
+  if (
+    rawCode === 'permission-denied' ||
+    lower.includes('permission_denied') ||
+    lower.includes('missing or insufficient permissions')
+  ) {
+    return { status: 'permission_denied', code: rawCode || 'permission-denied', message };
+  }
+  if (rawCode === 'unauthenticated' || lower.includes('unauthenticated')) {
+    return { status: 'unauthenticated', code: rawCode || 'unauthenticated', message };
+  }
+  if (
+    rawCode === 'invalid-argument' ||
+    rawCode === 'not-found' ||
+    lower.includes('does not exist') ||
+    lower.includes('invalid database') ||
+    lower.includes('project')
+  ) {
+    return { status: 'invalid_config', code: rawCode || 'invalid-config', message };
+  }
+  if (
+    rawCode === 'unavailable' ||
+    rawCode === 'deadline-exceeded' ||
+    rawCode === 'aborted' ||
+    lower.includes('offline') ||
+    lower.includes('could not reach cloud firestore backend') ||
+    lower.includes('network') ||
+    lower.includes('timeout')
+  ) {
+    return { status: 'network_unavailable', code: rawCode || 'unavailable', message };
+  }
+  return { status: 'unknown_error', code: rawCode || 'unknown', message };
+}
+
 /**
  * Valida o documento de papel do sistema recuperado de system_roles/{uid}.
  * Documentos sem campo role, com role inválido ou com role 'student' NUNCA concedem privilégios.
@@ -228,6 +312,120 @@ export function parseSystemRoleDoc(data: any): UserRole {
 }
 
 /**
+ * Consulta system_roles/{uid} diretamente no servidor Firestore (banco nomeado configurado)
+ * e devolve diagnóstico detalhado preservando o fail-closed Zero-Trust ('student' em qualquer falha).
+ */
+export async function fetchSystemRoleWithDiagnostics(
+  uid: string,
+  testDocProvider?: (uid: string) => Promise<any>
+): Promise<SystemRoleResolution> {
+  const docPath = `system_roles/${uid || ''}`;
+  const baseResult = (
+    overrides: Partial<SystemRoleResolution>
+  ): SystemRoleResolution => ({
+    uid,
+    role: 'student',
+    status: 'unknown_error',
+    databaseId: FIRESTORE_DATABASE_ID,
+    projectId: FIREBASE_PROJECT_ID,
+    path: docPath,
+    errorCode: null,
+    errorMessage: null,
+    rawRoleValue: undefined,
+    checkedAt: new Date().toISOString(),
+    ...overrides,
+  });
+
+  if (!uid || typeof uid !== 'string') {
+    return baseResult({
+      status: 'unauthenticated',
+      errorCode: 'auth/missing-uid',
+      errorMessage: 'UID do usuário autenticado ausente ou inválido.',
+    });
+  }
+
+  if (testDocProvider) {
+    try {
+      const data = await testDocProvider(uid);
+      if (!data || typeof data !== 'object') {
+        return baseResult({ status: 'missing_document' });
+      }
+      const resolved = parseSystemRoleDoc(data);
+      const isKnownRole =
+        data.role === 'admin' || data.role === 'teacher' || data.role === 'student';
+      return baseResult({
+        role: resolved,
+        status: isKnownRole ? 'resolved' : 'invalid_role_value',
+        rawRoleValue: data.role,
+      });
+    } catch (err) {
+      const classified = classifySystemRoleReadError(err);
+      return baseResult({
+        status: classified.status,
+        errorCode: classified.code,
+        errorMessage: classified.message,
+      });
+    }
+  }
+
+  if (!FIREBASE_PROJECT_ID || !FIRESTORE_DATABASE_ID) {
+    const errMsg = 'Configuração Firebase incompleta (projectId ou firestoreDatabaseId ausente).';
+    console.error(`[RBAC] ${errMsg}`, {
+      projectId: FIREBASE_PROJECT_ID,
+      databaseId: FIRESTORE_DATABASE_ID,
+    });
+    return baseResult({
+      status: 'invalid_config',
+      errorCode: 'config/missing-firebase-ids',
+      errorMessage: errMsg,
+    });
+  }
+
+  try {
+    const roleRef = doc(db, 'system_roles', uid);
+    const snap = await getDocFromServer(roleRef);
+    if (!snap.exists()) {
+      console.warn(
+        `[RBAC] Documento "${docPath}" não encontrado no banco "${FIRESTORE_DATABASE_ID}" (projeto "${FIREBASE_PROJECT_ID}"). Papel resolvido como "student" (fail-closed).`
+      );
+      return baseResult({ status: 'missing_document' });
+    }
+
+    const data = snap.data();
+    const resolved = parseSystemRoleDoc(data);
+    const isKnownRole =
+      data?.role === 'admin' || data?.role === 'teacher' || data?.role === 'student';
+
+    if (!isKnownRole) {
+      console.warn(
+        `[RBAC] Documento "${docPath}" existe no banco "${FIRESTORE_DATABASE_ID}", mas o campo "role" é inválido ou ausente (${JSON.stringify(data?.role)}). Papel mantido como "student".`
+      );
+      return baseResult({
+        role: resolved,
+        status: 'invalid_role_value',
+        rawRoleValue: data?.role,
+      });
+    }
+
+    return baseResult({
+      role: resolved,
+      status: 'resolved',
+      rawRoleValue: data.role,
+    });
+  } catch (err) {
+    const classified = classifySystemRoleReadError(err);
+    console.error(
+      `[RBAC] Falha ao consultar "${docPath}" no banco "${FIRESTORE_DATABASE_ID}" (${classified.status} / ${classified.code}): ${classified.message}`
+    );
+    return baseResult({
+      status: classified.status,
+      errorCode: classified.code,
+      errorMessage: classified.message,
+    });
+  }
+}
+
+/**
  * Consulta a fonte autoritativa única de papéis em system_roles/{uid} diretamente no Firestore.
  * Somente o Firebase Admin SDK / Console pode criar ou alterar este documento (allow write: if false).
  * Qualquer erro de leitura, ausência de documento ou ausência do campo role resulta em 'student' (fail-closed).
@@ -236,29 +434,8 @@ export async function fetchSystemRole(
   uid: string,
   testDocProvider?: (uid: string) => Promise<any>
 ): Promise<UserRole> {
-  if (!uid || typeof uid !== 'string') return 'student';
-
-  // Suporte a injeção determinística de provedor de documento em suítes de testes unitários
-  if (testDocProvider) {
-    try {
-      const data = await testDocProvider(uid);
-      return parseSystemRoleDoc(data);
-    } catch {
-      return 'student';
-    }
-  }
-
-  try {
-    const roleRef = doc(db, 'system_roles', uid);
-    const snap = await getDoc(roleRef);
-    if (snap.exists()) {
-      return parseSystemRoleDoc(snap.data());
-    }
-  } catch (err) {
-    console.warn('Falha ao consultar system_roles no Firestore (fail-closed Zero-Trust):', err);
-  }
-
-  return 'student';
+  const result = await fetchSystemRoleWithDiagnostics(uid, testDocProvider);
+  return result.role;
 }
 
 /**

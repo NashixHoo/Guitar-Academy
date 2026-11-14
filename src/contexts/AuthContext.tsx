@@ -10,6 +10,8 @@ import {
   logOut as fbLogOut, 
   fetchUserProfile,
   fetchSystemRole,
+  fetchSystemRoleWithDiagnostics,
+  SystemRoleResolution,
   updateUserLastSeen,
   mapFirebaseAuthError,
   onAuthStateChanged,
@@ -25,6 +27,8 @@ interface AuthContextType {
   user: User | null;
   studentProfile: StudentProfile | null;
   role: UserRole;
+  roleResolution: SystemRoleResolution | null;
+  isRoleChecking: boolean;
   isAdmin: boolean;
   isTeacher: boolean;
   adminPreviewMode: boolean;
@@ -57,6 +61,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [user, setUser] = useState<User | null>(null);
   const [studentProfile, setStudentProfile] = useState<StudentProfile | null>(null);
   const [role, setRole] = useState<UserRole>('student');
+  const [roleResolution, setRoleResolution] = useState<SystemRoleResolution | null>(null);
+  const [isRoleChecking, setIsRoleChecking] = useState<boolean>(false);
   const [adminPreviewMode, setAdminPreviewMode] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('synced');
@@ -65,32 +71,73 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [authSuccessMessage, setAuthSuccessMessage] = useState<string | null>(null);
   const [showLegacyModal, setShowLegacyModal] = useState<boolean>(false);
   const authSeqRef = useRef<number>(0);
+  const roleSeqRef = useRef<number>(0);
+
+  const resolveAndApplyRole = useCallback(async (uid: string): Promise<SystemRoleResolution | null> => {
+    const roleSeq = ++roleSeqRef.current;
+    setIsRoleChecking(true);
+    try {
+      // Garante token fresco antes de consultar system_roles/{uid}
+      if (auth.currentUser?.uid === uid) {
+        await auth.currentUser.getIdToken().catch(() => undefined);
+      }
+      const resolution = await fetchSystemRoleWithDiagnostics(uid);
+      if (roleSeqRef.current !== roleSeq || auth.currentUser?.uid !== uid) {
+        return null;
+      }
+      setRoleResolution(resolution);
+      setRole(resolution.role);
+      if (resolution.role !== 'admin') {
+        setAdminPreviewMode(false);
+      }
+      return resolution;
+    } catch (err: any) {
+      if (roleSeqRef.current !== roleSeq || auth.currentUser?.uid !== uid) {
+        return null;
+      }
+      console.error('[AuthContext] Erro inesperado ao consultar papel em system_roles:', err);
+      setRole('student');
+      setAdminPreviewMode(false);
+      return null;
+    } finally {
+      if (roleSeqRef.current === roleSeq) {
+        setIsRoleChecking(false);
+      }
+    }
+  }, []);
 
   const refreshUserProfile = useCallback(async () => {
     const currentUser = auth.currentUser;
     if (!currentUser) {
+      roleSeqRef.current += 1;
       setStudentProfile(null);
       setRole('student');
+      setRoleResolution(null);
+      setIsRoleChecking(false);
       setAdminPreviewMode(false);
       return;
     }
     try {
-      const [profile, resolvedRole] = await Promise.all([
+      const [profile, resolution] = await Promise.all([
         fetchUserProfile(currentUser.uid),
-        fetchSystemRole(currentUser.uid),
+        resolveAndApplyRole(currentUser.uid),
       ]);
       if (auth.currentUser?.uid !== currentUser.uid) return;
-      setStudentProfile(profile);
-      setRole(resolvedRole);
-      if (resolvedRole !== 'admin') {
-        setAdminPreviewMode(false);
+      if (profile) {
+        setStudentProfile({
+          ...profile,
+          role: resolution?.role ?? profile.role,
+        });
+      } else {
+        setStudentProfile(null);
       }
-    } catch {
+    } catch (err) {
       if (auth.currentUser?.uid !== currentUser.uid) return;
+      console.error('[AuthContext] Falha ao atualizar perfil e papel do usuário:', err);
       setRole('student');
       setAdminPreviewMode(false);
     }
-  }, []);
+  }, [resolveAndApplyRole]);
 
   // Inicialização preventiva de arquivamento de dados legados e listener de autenticação
   useEffect(() => {
@@ -105,19 +152,23 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         // Carrega o perfil do estudante e o papel confiável exclusivamente de system_roles/{uid}
         try {
-          const [profile, resolvedRole] = await Promise.all([
+          const [profile, resolution] = await Promise.all([
             fetchUserProfile(currentUser.uid),
-            fetchSystemRole(currentUser.uid),
+            resolveAndApplyRole(currentUser.uid),
           ]);
           if (authSeqRef.current !== seq) return;
-          setStudentProfile(profile);
-          setRole(resolvedRole);
-          if (resolvedRole !== 'admin') {
-            setAdminPreviewMode(false);
-          }
+          setStudentProfile(
+            profile
+              ? {
+                  ...profile,
+                  role: resolution?.role ?? profile.role,
+                }
+              : null
+          );
           updateUserLastSeen(currentUser.uid);
-        } catch {
+        } catch (err) {
           if (authSeqRef.current !== seq) return;
+          console.error('[AuthContext] Erro ao sincronizar sessão e papel Zero-Trust:', err);
           // Em caso de falha de rede ou leitura, mantém estritamente o papel seguro de aluno
           setRole('student');
           setStudentProfile(null);
@@ -151,9 +202,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
       } else {
         // Sessão desconectada: limpa imediatamente usuário ativo, perfil e privilégios administrativos
+        roleSeqRef.current += 1;
         setUser(null);
         setStudentProfile(null);
         setRole('student');
+        setRoleResolution(null);
+        setIsRoleChecking(false);
         setAdminPreviewMode(false);
         storageService.setCurrentUser(null);
         setShowLegacyModal(false);
@@ -165,7 +219,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [resolveAndApplyRole]);
 
   const clearAuthError = useCallback(() => {
     setAuthError(null);
@@ -324,10 +378,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setAuthError('Erro ao desconectar sua conta.');
     } finally {
       // Desconexão imediata e irrevogável de privilégios e dados locais
+      roleSeqRef.current += 1;
       setUser(null);
       storageService.setCurrentUser(null);
       setStudentProfile(null);
       setRole('student');
+      setRoleResolution(null);
+      setIsRoleChecking(false);
       setAdminPreviewMode(false);
       setAuthError(null);
       setAuthSuccessMessage(null);
@@ -379,6 +436,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         user,
         studentProfile,
         role,
+        roleResolution,
+        isRoleChecking,
         isAdmin,
         isTeacher,
         adminPreviewMode,
