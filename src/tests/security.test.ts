@@ -47,6 +47,7 @@ import {
   parseSystemRoleDoc,
 } from '../services/firebase';
 import { matchesAdminLogEventFilter } from '../services/adminLogsService';
+import { buildAdminDirectoryUsers } from '../services/adminUsersService';
 
 const DEFAULT_FIRESTORE_DATABASE_ID =
   'ai-studio-guitaracademyfor-e7ce9efa-82d3-4dd1-8b8e-58aa69749913';
@@ -199,6 +200,78 @@ describe('Zero-Trust RBAC Role Resolution (Client Fail-Closed Unit Tests)', () =
     const unauthRes = await fetchSystemRoleWithDiagnostics('');
     assert.equal(unauthRes.status, 'unauthenticated');
     assert.equal(unauthRes.role, 'student');
+  });
+
+  it('builds admin directory strictly from real Firestore inputs without fabricated accounts', () => {
+    const emptyDirectory = buildAdminDirectoryUsers({
+      userDocs: [],
+      roleDocs: [],
+      classes: [],
+      enrollments: [],
+    });
+    assert.equal(emptyDirectory.length, 0);
+
+    const merged = buildAdminDirectoryUsers({
+      userDocs: [
+        {
+          id: 'real-stu-1',
+          data: {
+            uid: 'real-stu-1',
+            displayName: 'Maria Real',
+            email: 'maria@real.test',
+            provider: 'google.com',
+            accountStatus: 'suspended',
+            createdAt: '2026-10-01T10:00:00.000Z',
+            enrolledCourses: ['violao'],
+            role: 'admin', // campo injetado em users/ NÃO pode conceder papel admin
+          },
+        },
+      ],
+      roleDocs: [
+        { id: 'real-adm-1', data: { role: 'admin' } },
+        { id: 'real-stu-1', data: { role: 'student' } },
+      ],
+      classes: [
+        {
+          id: 'cls-1',
+          name: 'Turma Violão Real',
+          code: 'GA-REAL1',
+          teacherId: 'teacher-1',
+          teacherEmail: 'prof@real.test',
+          teacherName: 'Prof Real',
+          createdAt: '2026-10-01T00:00:00.000Z',
+          updatedAt: '2026-10-01T00:00:00.000Z',
+          active: true,
+        },
+      ],
+      enrollments: [
+        {
+          studentId: 'real-stu-1',
+          classId: 'cls-1',
+          courseId: 'solo',
+        },
+      ],
+      progressByUid: {
+        'real-stu-1': {
+          completedLessonsCount: 7,
+          totalStudyMinutes: 95,
+        },
+      },
+    });
+
+    assert.equal(merged.length, 2);
+    assert.equal(merged[0].uid, 'real-adm-1');
+    assert.equal(merged[0].role, 'admin');
+    assert.equal(merged[0].hasUserProfileDoc, false);
+
+    assert.equal(merged[1].uid, 'real-stu-1');
+    assert.equal(merged[1].role, 'student');
+    assert.equal(merged[1].accountStatus, 'suspended');
+    assert.equal(merged[1].hasUserProfileDoc, true);
+    assert.deepEqual(merged[1].enrolledCourses, ['violao', 'solo']);
+    assert.deepEqual(merged[1].classNames, ['Turma Violão Real']);
+    assert.equal(merged[1].completedLessonsCount, 7);
+    assert.equal(merged[1].totalStudyMinutes, 95);
   });
 });
 
@@ -718,6 +791,18 @@ describe('Firebase Emulator — Firestore Security Rules (Student vs Admin)', ()
       updateDoc(doc(adminDb, 'admin_logs', 'log-seed-1'), { action: 'Overwrite immutable' })
     );
 
+    // Verified admin can suspend and reactivate a student's users/{uid}.accountStatus, while student cannot
+    const studentSelfDb = getAuthenticatedDb(env, STUDENT_UID);
+    await assertSucceeds(
+      updateDoc(doc(adminDb, 'users', STUDENT_UID), { accountStatus: 'suspended' })
+    );
+    await assertFails(
+      updateDoc(doc(studentSelfDb, 'users', STUDENT_UID), { accountStatus: 'active' })
+    );
+    await assertSucceeds(
+      updateDoc(doc(adminDb, 'users', STUDENT_UID), { accountStatus: 'active' })
+    );
+
     // Teacher can read ONLY their own system_roles doc (serverless role resolution)
     const teacherOwnRoleSnap = await assertSucceeds(getDoc(doc(teacherDb, 'system_roles', TEACHER_UID)));
     assert.equal(teacherOwnRoleSnap.data()?.role, 'teacher');
@@ -929,6 +1014,8 @@ describe('Backend Express HTTP — Zero-Trust Auth, RBAC & CORS (Real Server Req
     'admin-http-1': { exists: true, role: 'admin' },
   };
 
+  const statusAuditCalls: Array<{ uid: string; status: string; actorUid: string }> = [];
+
   const app = createServerApp({
     verifyIdToken: async (token: string) => {
       const decoded = TOKENS[token];
@@ -943,8 +1030,21 @@ describe('Backend Express HTTP — Zero-Trust Auth, RBAC & CORS (Real Server Req
       }
       return ROLES[uid] || { exists: false, role: 'student' };
     },
-    writeAdminLog: async () => {},
+    writeAdminLog: async (entry) => {
+      if (entry.eventType === 'student_status_updated' && entry.targetUid) {
+        statusAuditCalls.push({
+          uid: entry.targetUid,
+          status: entry.action,
+          actorUid: entry.actorUid,
+        });
+      }
+    },
     listAdminLogs: async () => [],
+    updateUserAccountStatus: async (uid, accountStatus) => {
+      void uid;
+      void accountStatus;
+      return { firestorePersisted: true, authDisabledUpdated: true };
+    },
   });
 
   let server: import('node:http').Server;
@@ -1149,6 +1249,79 @@ describe('Backend Express HTTP — Zero-Trust Auth, RBAC & CORS (Real Server Req
       body: JSON.stringify({ message: 'Ola' }),
     });
     assert.equal(blockedPostRes.status, 403);
+  });
+
+  it('protects POST /api/admin/users/:uid/status with Zero-Trust auth, admin check, validation, and audit logging', async () => {
+    const unauthStatusRes = await fetch(`${baseUrl}/api/admin/users/student-http-1/status`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ accountStatus: 'suspended' }),
+    });
+    assert.equal(unauthStatusRes.status, 401);
+
+    const studentAttempt = await fetch(`${baseUrl}/api/admin/users/teacher-http-1/status`, {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer valid-student-jwt',
+        'Content-Type': 'application/json',
+        'x-role': 'admin',
+      },
+      body: JSON.stringify({ accountStatus: 'suspended', role: 'admin' }),
+    });
+    assert.equal(studentAttempt.status, 403);
+
+    const teacherAttempt = await fetch(`${baseUrl}/api/admin/users/student-http-1/status`, {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer valid-teacher-jwt',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ accountStatus: 'suspended' }),
+    });
+    assert.equal(teacherAttempt.status, 403);
+
+    const selfSuspendAttempt = await fetch(`${baseUrl}/api/admin/users/admin-http-1/status`, {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer valid-admin-jwt',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ accountStatus: 'suspended' }),
+    });
+    assert.equal(selfSuspendAttempt.status, 400);
+
+    const invalidStatusAttempt = await fetch(`${baseUrl}/api/admin/users/student-http-1/status`, {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer valid-admin-jwt',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ accountStatus: 'deleted' }),
+    });
+    assert.equal(invalidStatusAttempt.status, 400);
+
+    const validSuspendRes = await fetch(`${baseUrl}/api/admin/users/student-http-1/status`, {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer valid-admin-jwt',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ accountStatus: 'suspended' }),
+    });
+    assert.equal(validSuspendRes.status, 200);
+    const suspendPayload = (await validSuspendRes.json()) as {
+      status: string;
+      accountStatus: string;
+      firestorePersisted: boolean;
+      authDisabledUpdated: boolean;
+    };
+    assert.equal(suspendPayload.status, 'ok');
+    assert.equal(suspendPayload.accountStatus, 'suspended');
+    assert.equal(suspendPayload.firestorePersisted, true);
+    assert.equal(suspendPayload.authDisabledUpdated, true);
+    assert.ok(
+      statusAuditCalls.some((c) => c.uid === 'student-http-1' && c.actorUid === 'admin-http-1')
+    );
   });
 });
 

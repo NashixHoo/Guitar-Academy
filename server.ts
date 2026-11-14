@@ -4,7 +4,7 @@ import { GoogleGenAI } from '@google/genai';
 import admin from 'firebase-admin';
 import { getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
-import { getFirestore } from 'firebase-admin/firestore';
+import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import fs from 'fs';
 import http from 'http';
 import os from 'os';
@@ -91,7 +91,8 @@ export interface AdminLogPayload {
   eventType:
     | 'auth_token_rejected'
     | 'role_access_denied'
-    | 'admin_role_lookup';
+    | 'admin_role_lookup'
+    | 'student_status_updated';
   severity: 'info' | 'warning' | 'critical';
   actorUid: string;
   actorEmail?: string | null;
@@ -106,6 +107,11 @@ export interface ServerAuthDependencies {
   getSystemRole?: (uid: string) => Promise<{ exists: boolean; role: string }>;
   writeAdminLog?: (entry: AdminLogPayload) => Promise<void>;
   listAdminLogs?: () => Promise<Array<Record<string, unknown>>>;
+  updateUserAccountStatus?: (
+    uid: string,
+    accountStatus: 'active' | 'suspended',
+    actor: { uid: string; email?: string | null }
+  ) => Promise<{ firestorePersisted: boolean; authDisabledUpdated: boolean }>;
 }
 
 const VALID_ROLES = new Set(['student', 'teacher', 'admin']);
@@ -857,6 +863,113 @@ Responda ESTRITAMENTE em JSON com plano de intervenção coletiva:
       platform: 'Guitar Academy Production Backend',
       timestamp: new Date().toISOString(),
     });
+  });
+
+  // Atualização administrativa persistente da situação da conta (Zero-Trust: requer ID Token + admin em system_roles)
+  app.post('/api/admin/users/:uid/status', requireAuth, requireAdmin, async (req, res) => {
+    const caller = (req as any).user;
+    const targetUid = String(req.params.uid || '').trim();
+    const rawStatus = req.body?.accountStatus;
+
+    if (!UID_REGEX.test(targetUid)) {
+      return res.status(400).json({ error: 'Identificador de usuário inválido.' });
+    }
+    if (targetUid === caller.uid) {
+      return res.status(400).json({
+        error: 'O administrador não pode suspender ou alterar o status da própria conta ativa.',
+      });
+    }
+    if (rawStatus !== 'active' && rawStatus !== 'suspended') {
+      return res.status(400).json({
+        error: 'Valor de accountStatus inválido. Valores permitidos: "active" ou "suspended".',
+      });
+    }
+
+    const nextStatus: 'active' | 'suspended' = rawStatus;
+
+    try {
+      if (deps.updateUserAccountStatus) {
+        const result = await deps.updateUserAccountStatus(targetUid, nextStatus, {
+          uid: caller.uid,
+          email: caller.email || null,
+        });
+        await recordAdminLog({
+          eventType: 'student_status_updated',
+          severity: nextStatus === 'suspended' ? 'warning' : 'info',
+          actorUid: caller.uid,
+          actorEmail: caller.email || null,
+          actorRole: 'admin',
+          targetUid,
+          action: `Situação da conta alterada para "${nextStatus}"`,
+          details: `Operação administrativa executada via backend (Auth disabled=${result.authDisabledUpdated})`,
+        });
+        return res.json({
+          status: 'ok',
+          uid: targetUid,
+          accountStatus: nextStatus,
+          firestorePersisted: result.firestorePersisted,
+          authDisabledUpdated: result.authDisabledUpdated,
+        });
+      }
+
+      if (!canWriteAuditLogToFirestore()) {
+        return res.status(503).json({
+          error: 'Credenciais administrativas do Firebase Admin SDK não estão disponíveis neste servidor.',
+          code: 'admin/credentials-unavailable',
+        });
+      }
+
+      const adminDb = getAdminDb();
+      const userRef = adminDb.collection('users').doc(targetUid);
+      const existingSnap = await userRef.get();
+      if (!existingSnap.exists) {
+        return res.status(404).json({
+          error: `Usuário "${targetUid}" não encontrado na coleção users.`,
+        });
+      }
+
+      await userRef.update({
+        accountStatus: nextStatus,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+
+      let authDisabledUpdated = false;
+      try {
+        await getAuth().updateUser(targetUid, { disabled: nextStatus === 'suspended' });
+        if (nextStatus === 'suspended') {
+          await getAuth().revokeRefreshTokens(targetUid);
+        }
+        authDisabledUpdated = true;
+      } catch (authErr: any) {
+        console.warn(
+          `[Admin] accountStatus persistido em users/${targetUid}, mas não foi possível atualizar Firebase Auth (${authErr?.code || authErr?.message || 'erro'}).`
+        );
+      }
+
+      await recordAdminLog({
+        eventType: 'student_status_updated',
+        severity: nextStatus === 'suspended' ? 'warning' : 'info',
+        actorUid: caller.uid,
+        actorEmail: caller.email || null,
+        actorRole: 'admin',
+        targetUid,
+        action: `Situação da conta alterada para "${nextStatus === 'active' ? 'Ativa' : 'Suspensa'}"`,
+        details: `Persistido em users/${targetUid}.accountStatus=${nextStatus} via backend (Auth disabled=${authDisabledUpdated})`,
+      });
+
+      return res.json({
+        status: 'ok',
+        uid: targetUid,
+        accountStatus: nextStatus,
+        firestorePersisted: true,
+        authDisabledUpdated,
+      });
+    } catch (err: any) {
+      console.error('[Admin] Falha ao atualizar status da conta:', err?.message || err);
+      return res.status(500).json({
+        error: 'Não foi possível persistir a alteração de status da conta.',
+      });
+    }
   });
 
   // Catch-all 404 para rotas /api inexistentes (retorna JSON, nunca HTML)
