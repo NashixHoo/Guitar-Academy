@@ -641,10 +641,17 @@ export class GuitarPitchDetector {
   private isAcquiringMicrophone = false;
   private animFrameId: number | null = null;
 
+  static readonly MIN_INPUT_GAIN = 0.5;
+  static readonly DEFAULT_INPUT_GAIN = 1.8;
+  static readonly MAX_INPUT_GAIN = 3.2;
+
   private lastTimeBuffer: Float32Array | null = null;
   private lastSampleRate = 44100;
   private consecutiveZeroBuffers = 0;
-  private currentInputGain = 1.8;
+  private currentInputGain = GuitarPitchDetector.DEFAULT_INPUT_GAIN;
+  private weakGainBoostStreak = 0;
+  private strongGainReduceStreak = 0;
+  private gainHoldCooldownFrames = 0;
   private appliedMicSettings: MicAppliedSettings | null = null;
 
   // Onset, Ataque, Decaimento & Estabilidade
@@ -722,6 +729,228 @@ export class GuitarPitchDetector {
       consecutiveZeroBuffers: this.consecutiveZeroBuffers,
       inputGain: parseFloat(this.currentInputGain.toFixed(2)),
       appliedSettings: this.appliedMicSettings
+    };
+  }
+
+  /**
+   * Controle adaptativo de ganho com histerese, proteção imediata contra clipping
+   * e amplificação gradual apenas quando há evidência de periodicidade musical.
+   */
+  updateAdaptiveInputGain(
+    buffer: Float32Array,
+    pitch: PitchDetectionResult | null
+  ): {
+    gain: number;
+    previousGain: number;
+    action:
+      | 'clipping_reduce'
+      | 'strong_reduce'
+      | 'weak_boost'
+      | 'hold_deadband'
+      | 'hold_cooldown'
+      | 'hold_rejected'
+      | 'hold_hysteresis';
+    timeConstant: number;
+    rawMaxAbs: number;
+    acMaxAbs: number;
+    acRms: number;
+  } {
+    const len = buffer ? buffer.length : 0;
+    let sum = 0;
+    let rawMaxAbs = 0;
+    for (let i = 0; i < len; i++) {
+      const v = Number.isFinite(buffer[i]) ? buffer[i] : 0;
+      const abs = Math.abs(v);
+      if (abs > rawMaxAbs) rawMaxAbs = abs;
+      sum += v;
+    }
+
+    const dcMean = len > 0 ? sum / len : 0;
+    let acMaxAbs = 0;
+    let acSumSq = 0;
+    for (let i = 0; i < len; i++) {
+      const ac = (Number.isFinite(buffer[i]) ? buffer[i] : 0) - dcMean;
+      const absAc = Math.abs(ac);
+      if (absAc > acMaxAbs) acMaxAbs = absAc;
+      acSumSq += ac * ac;
+    }
+    const acRms = len > 0 ? Math.sqrt(acSumSq / len) : 0;
+    const previousGain = this.currentInputGain;
+
+    // 1. Proteção imediata contra clipping / saturação
+    if (rawMaxAbs >= 0.85 || acMaxAbs >= 0.85) {
+      const nextGain = Math.max(
+        GuitarPitchDetector.MIN_INPUT_GAIN,
+        parseFloat((previousGain * 0.55).toFixed(4))
+      );
+      this.currentInputGain = nextGain;
+      this.weakGainBoostStreak = 0;
+      this.strongGainReduceStreak = 0;
+      this.gainHoldCooldownFrames = 6;
+      return {
+        gain: nextGain,
+        previousGain,
+        action: 'clipping_reduce',
+        timeConstant: 0.012,
+        rawMaxAbs,
+        acMaxAbs,
+        acRms
+      };
+    }
+
+    // 2. Atenuação gradual para sinais fortes (evita distorção e bombeamento em ataques)
+    if (rawMaxAbs >= 0.45 || acMaxAbs >= 0.45 || acRms >= 0.14) {
+      this.weakGainBoostStreak = 0;
+      this.strongGainReduceStreak++;
+      if (rawMaxAbs >= 0.62 || acRms >= 0.19 || this.strongGainReduceStreak >= 2) {
+        const factor = rawMaxAbs >= 0.62 ? 0.72 : 0.84;
+        const nextGain = Math.max(
+          GuitarPitchDetector.MIN_INPUT_GAIN,
+          parseFloat((previousGain * factor).toFixed(4))
+        );
+        this.currentInputGain = nextGain;
+        this.gainHoldCooldownFrames = 4;
+        return {
+          gain: nextGain,
+          previousGain,
+          action: 'strong_reduce',
+          timeConstant: 0.025,
+          rawMaxAbs,
+          acMaxAbs,
+          acRms
+        };
+      }
+      return {
+        gain: this.currentInputGain,
+        previousGain,
+        action: 'hold_hysteresis',
+        timeConstant: 0.04,
+        rawMaxAbs,
+        acMaxAbs,
+        acRms
+      };
+    }
+
+    this.strongGainReduceStreak = 0;
+
+    // 3. Nunca amplifica diante de silêncio, ruído aleatório ou polifonia
+    if (
+      !pitch ||
+      pitch.isSilence ||
+      pitch.detectionType === 'silence' ||
+      pitch.detectionType === 'noise_or_unidentified' ||
+      pitch.detectionType === 'polyphonic_ambiguous'
+    ) {
+      this.weakGainBoostStreak = 0;
+      if (this.gainHoldCooldownFrames > 0) this.gainHoldCooldownFrames--;
+      return {
+        gain: this.currentInputGain,
+        previousGain,
+        action: 'hold_rejected',
+        timeConstant: 0.08,
+        rawMaxAbs,
+        acMaxAbs,
+        acRms
+      };
+    }
+
+    // 4. Histerese temporal após redução de ganho
+    if (this.gainHoldCooldownFrames > 0) {
+      this.gainHoldCooldownFrames--;
+      this.weakGainBoostStreak = 0;
+      return {
+        gain: this.currentInputGain,
+        previousGain,
+        action: 'hold_cooldown',
+        timeConstant: 0.08,
+        rawMaxAbs,
+        acMaxAbs,
+        acRms
+      };
+    }
+
+    // 5. Faixa confortável com histerese de amplitude (evita oscilações entre subida e descida)
+    if (acMaxAbs >= 0.055 || acRms >= 0.018) {
+      this.weakGainBoostStreak = 0;
+      return {
+        gain: this.currentInputGain,
+        previousGain,
+        action: 'hold_deadband',
+        timeConstant: 0.08,
+        rawMaxAbs,
+        acMaxAbs,
+        acRms
+      };
+    }
+
+    // 6. Piso mínimo de energia AC real (protege contra ruído digital próximo a zero)
+    if (acRms < Math.max(this.silenceThreshold * 0.75, 0.0007) || acMaxAbs < 0.0012) {
+      this.weakGainBoostStreak = 0;
+      return {
+        gain: this.currentInputGain,
+        previousGain,
+        action: 'hold_rejected',
+        timeConstant: 0.08,
+        rawMaxAbs,
+        acMaxAbs,
+        acRms
+      };
+    }
+
+    // 7. Evidência de periodicidade musical (monofônico suave, sinal fraco válido ou fraco periódico)
+    const conf = pitch.confidence ?? 0;
+    const periodicity = pitch.normalizedPeriodicity ?? 0;
+    const isMonophonicQuiet =
+      pitch.detectionType === 'monophonic_note' && conf >= 0.58 && periodicity >= 0.55;
+    const isWeakValidPeriodic =
+      Boolean(pitch.isWeakValid) && conf >= 0.42 && periodicity >= 0.55;
+    const isWeakPeriodic =
+      pitch.detectionType === 'weak_signal' && conf >= 0.34 && periodicity >= 0.52;
+
+    if (!isMonophonicQuiet && !isWeakValidPeriodic && !isWeakPeriodic) {
+      this.weakGainBoostStreak = 0;
+      return {
+        gain: this.currentInputGain,
+        previousGain,
+        action: 'hold_rejected',
+        timeConstant: 0.08,
+        rawMaxAbs,
+        acMaxAbs,
+        acRms
+      };
+    }
+
+    // Exige 2 quadros periódicos consecutivos antes de ampliar para evitar disparo em estalos isolados
+    this.weakGainBoostStreak++;
+    if (this.weakGainBoostStreak < 2) {
+      return {
+        gain: this.currentInputGain,
+        previousGain,
+        action: 'hold_hysteresis',
+        timeConstant: 0.08,
+        rawMaxAbs,
+        acMaxAbs,
+        acRms
+      };
+    }
+
+    const boostStep =
+      isMonophonicQuiet || isWeakValidPeriodic
+        ? (acMaxAbs < 0.015 ? 0.14 : 0.09)
+        : 0.07;
+    const nextGain = Math.min(
+      GuitarPitchDetector.MAX_INPUT_GAIN,
+      parseFloat((previousGain + boostStep).toFixed(4))
+    );
+    this.currentInputGain = nextGain;
+    return {
+      gain: nextGain,
+      previousGain,
+      action: 'weak_boost',
+      timeConstant: 0.09,
+      rawMaxAbs,
+      acMaxAbs,
+      acRms
     };
   }
 
@@ -821,8 +1050,11 @@ export class GuitarPitchDetector {
       this.lowpassFilter.frequency.setValueAtTime(this.highCutoff, this.audioCtx.currentTime);
       this.lowpassFilter.Q.setValueAtTime(0.707, this.audioCtx.currentTime);
 
-      // Condicionamento limitado de entrada para microfones com ganho nativo baixo (1.0x a 3.2x max, sem clipping)
-      this.currentInputGain = 1.8;
+      // Condicionamento limitado de entrada para microfones com ganho nativo baixo (0.5x a 3.2x max, sem clipping)
+      this.currentInputGain = GuitarPitchDetector.DEFAULT_INPUT_GAIN;
+      this.weakGainBoostStreak = 0;
+      this.strongGainReduceStreak = 0;
+      this.gainHoldCooldownFrames = 0;
       this.inputGainNode = this.audioCtx.createGain();
       this.inputGainNode.gain.setValueAtTime(this.currentInputGain, this.audioCtx.currentTime);
 
@@ -912,31 +1144,19 @@ export class GuitarPitchDetector {
             const isMuted = Boolean(track?.muted) || track?.readyState !== 'live';
             const ctxSuspended = this.audioCtx.state !== 'running';
 
-            let maxAbs = 0;
-            for (let i = 0; i < buffer.length; i += 8) {
-              const abs = Math.abs(buffer[i]);
-              if (abs > maxAbs) maxAbs = abs;
-            }
-            if (maxAbs === 0) {
+            const gainEval = this.updateAdaptiveInputGain(buffer, pitch);
+            if (gainEval.rawMaxAbs === 0) {
               this.consecutiveZeroBuffers++;
             } else {
               this.consecutiveZeroBuffers = 0;
             }
 
-            // Controle automático limitado de ganho (evita clipping e auxilia sinais baixos de violão/guitarra)
-            if (this.inputGainNode && this.audioCtx) {
-              if (maxAbs > 0.45 && this.currentInputGain > 1.0) {
-                this.currentInputGain = Math.max(1.0, this.currentInputGain * 0.72);
-                this.inputGainNode.gain.setTargetAtTime(this.currentInputGain, this.audioCtx.currentTime, 0.02);
-              } else if (
-                maxAbs > 0.001 &&
-                maxAbs < 0.05 &&
-                pitch.detectionType === 'monophonic_note' &&
-                this.currentInputGain < 3.0
-              ) {
-                this.currentInputGain = Math.min(3.0, this.currentInputGain + 0.12);
-                this.inputGainNode.gain.setTargetAtTime(this.currentInputGain, this.audioCtx.currentTime, 0.08);
-              }
+            if (this.inputGainNode && this.audioCtx && gainEval.gain !== gainEval.previousGain) {
+              this.inputGainNode.gain.setTargetAtTime(
+                gainEval.gain,
+                this.audioCtx.currentTime,
+                gainEval.timeConstant
+              );
             }
 
             pitch.contextState = this.audioCtx.state;
@@ -1153,6 +1373,9 @@ export class GuitarPitchDetector {
     this.transientFramesRemaining = 0;
     this.lastNoteKey = null;
     this.consecutiveZeroBuffers = 0;
+    this.weakGainBoostStreak = 0;
+    this.strongGainReduceStreak = 0;
+    this.gainHoldCooldownFrames = 0;
     this.appliedMicSettings = null;
   }
 

@@ -148,6 +148,9 @@ export class TunerSmoother {
   private tentativeCents = 0;
   private tentativeExpectedFreq = 0;
   private lastTentativeTime = 0;
+  private weakStableStreak = 0;
+  private weakLastNoteId: string | null = null;
+  private weakCentsWindow: number[] = [];
 
   constructor(options: TunerSmootherOptions = {}) {
     this.confidenceThreshold = options.confidenceThreshold !== undefined ? options.confidenceThreshold : 0.58;
@@ -212,6 +215,9 @@ export class TunerSmoother {
     this.tentativeCents = 0;
     this.tentativeExpectedFreq = 0;
     this.lastTentativeTime = 0;
+    this.weakStableStreak = 0;
+    this.weakLastNoteId = null;
+    this.weakCentsWindow = [];
   }
 
   feedPitch(pitch: PitchDetectionResult | null, timestamp: number | null = null): void {
@@ -232,14 +238,23 @@ export class TunerSmoother {
         this.currentState = TUNER_STATES.WEAK_SIGNAL;
         this.consecutiveInTuneReadings = 0;
         this.tentativeNote = null;
+        this.weakStableStreak = 0;
+        this.weakLastNoteId = null;
+        this.weakCentsWindow = [];
       } else if (pitch && (pitch.detectionType === 'noise_or_unidentified' || pitch.detectionType === 'weak_signal')) {
         this.isWeakSignal = true;
         this.targetPolyphonic = false;
         this.currentState = TUNER_STATES.WEAK_SIGNAL;
         this.consecutiveInTuneReadings = 0;
         this.tentativeNote = null;
+        this.weakStableStreak = 0;
+        this.weakLastNoteId = null;
+        this.weakCentsWindow = [];
       } else {
         this.targetPolyphonic = false;
+        this.weakStableStreak = 0;
+        this.weakLastNoteId = null;
+        this.weakCentsWindow = [];
       }
       return;
     }
@@ -247,7 +262,8 @@ export class TunerSmoother {
     const confidence = pitch.confidence !== undefined ? pitch.confidence : 0;
     this.targetIntensity = pitch.intensity ?? 0;
 
-    // Sinal fraco, mas periódico/tonal válido: mantém leitura provisória sem jamais confirmar afinação
+    // Sinal fraco, mas periódico/tonal válido: mantém leitura provisória e só evolui para confirmada após estabilidade sustentada
+    let promotedFromWeakValid = false;
     if (
       pitch.isWeakValid &&
       pitch.note &&
@@ -255,26 +271,60 @@ export class TunerSmoother {
       confidence >= 0.45
     ) {
       const weakRawCents = pitch.rawCents !== undefined ? pitch.rawCents : (pitch.cents ?? 0);
-      this.isWeakSignal = true;
-      this.targetPolyphonic = false;
-      this.currentState = TUNER_STATES.WEAK_SIGNAL;
-      this.consecutiveInTuneReadings = 0;
-      this.targetConfidence = confidence;
-      this.targetStability = pitch.stability ?? 35;
-      this.targetTransient = Boolean(pitch.isTransientContaminated || pitch.signalPhase === 'attack');
-      this.tentativeNote = pitch.note;
-      this.tentativeNotePt = pitch.notePt;
-      this.tentativeOctave = pitch.octave;
-      this.tentativeFreq = pitch.frequency;
-      this.tentativeCents = Math.max(-50, Math.min(50, weakRawCents));
-      this.tentativeExpectedFreq = pitch.exactExpectedFreq ?? pitch.expectedFreq ?? 0;
-      this.targetCents = this.tentativeCents;
-      this.lastTentativeTime = now;
-      return;
-    }
+      const clampedWeakCents = Math.max(-50, Math.min(50, weakRawCents));
+      const weakNoteId = `${pitch.note}${pitch.octave !== null ? pitch.octave : ''}`;
+      const isWeakTransient = Boolean(pitch.isTransientContaminated || pitch.signalPhase === 'attack');
+      const periodicityOk =
+        pitch.normalizedPeriodicity === undefined ? confidence >= 0.50 : pitch.normalizedPeriodicity >= 0.68;
+      const nonPolyphonicOk = (pitch.inharmonicPeaksCount ?? 0) === 0;
 
-    // Exige detecção monofônica válida acima do limiar de confiança
-    if (
+      if (!isWeakTransient && periodicityOk && nonPolyphonicOk && confidence >= 0.48) {
+        if (this.weakLastNoteId === weakNoteId) {
+          this.weakStableStreak++;
+          this.weakCentsWindow.push(clampedWeakCents);
+          if (this.weakCentsWindow.length > 5) {
+            this.weakCentsWindow.shift();
+          }
+        } else {
+          this.weakLastNoteId = weakNoteId;
+          this.weakStableStreak = 1;
+          this.weakCentsWindow = [clampedWeakCents];
+        }
+      } else {
+        this.weakStableStreak = 0;
+        this.weakLastNoteId = null;
+        this.weakCentsWindow = [];
+      }
+
+      const weakSpread =
+        this.weakCentsWindow.length >= 4
+          ? Math.max(...this.weakCentsWindow) - Math.min(...this.weakCentsWindow)
+          : 999;
+      promotedFromWeakValid =
+        this.weakStableStreak >= 4 &&
+        this.weakCentsWindow.length >= 4 &&
+        weakSpread <= 6.0;
+
+      if (!promotedFromWeakValid) {
+        this.isWeakSignal = true;
+        this.targetPolyphonic = false;
+        this.currentState = TUNER_STATES.WEAK_SIGNAL;
+        this.consecutiveInTuneReadings = 0;
+        this.targetConfidence = confidence;
+        this.targetStability = pitch.stability ?? 35;
+        this.targetTransient = isWeakTransient;
+        this.tentativeNote = pitch.note;
+        this.tentativeNotePt = pitch.notePt;
+        this.tentativeOctave = pitch.octave;
+        this.tentativeFreq = pitch.frequency;
+        this.tentativeCents = clampedWeakCents;
+        this.tentativeExpectedFreq = pitch.exactExpectedFreq ?? pitch.expectedFreq ?? 0;
+        this.targetCents = this.tentativeCents;
+        this.lastTentativeTime = now;
+        return;
+      }
+    } else if (
+      // Exige detecção monofônica válida acima do limiar de confiança
       pitch.detectionType !== 'monophonic_note' ||
       pitch.isReliable === false ||
       confidence < this.confidenceThreshold ||
@@ -285,7 +335,14 @@ export class TunerSmoother {
       this.currentState = TUNER_STATES.WEAK_SIGNAL;
       this.consecutiveInTuneReadings = 0;
       this.tentativeNote = null;
+      this.weakStableStreak = 0;
+      this.weakLastNoteId = null;
+      this.weakCentsWindow = [];
       return;
+    } else {
+      this.weakStableStreak = 0;
+      this.weakLastNoteId = null;
+      this.weakCentsWindow = [];
     }
 
     this.isWeakSignal = false;
@@ -385,7 +442,7 @@ export class TunerSmoother {
     this.targetConfidence = confidence;
     this.targetExpectedFreq = exactExpectedFreq;
     this.targetDiffHz = exactDiffHz;
-    this.targetStability = pitch.stability ?? 75;
+    this.targetStability = promotedFromWeakValid ? Math.max(74, pitch.stability ?? 74) : (pitch.stability ?? 75);
     this.targetCents = smoothedSampleCents;
     this.consecutiveValidReadings++;
 
@@ -480,10 +537,14 @@ export class TunerSmoother {
       absTarget <= this.inTuneTolerance &&
       this.consecutiveInTuneReadings >= requiredReadingsForInTune;
 
-    if (this.currentState === TUNER_STATES.WEAK_SIGNAL || this.isWeakSignal) {
+    if (this.isWeakSignal) {
+      this.currentState = TUNER_STATES.WEAK_SIGNAL;
       this.stableInTuneCount = 0;
       this.currentStage = 'inconclusive';
-    } else if (this.currentState === TUNER_STATES.WAITING_SOUND || !this.targetNote) {
+    } else if (!this.targetNote || (this.lastConfidentTime > 0 && timeSinceLastSound > this.silenceGracePeriodMs)) {
+      if (this.currentState !== TUNER_STATES.IDLE || (this.lastConfidentTime > 0 && timeSinceLastSound > this.silenceGracePeriodMs)) {
+        this.currentState = TUNER_STATES.WAITING_SOUND;
+      }
       this.stableInTuneCount = 0;
       this.currentStage = 'inconclusive';
     } else if (canConfirmInTune) {

@@ -6289,6 +6289,330 @@ assert(
   '36.6 Silêncio e ruído permanecem sem nota falsa; sinal fraco válido preserva leitura provisória sem confirmar afinação; UI orienta "Toque uma corda para começar"'
 );
 
+// =============================================================
+// GRUPO 37 — HOTFIX GANHO ADAPTATIVO & EVOLUÇÃO DE SINAL FRACO
+// =============================================================
+console.log('\n--- GRUPO 37: HOTFIX GANHO ADAPTATIVO & EVOLUÇÃO DE SINAL FRACO ---');
+
+// 37.1 Sinal fraco periódico que inicialmente não é reconhecido eleva o ganho com histerese
+const gainDet1 = new GuitarPitchDetector();
+const weakPeriodicUnrecognizedBuf = new Float32Array(4096);
+let seed37 = 424242;
+for (let i = 0; i < 4096; i++) {
+  const t = i / 44100;
+  seed37 = (seed37 * 1664525 + 1013904223) >>> 0;
+  const rand = (seed37 / 0xffffffff) * 2 - 1;
+  // Sinal fraco periódico com relação sinal-ruído limítrofe: gera periodicidade válida sem fechar nota
+  weakPeriodicUnrecognizedBuf[i] =
+    0.008 * Math.sin(2 * Math.PI * 110.0 * t) +
+    0.005 * Math.sin(2 * Math.PI * 220.0 * t) +
+    0.0065 * rand;
+}
+const rawWeakUnrecognizedPitch: any = {
+  frequency: 0,
+  note: null,
+  notePt: null,
+  octave: null,
+  cents: 0,
+  rawCents: 0,
+  confidence: 0.39,
+  intensity: 0.12,
+  isSilence: false,
+  isWeakSignal: true,
+  isWeakValid: false,
+  isOnset: false,
+  detectionType: 'weak_signal',
+  isReliable: false,
+  normalizedPeriodicity: 0.56,
+  stability: 0,
+  stabilityLabel: 'Sinal fraco',
+  expectedFreq: 0,
+  diffHz: 0,
+  timestamp: Date.now()
+};
+const initialGain37 = gainDet1.getAudioDiagnostics().inputGain;
+const step1Hyst = gainDet1.updateAdaptiveInputGain(weakPeriodicUnrecognizedBuf, rawWeakUnrecognizedPitch);
+const step2Boost = gainDet1.updateAdaptiveInputGain(weakPeriodicUnrecognizedBuf, rawWeakUnrecognizedPitch);
+const step3Boost = gainDet1.updateAdaptiveInputGain(weakPeriodicUnrecognizedBuf, rawWeakUnrecognizedPitch);
+
+assert(
+  step1Hyst.action === 'hold_hysteresis' &&
+  step1Hyst.gain === initialGain37 &&
+  step2Boost.action === 'weak_boost' &&
+  step2Boost.gain > initialGain37 &&
+  step3Boost.gain > step2Boost.gain &&
+  step3Boost.gain <= GuitarPitchDetector.MAX_INPUT_GAIN,
+  `37.1 Sinal fraco não reconhecido com periodicidade musical eleva o ganho gradualmente após histerese (${initialGain37} -> ${step2Boost.gain.toFixed(2)} -> ${step3Boost.gain.toFixed(2)})`
+);
+
+// 37.2 Sinal fraco periódico evolui para nota reconhecida (malha fechada startListening + TunerSmoother)
+const gainDet2 = new GuitarPitchDetector({ lowCutoff: 52, highCutoff: 1450, confidenceThreshold: 0.78 });
+const rawFloorSeed = 104729;
+let closedLoopFirstNote: any = null;
+let closedLoopConfirmedOut: any = null;
+const evolutionSmoother = new TunerSmoother({ confidenceThreshold: 0.78, inTuneTolerance: 5.0, minStableReadingsForInTune: 2 });
+let currentMockGain = GuitarPitchDetector.DEFAULT_INPUT_GAIN;
+const gainHistory: number[] = [];
+
+// Simula captação contínua onde o ganho adaptativo eleva o sinal fraco de A2 acima do piso de ruído/confiança
+const baseWeakSignalAmp = 0.00105;
+const adcStaticFloorAmp = 0.0021;
+for (let frame = 0; frame < 13; frame++) {
+  const frameBuf = new Float32Array(4096);
+  let fSeed = rawFloorSeed + frame * 7919;
+  for (let i = 0; i < 4096; i++) {
+    const t = i / 44100;
+    fSeed = (fSeed * 1664525 + 1013904223) >>> 0;
+    const circuitNoise = ((fSeed / 0xffffffff) * 2 - 1) * adcStaticFloorAmp;
+    const amplifiedString =
+      currentMockGain *
+      (baseWeakSignalAmp * Math.sin(2 * Math.PI * 110.0 * t) +
+        baseWeakSignalAmp * 0.7 * Math.sin(2 * Math.PI * 220.0 * t));
+    frameBuf[i] = amplifiedString + circuitNoise;
+  }
+
+  const pitchRes = gainDet2.detectPitchFromBuffer(frameBuf, 44100);
+  if (frame === 0) closedLoopFirstNote = pitchRes;
+  const gRes = gainDet2.updateAdaptiveInputGain(frameBuf, pitchRes);
+  currentMockGain = gRes.gain;
+  gainHistory.push(currentMockGain);
+  evolutionSmoother.feedPitch(pitchRes, 2000 + frame * 32);
+  closedLoopConfirmedOut = evolutionSmoother.step(2000 + frame * 32 + 16);
+}
+
+// Também valida evolução direta no TunerSmoother de leitura provisória estável (isWeakValid -> confirmada)
+const weakToConfirmedSmoother = new TunerSmoother({ confidenceThreshold: 0.58, inTuneTolerance: 5.0, minStableReadingsForInTune: 2 });
+let outAfter1Weak: any = null;
+let outAfterStableWeak: any = null;
+for (let f = 0; f < 6; f++) {
+  const ts = 5000 + f * 35;
+  weakToConfirmedSmoother.feedPitch({
+    frequency: 82.41 + (f % 2) * 0.02,
+    note: 'E',
+    notePt: 'Mi',
+    octave: 2,
+    cents: 0,
+    rawCents: (f % 2) * 0.4,
+    confidence: 0.52,
+    intensity: 0.16,
+    isSilence: false,
+    isWeakSignal: true,
+    isWeakValid: true,
+    isOnset: false,
+    signalPhase: 'steady',
+    isTransientContaminated: false,
+    detectionType: 'weak_signal',
+    isReliable: false,
+    normalizedPeriodicity: 0.76,
+    inharmonicPeaksCount: 0,
+    stability: 42,
+    stabilityLabel: 'Sinal fraco',
+    expectedFreq: 82.41,
+    exactExpectedFreq: 82.41,
+    diffHz: 0,
+    exactDiffHz: 0,
+    timestamp: ts
+  }, ts);
+  const st = weakToConfirmedSmoother.step(ts + 16);
+  if (f === 0) outAfter1Weak = st;
+  if (f === 5) outAfterStableWeak = st;
+}
+
+assert(
+  (closedLoopFirstNote?.note === null || closedLoopFirstNote?.detectionType === 'weak_signal') &&
+  currentMockGain > GuitarPitchDetector.DEFAULT_INPUT_GAIN &&
+  closedLoopConfirmedOut?.note === 'A' &&
+  closedLoopConfirmedOut?.octave === 2 &&
+  closedLoopConfirmedOut?.isUnconfirmed === false &&
+  outAfter1Weak?.note === null &&
+  outAfter1Weak?.tentativeNote === 'E' &&
+  outAfter1Weak?.isUnconfirmed === true &&
+  outAfterStableWeak?.note === 'E' &&
+  outAfterStableWeak?.octave === 2 &&
+  outAfterStableWeak?.isUnconfirmed === false,
+  '37.2 Sinal fraco periódico evolui para nota reconhecida e confirmada (tanto por ganho adaptativo quanto por estabilidade contínua)'
+);
+
+// 37.3 Ruído ambiente, silêncio e polifonia NÃO provocam amplificação contínua
+const noiseGainDet = new GuitarPitchDetector();
+const initNoiseGain = noiseGainDet.getAudioDiagnostics().inputGain;
+const softNoiseBuf = generateWhiteNoiseBuffer(4096, 0.015);
+const silentBuf37 = new Float32Array(4096);
+const softPolyBuf = new Float32Array(4096);
+for (let i = 0; i < 4096; i++) {
+  const t = i / 44100;
+  softPolyBuf[i] = 0.018 * Math.sin(2 * Math.PI * 82.41 * t) + 0.018 * Math.sin(2 * Math.PI * 123.47 * t);
+}
+for (let f = 0; f < 30; f++) {
+  const nDet = noiseGainDet.detectPitchFromBuffer(softNoiseBuf, 44100);
+  noiseGainDet.updateAdaptiveInputGain(softNoiseBuf, nDet);
+  const sDet = noiseGainDet.detectPitchFromBuffer(silentBuf37, 44100);
+  noiseGainDet.updateAdaptiveInputGain(silentBuf37, sDet);
+  const pDet = noiseGainDet.detectPitchFromBuffer(softPolyBuf, 44100);
+  noiseGainDet.updateAdaptiveInputGain(softPolyBuf, pDet);
+}
+assert(
+  noiseGainDet.getAudioDiagnostics().inputGain === initNoiseGain,
+  `37.3 Ruído ambiente, silêncio e polifonia não provocam amplificação (ganho mantido em ${noiseGainDet.getAudioDiagnostics().inputGain})`
+);
+
+// 37.4 Sinal forte reduz o ganho e aplica histerese de cooldown anti-oscilação
+const strongGainDet = new GuitarPitchDetector();
+const strongBuf = generateHarmonicTone(146.83, [0.55, 0.25, 0.12], 44100, 4096);
+const strongPitch = strongGainDet.detectPitchFromBuffer(strongBuf, 44100);
+const strongRes1 = strongGainDet.updateAdaptiveInputGain(strongBuf, strongPitch);
+const strongRes2 = strongGainDet.updateAdaptiveInputGain(strongBuf, strongPitch);
+const afterStrongWeakRes = strongGainDet.updateAdaptiveInputGain(weakPeriodicUnrecognizedBuf, rawWeakUnrecognizedPitch);
+
+assert(
+  (strongRes1.action === 'strong_reduce' || strongRes2.action === 'strong_reduce') &&
+  strongGainDet.getAudioDiagnostics().inputGain < GuitarPitchDetector.DEFAULT_INPUT_GAIN &&
+  afterStrongWeakRes.action === 'hold_cooldown',
+  `37.4 Sinal forte reduz o ganho com proteção de cooldown anti-oscilação (novo ganho=${strongGainDet.getAudioDiagnostics().inputGain})`
+);
+
+// 37.5 Limites máximo e mínimo de ganho rigorosamente respeitados
+const maxBoundsDet = new GuitarPitchDetector();
+for (let f = 0; f < 100; f++) {
+  maxBoundsDet.updateAdaptiveInputGain(weakPeriodicUnrecognizedBuf, rawWeakUnrecognizedPitch);
+}
+const minBoundsDet = new GuitarPitchDetector();
+for (let f = 0; f < 100; f++) {
+  minBoundsDet.updateAdaptiveInputGain(strongBuf, strongPitch);
+}
+assert(
+  maxBoundsDet.getAudioDiagnostics().inputGain === GuitarPitchDetector.MAX_INPUT_GAIN &&
+  minBoundsDet.getAudioDiagnostics().inputGain === GuitarPitchDetector.MIN_INPUT_GAIN,
+  `37.5 Limites mínimo (${minBoundsDet.getAudioDiagnostics().inputGain}x) e máximo (${maxBoundsDet.getAudioDiagnostics().inputGain}x) rigorosamente respeitados`
+);
+
+// 37.6 Proteção imediata e ausência de clipping em sinal saturado
+const clipDet = new GuitarPitchDetector();
+const rawLoudHarmonic = generateHarmonicTone(82.41, [0.42, 0.14, 0.08], 44100, 4096);
+let simPreampGain = GuitarPitchDetector.DEFAULT_INPUT_GAIN;
+const postGainPeaks: number[] = [];
+let clipActionObserved = false;
+for (let f = 0; f < 8; f++) {
+  const postGainBuf = new Float32Array(4096);
+  let frameMax = 0;
+  for (let i = 0; i < 4096; i++) {
+    const sample = rawLoudHarmonic[i] * simPreampGain;
+    postGainBuf[i] = sample;
+    const abs = Math.abs(sample);
+    if (abs > frameMax) frameMax = abs;
+  }
+  postGainPeaks.push(frameMax);
+  const clipPitch = clipDet.detectPitchFromBuffer(postGainBuf, 44100);
+  const gOut = clipDet.updateAdaptiveInputGain(postGainBuf, clipPitch);
+  if (gOut.action === 'clipping_reduce') clipActionObserved = true;
+  simPreampGain = gOut.gain;
+}
+assert(
+  clipActionObserved === true &&
+  postGainPeaks[postGainPeaks.length - 1] < 0.70 &&
+  postGainPeaks[postGainPeaks.length - 1] < postGainPeaks[0],
+  `37.6 Redução imediata diante de risco de clipping mantém pico estável abaixo de 0.70 (inicial=${postGainPeaks[0].toFixed(2)} -> estabilizado=${postGainPeaks[postGainPeaks.length - 1].toFixed(2)})`
+);
+
+// 37.7 Verifica que startListening() utiliza updateAdaptiveInputGain em grafo real/simulado sem erros
+const prevWin37 = (globalThis as any).window;
+const prevNavDesc37 = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+const prevRaf37 = globalThis.requestAnimationFrame;
+const prevCaf37 = globalThis.cancelAnimationFrame;
+let startListeningGainIncreased = false;
+try {
+  const scheduledGainTargets: number[] = [];
+  let simulatedCurrentGain37 = GuitarPitchDetector.DEFAULT_INPUT_GAIN;
+  let createGainCallIdx = 0;
+  let frameIdx37 = 0;
+  const mockAudioCtx: any = {
+    state: 'running',
+    sampleRate: 44100,
+    currentTime: 0,
+    destination: {},
+    resume: async () => {},
+    createMediaStreamSource: () => ({ connect: () => {}, disconnect: () => {} }),
+    createBiquadFilter: () => ({ type: 'highpass', frequency: { setValueAtTime: () => {} }, Q: { setValueAtTime: () => {} }, connect: () => {}, disconnect: () => {} }),
+    createGain: () => {
+      const isInputGain = createGainCallIdx === 0;
+      createGainCallIdx++;
+      const node: any = {
+        gain: {
+          setValueAtTime: (v: number) => {
+            if (isInputGain) simulatedCurrentGain37 = v;
+          },
+          setTargetAtTime: (v: number) => {
+            if (isInputGain) {
+              scheduledGainTargets.push(v);
+              simulatedCurrentGain37 = v;
+            }
+          },
+        },
+        connect: () => {},
+        disconnect: () => {},
+      };
+      return node;
+    },
+    createAnalyser: () => ({
+      fftSize: 4096,
+      smoothingTimeConstant: 0,
+      connect: () => {},
+      disconnect: () => {},
+      getFloatTimeDomainData: (out: Float32Array) => {
+        for (let i = 0; i < out.length; i++) {
+          const t = i / 44100;
+          // Sinal suave contínuo de A2 abaixo do deadband (amplitude ~0.008)
+          out[i] =
+            simulatedCurrentGain37 *
+            (0.004 * Math.sin(2 * Math.PI * 110.0 * t) + 0.0025 * Math.sin(2 * Math.PI * 220.0 * t));
+        }
+      },
+    }),
+  };
+
+  (globalThis as any).window = globalThis;
+  Object.defineProperty(globalThis, 'navigator', {
+    value: {
+      mediaDevices: {
+        getUserMedia: async () => ({
+          getAudioTracks: () => [{ readyState: 'live', muted: false, onended: null, stop: () => {}, getSettings: () => ({ sampleRate: 44100, channelCount: 1, echoCancellation: false, noiseSuppression: false, autoGainControl: false }) }],
+          getTracks: () => [{ stop: () => {} }],
+        }),
+      },
+    },
+    configurable: true,
+    writable: true,
+  });
+
+  const rafQueue: FrameRequestCallback[] = [];
+  globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => {
+    rafQueue.push(cb);
+    return ++frameIdx37;
+  }) as any;
+  globalThis.cancelAnimationFrame = (() => {}) as any;
+
+  const liveGainDet = new GuitarPitchDetector();
+  const startRes37 = await liveGainDet.startListening(() => {}, mockAudioCtx);
+  for (let iter = 0; iter < 5 && rafQueue.length > 0; iter++) {
+    const cb = rafQueue.shift()!;
+    cb(100 + iter * 40);
+  }
+  startListeningGainIncreased =
+    startRes37.success &&
+    scheduledGainTargets.some((g) => g > GuitarPitchDetector.DEFAULT_INPUT_GAIN) &&
+    liveGainDet.getAudioDiagnostics().inputGain > GuitarPitchDetector.DEFAULT_INPUT_GAIN;
+  liveGainDet.stopListening();
+} finally {
+  (globalThis as any).window = prevWin37;
+  if (prevNavDesc37) Object.defineProperty(globalThis, 'navigator', prevNavDesc37);
+  globalThis.requestAnimationFrame = prevRaf37;
+  globalThis.cancelAnimationFrame = prevCaf37;
+}
+assert(
+  startListeningGainIncreased,
+  '37.7 Loop de startListening() aplica ganho adaptativo progressivo sobre AudioContext/GainNode sem erros'
+);
+
 console.log('\n===========================================================');
 console.log(`TOTAL DE TESTES: ${totalTests}`);
 console.log(`PASSOU: ${passedTests}`);
@@ -6298,7 +6622,7 @@ console.log('===========================================================');
 if (failedTests > 0) {
   process.exit(1);
 } else {
-  console.log('✓ Todos os testes de integração do motor musical, detector, currículo, Central de Prática, Busca Global, Diagramas Cifra Club, Autenticação Obrigatória, Separação de Ambientes Aluno/Admin, Backend Hardening, SMART TUNER V1.2, AUTENTICAÇÃO ADMINISTRATIVA DEFINITIVA, CORREÇÃO GERAL DEFINITIVA, MODAL/IMAGENS DOS CURSOS, AUDITORIA DE ÁUDIO, MASTER TUNER V2.1 e CORREÇÃO PRIORITÁRIA DO AFINADOR foram APROVADOS com sucesso!\n');
+  console.log('✓ Todos os testes de integração do motor musical, detector, currículo, Central de Prática, Busca Global, Diagramas Cifra Club, Autenticação Obrigatória, Separação de Ambientes Aluno/Admin, Backend Hardening, SMART TUNER V1.2, AUTENTICAÇÃO ADMINISTRATIVA DEFINITIVA, CORREÇÃO GERAL DEFINITIVA, MODAL/IMAGENS DOS CURSOS, AUDITORIA DE ÁUDIO, MASTER TUNER V2.1, CORREÇÃO PRIORITÁRIA DO AFINADOR e HOTFIX GANHO ADAPTATIVO foram APROVADOS com sucesso!\n');
   process.exit(0);
 }
 
