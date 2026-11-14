@@ -107,6 +107,8 @@ export const ELECTRIC_GUITAR_PRESETS: TunerPreset[] = [
     instrumentId: 'electric_guitar',
     instrumentName: 'Guitarra Elétrica',
     category: 'guitar',
+    recommendedLowCutoff: 52,
+    recommendedHighCutoff: 1450,
     strings: [
       { stringNumber: 6, note: 'E', notePt: 'Mi', octave: 2, label: '6ª Corda (Grave)', shortName: '6E' },
       { stringNumber: 5, note: 'A', notePt: 'Lá', octave: 2, label: '5ª Corda', shortName: '5A' },
@@ -123,6 +125,8 @@ export const ELECTRIC_GUITAR_PRESETS: TunerPreset[] = [
     instrumentId: 'electric_guitar',
     instrumentName: 'Guitarra Elétrica',
     category: 'guitar',
+    recommendedLowCutoff: 46,
+    recommendedHighCutoff: 1450,
     strings: [
       { stringNumber: 6, note: 'D', notePt: 'Ré', octave: 2, label: '6ª Corda (Drop D)', shortName: '6D' },
       { stringNumber: 5, note: 'A', notePt: 'Lá', octave: 2, label: '5ª Corda', shortName: '5A' },
@@ -139,6 +143,8 @@ export const ELECTRIC_GUITAR_PRESETS: TunerPreset[] = [
     instrumentId: 'electric_guitar',
     instrumentName: 'Guitarra Elétrica',
     category: 'guitar',
+    recommendedLowCutoff: 50,
+    recommendedHighCutoff: 1450,
     strings: [
       { stringNumber: 6, note: 'D#', notePt: 'Mib', octave: 2, label: '6ª Corda (Eb2)', shortName: '6Eb' },
       { stringNumber: 5, note: 'G#', notePt: 'Láb', octave: 2, label: '5ª Corda (Ab2)', shortName: '5Ab' },
@@ -155,6 +161,8 @@ export const ELECTRIC_GUITAR_PRESETS: TunerPreset[] = [
     instrumentId: 'electric_guitar',
     instrumentName: 'Guitarra Elétrica',
     category: 'guitar',
+    recommendedLowCutoff: 46,
+    recommendedHighCutoff: 1450,
     strings: [
       { stringNumber: 6, note: 'D', notePt: 'Ré', octave: 2, label: '6ª Corda (D2)', shortName: '6D' },
       { stringNumber: 5, note: 'G', notePt: 'Sol', octave: 2, label: '5ª Corda (G2)', shortName: '5G' },
@@ -171,6 +179,8 @@ export const ELECTRIC_GUITAR_PRESETS: TunerPreset[] = [
     instrumentId: 'electric_guitar',
     instrumentName: 'Guitarra Elétrica',
     category: 'guitar',
+    recommendedLowCutoff: 40,
+    recommendedHighCutoff: 1450,
     strings: [
       { stringNumber: 6, note: 'C', notePt: 'Dó', octave: 2, label: '6ª Corda (Drop C)', shortName: '6C' },
       { stringNumber: 5, note: 'G', notePt: 'Sol', octave: 2, label: '5ª Corda (G2)', shortName: '5G' },
@@ -187,6 +197,8 @@ export const ELECTRIC_GUITAR_PRESETS: TunerPreset[] = [
     instrumentId: 'electric_guitar',
     instrumentName: 'Guitarra Elétrica',
     category: 'guitar',
+    recommendedLowCutoff: 46,
+    recommendedHighCutoff: 1450,
     strings: [
       { stringNumber: 6, note: 'D', notePt: 'Ré', octave: 2, label: '6ª Corda (D2)', shortName: '6D' },
       { stringNumber: 5, note: 'G', notePt: 'Sol', octave: 2, label: '5ª Corda (G2)', shortName: '5G' },
@@ -203,6 +215,8 @@ export const ELECTRIC_GUITAR_PRESETS: TunerPreset[] = [
     instrumentId: 'electric_guitar',
     instrumentName: 'Guitarra Elétrica',
     category: 'guitar',
+    recommendedLowCutoff: 46,
+    recommendedHighCutoff: 1450,
     strings: [
       { stringNumber: 6, note: 'D', notePt: 'Ré', octave: 2, label: '6ª Corda (D2)', shortName: '6D' },
       { stringNumber: 5, note: 'A', notePt: 'Lá', octave: 2, label: '5ª Corda (A2)', shortName: '5A' },
@@ -219,6 +233,8 @@ export const ELECTRIC_GUITAR_PRESETS: TunerPreset[] = [
     instrumentId: 'electric_guitar',
     instrumentName: 'Guitarra Elétrica',
     category: 'guitar',
+    recommendedLowCutoff: 46,
+    recommendedHighCutoff: 1450,
     strings: [
       { stringNumber: 6, note: 'D', notePt: 'Ré', octave: 2, label: '6ª Corda (D2)', shortName: '6D' },
       { stringNumber: 5, note: 'A', notePt: 'Lá', octave: 2, label: '5ª Corda (A2)', shortName: '5A' },
@@ -239,6 +255,8 @@ export const ACOUSTIC_GUITAR_PRESETS: TunerPreset[] = [
     instrumentId: 'acoustic_guitar',
     instrumentName: 'Violão Acústico',
     category: 'acoustic',
+    recommendedLowCutoff: 52,
+    recommendedHighCutoff: 1450,
     strings: [
       { stringNumber: 6, note: 'E', notePt: 'Mi', octave: 2, label: '6ª Corda (Mi grave)', shortName: '6E' },
       { stringNumber: 5, note: 'A', notePt: 'Lá', octave: 2, label: '5ª Corda (Lá)', shortName: '5A' },
@@ -255,6 +273,8 @@ export const ACOUSTIC_GUITAR_PRESETS: TunerPreset[] = [
     instrumentId: 'acoustic_guitar',
     instrumentName: 'Violão Acústico',
     category: 'acoustic',
+    recommendedLowCutoff: 46,
+    recommendedHighCutoff: 1450,
     strings: [
       { stringNumber: 6, note: 'D', notePt: 'Ré', octave: 2, label: '6ª Corda (Ré grave)', shortName: '6D' },
       { stringNumber: 5, note: 'A', notePt: 'Lá', octave: 2, label: '5ª Corda', shortName: '5A' },
@@ -271,6 +291,8 @@ export const ACOUSTIC_GUITAR_PRESETS: TunerPreset[] = [
     instrumentId: 'acoustic_guitar',
     instrumentName: 'Violão Acústico',
     category: 'acoustic',
+    recommendedLowCutoff: 50,
+    recommendedHighCutoff: 1450,
     strings: [
       { stringNumber: 6, note: 'D#', notePt: 'Mib', octave: 2, label: '6ª Corda (Eb2)', shortName: '6Eb' },
       { stringNumber: 5, note: 'G#', notePt: 'Láb', octave: 2, label: '5ª Corda (Ab2)', shortName: '5Ab' },
@@ -287,6 +309,8 @@ export const ACOUSTIC_GUITAR_PRESETS: TunerPreset[] = [
     instrumentId: 'acoustic_guitar',
     instrumentName: 'Violão Acústico',
     category: 'acoustic',
+    recommendedLowCutoff: 46,
+    recommendedHighCutoff: 1450,
     strings: [
       { stringNumber: 6, note: 'D', notePt: 'Ré', octave: 2, label: '6ª Corda (D2)', shortName: '6D' },
       { stringNumber: 5, note: 'A', notePt: 'Lá', octave: 2, label: '5ª Corda (A2)', shortName: '5A' },
@@ -303,6 +327,8 @@ export const ACOUSTIC_GUITAR_PRESETS: TunerPreset[] = [
     instrumentId: 'acoustic_guitar',
     instrumentName: 'Violão Acústico',
     category: 'acoustic',
+    recommendedLowCutoff: 46,
+    recommendedHighCutoff: 1450,
     strings: [
       { stringNumber: 6, note: 'D', notePt: 'Ré', octave: 2, label: '6ª Corda (D2)', shortName: '6D' },
       { stringNumber: 5, note: 'G', notePt: 'Sol', octave: 2, label: '5ª Corda (G2)', shortName: '5G' },
@@ -319,6 +345,8 @@ export const ACOUSTIC_GUITAR_PRESETS: TunerPreset[] = [
     instrumentId: 'acoustic_guitar',
     instrumentName: 'Violão Acústico',
     category: 'acoustic',
+    recommendedLowCutoff: 46,
+    recommendedHighCutoff: 1450,
     strings: [
       { stringNumber: 6, note: 'D', notePt: 'Ré', octave: 2, label: '6ª Corda (D2)', shortName: '6D' },
       { stringNumber: 5, note: 'A', notePt: 'Lá', octave: 2, label: '5ª Corda (A2)', shortName: '5A' },

@@ -6111,6 +6111,184 @@ assert(
   '35.G1 ExerciseNoteEvaluator separa CORRECT/INCORRECT/INCONCLUSIVE sem jamais penalizar ruído, silêncio, polifonia, ataque ou oscilação; UI exibe barras de estabilidade/intensidade'
 );
 
+// =============================================================
+// GRUPO 36 — CORREÇÃO PRIORITÁRIA DO AFINADOR: CAPTAÇÃO, SENSIBILIDADE,
+// FUNDAMENTAL E2, SINAIS DE VOLUME NORMAL E NÃO-CONFIRMAÇÃO DE SINAIS FRACOS
+// =============================================================
+console.log('\n--- GRUPO 36: CORREÇÃO PRIORITÁRIA DO AFINADOR (SENSIBILIDADE & RECONHECIMENTO) ---');
+
+const priorityDetector = new GuitarPitchDetector();
+
+// 36.1 As 6 cordas padrão da guitarra (A4 = 440 Hz) em amplitude normal/moderada
+const stdGuitarStrings = [
+  { str: 6, note: 'E', octave: 2, expectedHz: 82.41 },
+  { str: 5, note: 'A', octave: 2, expectedHz: 110.00 },
+  { str: 4, note: 'D', octave: 3, expectedHz: 146.83 },
+  { str: 3, note: 'G', octave: 3, expectedHz: 196.00 },
+  { str: 2, note: 'B', octave: 3, expectedHz: 246.94 },
+  { str: 1, note: 'E', octave: 4, expectedHz: 329.63 },
+];
+
+const stdPreset = findPresetById('eg_standard')!;
+const stdPresetErrors: string[] = [];
+for (const gs of stdGuitarStrings) {
+  const presetStr = stdPreset.strings.find((s) => s.stringNumber === gs.str)!;
+  const calcHz = calculateFrequency(presetStr.note, presetStr.octave, 440);
+  const det = priorityDetector.detectPitchFromBuffer(
+    generateHarmonicTone(gs.expectedHz, [0.025, 0.018, 0.010], 44100, 4096),
+    44100
+  );
+  if (
+    Math.abs(calcHz - gs.expectedHz) > 0.01 ||
+    !det ||
+    det.detectionType !== 'monophonic_note' ||
+    det.note !== gs.note ||
+    det.octave !== gs.octave ||
+    Math.abs(det.frequency - gs.expectedHz) > 0.5
+  ) {
+    stdPresetErrors.push(`${gs.note}${gs.octave}: calc=${calcHz}, det=${det?.note}${det?.octave}@${det?.frequency}`);
+  }
+}
+assert(
+  stdPresetErrors.length === 0,
+  `36.1 As 6 cordas padrão (E2 82.41 Hz .. E4 329.63 Hz) reconhecidas em amplitude normal: ${stdPresetErrors.join('; ') || 'OK'}`
+);
+
+// 36.2 Diferentes amplitudes (incluindo toque suave / microfone distante: 0.0025..0.50) + DC offset
+const ampLevels = [0.0025, 0.006, 0.02, 0.12, 0.50];
+const ampFailures: string[] = [];
+for (const amp of ampLevels) {
+  const buf = new Float32Array(4096);
+  for (let i = 0; i < 4096; i++) {
+    // Inclui DC offset de microfone USB/notebook (+0.005) para testar remoção de DC
+    buf[i] =
+      0.005 +
+      amp * Math.sin((2 * Math.PI * 82.41 * i) / 44100) +
+      amp * 0.7 * Math.sin((2 * Math.PI * 164.82 * i) / 44100) +
+      amp * 0.4 * Math.sin((2 * Math.PI * 247.23 * i) / 44100);
+  }
+  const det = priorityDetector.detectPitchFromBuffer(buf, 44100);
+  if (!det || det.note !== 'E' || det.octave !== 2 || det.detectionType !== 'monophonic_note') {
+    ampFailures.push(`amp=${amp}->${det?.detectionType}:${det?.note}${det?.octave}`);
+  }
+}
+assert(
+  ampFailures.length === 0,
+  `36.2 Sinais E2 em amplitudes variadas (0.0025 a 0.50) com DC offset reconhecidos sem corte prematuro: ${ampFailures.join('; ') || 'OK'}`
+);
+
+// 36.3 E2 com fundamental muito atenuada (roll-off de mic de celular) + harmônicos fortes + ruído/zumbido 60 Hz moderado
+const micRolloffE2 = new Float32Array(4096);
+let seed36 = 771133;
+for (let i = 0; i < 4096; i++) {
+  const t = i / 44100;
+  seed36 = (seed36 * 1664525 + 1013904223) >>> 0;
+  const rand = (seed36 / 0xffffffff) * 2 - 1;
+  micRolloffE2[i] =
+    0.004 * Math.sin(2 * Math.PI * 82.41 * t) +   // Fundamental fraca (roll-off < 100 Hz)
+    0.045 * Math.sin(2 * Math.PI * 164.82 * t) +  // 2º harmônico dominante
+    0.032 * Math.sin(2 * Math.PI * 247.23 * t) +  // 3º harmônico forte
+    0.012 * Math.sin(2 * Math.PI * 329.63 * t) +  // 4º harmônico
+    0.006 * Math.sin(2 * Math.PI * 60.0 * t) +    // Leve zumbido 60 Hz
+    0.0025 * rand;                                // Ruído ambiente leve
+}
+const rolloffRes = priorityDetector.detectPitchFromBuffer(micRolloffE2, 44100);
+assert(
+  rolloffRes !== null &&
+  rolloffRes.note === 'E' &&
+  rolloffRes.octave === 2 &&
+  Math.abs(rolloffRes.frequency - 82.41) < 1.0,
+  `36.3 E2 com fundamental atenuada (roll-off de microfone), 2º/3º harmônicos dominantes e ruído 60Hz converge para E2 (${rolloffRes?.note}${rolloffRes?.octave} @ ${rolloffRes?.frequency?.toFixed(2)} Hz)`
+);
+
+// 36.4 Ataque e decaimento naturais das cordas (A2 = 110 Hz e D3 = 146.83 Hz)
+const attackBuf = generateHarmonicTone(110.0, [0.06, 0.04, 0.02], 44100, 4096, 'decay', 0.002);
+const sustainBuf = generateHarmonicTone(110.0, [0.03, 0.02, 0.01], 44100, 4096, 'none', 0.0015);
+const decayBuf = generateHarmonicTone(110.0, [0.004, 0.0025, 0.0015], 44100, 4096, 'decay', 0.0005);
+
+const attDet = priorityDetector.detectPitchFromBuffer(attackBuf, 44100);
+const susDet = priorityDetector.detectPitchFromBuffer(sustainBuf, 44100);
+const decDet = priorityDetector.detectPitchFromBuffer(decayBuf, 44100);
+assert(
+  attDet?.note === 'A' && attDet?.octave === 2 &&
+  susDet?.note === 'A' && susDet?.octave === 2 &&
+  decDet?.note === 'A' && decDet?.octave === 2,
+  `36.4 Ataque, sustentação e decaimento natural de A2 preservam reconhecimento estável da nota`
+);
+
+// 36.5 Pequenos desvios de afinação (-12¢, -3¢, -1¢, +1¢, +3¢, +15¢) & calibração A4 (432, 440, 442 Hz)
+const microDevs = [-12, -3, -1, 1, 3, 15];
+const microErrs: string[] = [];
+for (const dc of microDevs) {
+  const f = calculateExactFrequency('G', 3, 440, dc);
+  const det = priorityDetector.detectPitchFromBuffer(generateHarmonicTone(f, [0.04, 0.02, 0.01]), 44100, {
+    targetString: { stringNumber: 3, note: 'G', octave: 3, freq: 196.00 }
+  });
+  if (!det || Math.abs((det.rawCents ?? 99) - dc) > 0.7) {
+    microErrs.push(`${dc}¢->${det?.rawCents?.toFixed(2)}`);
+  }
+}
+
+const e2At432 = priorityDetector.detectPitchFromBuffer(
+  generateSineBuffer(calculateExactFrequency('E', 2, 432), 44100, 4096, 0.04),
+  44100,
+  { a4: 432, targetString: { stringNumber: 6, note: 'E', octave: 2 } }
+);
+const e2At442 = priorityDetector.detectPitchFromBuffer(
+  generateSineBuffer(calculateExactFrequency('E', 2, 442), 44100, 4096, 0.04),
+  44100,
+  { a4: 442, targetString: { stringNumber: 6, note: 'E', octave: 2 } }
+);
+assert(
+  microErrs.length === 0 &&
+  Math.abs(e2At432?.rawCents ?? 99) < 0.5 &&
+  Math.abs(e2At442?.rawCents ?? 99) < 0.5,
+  `36.5 Pequenos desvios (-12¢..+15¢) e calibração A4 (432/440/442 Hz) em E2 mantém precisão sub-cent`
+);
+
+// 36.6 Ausência de sinal e ruído sem nota estável nunca exibem nota confirmada; sinal fraco válido não confirma afinação
+const silentDet36 = priorityDetector.detectPitchFromBuffer(new Float32Array(4096), 44100);
+const noiseDet36 = priorityDetector.detectPitchFromBuffer(generateWhiteNoiseBuffer(4096, 0.03), 44100);
+
+const weakValidSmoother = new TunerSmoother({ confidenceThreshold: 0.58, inTuneTolerance: 5.0 });
+weakValidSmoother.feedPitch({
+  frequency: 82.41,
+  note: 'E',
+  notePt: 'Mi',
+  octave: 2,
+  cents: 0,
+  rawCents: 0.2,
+  confidence: 0.51,
+  intensity: 0.14,
+  isSilence: false,
+  isWeakSignal: true,
+  isWeakValid: true,
+  isOnset: false,
+  detectionType: 'weak_signal',
+  isReliable: false,
+  stability: 35,
+  stabilityLabel: 'Sinal fraco',
+  expectedFreq: 82.41,
+  exactExpectedFreq: 82.41,
+  diffHz: 0,
+  exactDiffHz: 0,
+  timestamp: performance.now(),
+}, 1000);
+const weakValidOut = weakValidSmoother.step(1016);
+
+const tunerViewSrc36 = fs.readFileSync('src/components/tuner/TunerView.tsx', 'utf-8');
+assert(
+  silentDet36?.isSilence === true && silentDet36?.note === null &&
+  noiseDet36?.note === null && noiseDet36?.isReliable === false &&
+  weakValidOut.tentativeNote === 'E' &&
+  weakValidOut.isInTune === false &&
+  weakValidOut.isUnconfirmed === true &&
+  weakValidOut.note === null &&
+  tunerViewSrc36.includes('Toque uma corda para começar') &&
+  tunerViewSrc36.includes('leitura provisória (não confirmada)'),
+  '36.6 Silêncio e ruído permanecem sem nota falsa; sinal fraco válido preserva leitura provisória sem confirmar afinação; UI orienta "Toque uma corda para começar"'
+);
+
 console.log('\n===========================================================');
 console.log(`TOTAL DE TESTES: ${totalTests}`);
 console.log(`PASSOU: ${passedTests}`);
@@ -6120,7 +6298,7 @@ console.log('===========================================================');
 if (failedTests > 0) {
   process.exit(1);
 } else {
-  console.log('✓ Todos os testes de integração do motor musical, detector, currículo, Central de Prática, Busca Global, Diagramas Cifra Club, Autenticação Obrigatória, Separação de Ambientes Aluno/Admin, Backend Hardening, SMART TUNER V1.2, AUTENTICAÇÃO ADMINISTRATIVA DEFINITIVA, CORREÇÃO GERAL DEFINITIVA, MODAL/IMAGENS DOS CURSOS, AUDITORIA DE ÁUDIO e MASTER TUNER V2.1 foram APROVADOS com sucesso!\n');
+  console.log('✓ Todos os testes de integração do motor musical, detector, currículo, Central de Prática, Busca Global, Diagramas Cifra Club, Autenticação Obrigatória, Separação de Ambientes Aluno/Admin, Backend Hardening, SMART TUNER V1.2, AUTENTICAÇÃO ADMINISTRATIVA DEFINITIVA, CORREÇÃO GERAL DEFINITIVA, MODAL/IMAGENS DOS CURSOS, AUDITORIA DE ÁUDIO, MASTER TUNER V2.1 e CORREÇÃO PRIORITÁRIA DO AFINADOR foram APROVADOS com sucesso!\n');
   process.exit(0);
 }
 

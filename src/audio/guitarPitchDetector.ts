@@ -65,6 +65,7 @@ export interface PitchDetectionResult {
   intensity: number;
   isSilence: boolean;
   isWeakSignal: boolean;
+  isWeakValid?: boolean; // Sinal fraco mas periódico/tonal válido (leitura provisória não confirmada)
   isOnset: boolean;
   signalPhase?: SignalPhase;
   isTransientContaminated?: boolean;
@@ -107,11 +108,21 @@ export type PitchDetectorErrorType =
   | 'aborted'
   | 'unknown';
 
+export interface MicAppliedSettings {
+  sampleRate?: number;
+  channelCount?: number;
+  echoCancellation?: boolean;
+  noiseSuppression?: boolean;
+  autoGainControl?: boolean;
+  constraintTierUsed?: number;
+}
+
 export interface StartListeningResult {
   success: boolean;
   error?: string;
   errorType?: PitchDetectorErrorType;
   sampleRate?: number;
+  appliedSettings?: MicAppliedSettings;
 }
 
 export interface GuitarPitchDetectorOptions {
@@ -407,7 +418,7 @@ function analyzeSpectrum(
   lowFreq: number,
   highFreq: number
 ): SpectralSummary {
-  const fftSize = buffer.length >= 8192 ? 8192 : 4096;
+  const fftSize = buffer.length >= 8192 ? 8192 : (sampleRate >= 24000 ? 8192 : 4096);
   const magnitudes = computeHannFftMagnitudes(buffer, fftSize);
   const binHz = sampleRate / fftSize;
 
@@ -513,10 +524,11 @@ function analyzeSpectrum(
   }
 
   // Determina quantos picos NÃO são série harmônica de uma única fundamental.
-  // Se houver pico local real de fundamental fraca (>= 5% do pico) em f/2 ou f/3 que unifique 2x e 3x, inclui como F0 candidata.
+  // Tolera até o 12º harmônico (com leve alargamento para inarmonicidade natural de cordas de aço/nylon)
+  // e ignora zumbido fraco de rede elétrica (50/60 Hz) quando há fundamental musical mais forte acima.
   let inharmonicCount = 0;
   if (peaks.length >= 2) {
-    const strongCandidates = peaks.filter((p) => p.mag >= domMag * 0.30);
+    const strongCandidates = peaks.filter((p) => p.mag >= domMag * 0.34);
     if (strongCandidates.length >= 2) {
       const f0Candidates = strongCandidates.map((p) => p.freq);
       for (const sp of strongCandidates) {
@@ -530,6 +542,25 @@ function analyzeSpectrum(
             );
             if (subLocalPeak) {
               f0Candidates.push(subLocalPeak.freq);
+            } else if (div === 2) {
+              // Em captação com roll-off grave + zumbido de rede (50/60 Hz), F0 fraco pode ficar oculto
+              // na borda espectral do zumbido, mas a série harmônica completa (2*F0, 3*F0 e 4*F0 ou 5*F0)
+              // distingue uma única corda tocada (ex: E2) de um díade/acorde.
+              const hasHarm3 = allPeaks.some(
+                (pk) =>
+                  Math.abs(pk.freq - subFreq * 3) <= Math.max(subFreq * 3 * 0.08, binHz * 1.2) &&
+                  Math.abs(sp.freq - pk.freq) >= binHz * 2.5 &&
+                  pk.mag >= domMag * 0.10
+              );
+              const hasHigherHarm = allPeaks.some(
+                (pk) =>
+                  (Math.abs(pk.freq - subFreq * 4) <= Math.max(subFreq * 4 * 0.09, binHz * 1.5) ||
+                    Math.abs(pk.freq - subFreq * 5) <= Math.max(subFreq * 5 * 0.09, binHz * 1.5)) &&
+                  pk.mag >= domMag * 0.10
+              );
+              if (hasHarm3 && hasHigherHarm) {
+                f0Candidates.push(subFreq);
+              }
             }
           }
         }
@@ -539,10 +570,17 @@ function analyzeSpectrum(
       for (const f0 of f0Candidates) {
         let nonHarm = 0;
         for (const p of strongCandidates) {
+          const isMainsHum =
+            f0 > 68 &&
+            ((p.freq >= 47 && p.freq <= 53) || (p.freq >= 57 && p.freq <= 63)) &&
+            p.mag < domMag * 0.52;
+          if (isMainsHum) continue;
+
           const ratio = p.freq / f0;
           const nearestInt = Math.max(1, Math.round(ratio));
           const relErr = Math.abs(ratio - nearestInt) / nearestInt;
-          if (!(nearestInt <= 8 && relErr <= 0.065)) {
+          const stiffTol = Math.min(0.11, 0.065 + 0.003 * nearestInt);
+          if (!(nearestInt <= 12 && relErr <= stiffTol)) {
             nonHarm++;
           }
         }
@@ -596,6 +634,7 @@ export class GuitarPitchDetector {
   private sourceNode: MediaStreamAudioSourceNode | null = null;
   private highpassFilter: BiquadFilterNode | null = null;
   private lowpassFilter: BiquadFilterNode | null = null;
+  private inputGainNode: GainNode | null = null;
   private analyser: AnalyserNode | null = null;
   private silentSinkGainNode: GainNode | null = null;
   private isRunning = false;
@@ -605,11 +644,13 @@ export class GuitarPitchDetector {
   private lastTimeBuffer: Float32Array | null = null;
   private lastSampleRate = 44100;
   private consecutiveZeroBuffers = 0;
+  private currentInputGain = 1.8;
+  private appliedMicSettings: MicAppliedSettings | null = null;
 
   // Onset, Ataque, Decaimento & Estabilidade
   private prevRms = 0;
   private hasProcessedAnyFrame = false;
-  private noiseFloor = 0.003;
+  private noiseFloor = 0.0012;
   private transientFramesRemaining = 0;
   private lastNoteKey: string | null = null;
   private recentDetections: { note: string | null; octave: number | null; rawCents: number; freq: number }[] = [];
@@ -622,7 +663,7 @@ export class GuitarPitchDetector {
   constructor(options: GuitarPitchDetectorOptions = {}) {
     this.lowCutoff = options.lowCutoff !== undefined ? options.lowCutoff : 25;
     this.highCutoff = options.highCutoff !== undefined ? options.highCutoff : 1600;
-    this.silenceThreshold = options.silenceThreshold !== undefined ? options.silenceThreshold : 0.004;
+    this.silenceThreshold = options.silenceThreshold !== undefined ? options.silenceThreshold : 0.0012;
     this.confidenceThreshold = options.confidenceThreshold !== undefined ? options.confidenceThreshold : 0.60;
     this.bufferSize = options.bufferSize || 4096;
     this.a4Calibration = options.a4Calibration || 440;
@@ -668,6 +709,8 @@ export class GuitarPitchDetector {
     trackMuted: boolean;
     trackLive: boolean;
     consecutiveZeroBuffers: number;
+    inputGain: number;
+    appliedSettings: MicAppliedSettings | null;
   } {
     const track = this.mediaStream?.getAudioTracks()[0];
     return {
@@ -676,7 +719,9 @@ export class GuitarPitchDetector {
       sampleRate: this.audioCtx?.sampleRate || this.lastSampleRate,
       trackMuted: Boolean(track?.muted),
       trackLive: track ? track.readyState === 'live' : false,
-      consecutiveZeroBuffers: this.consecutiveZeroBuffers
+      consecutiveZeroBuffers: this.consecutiveZeroBuffers,
+      inputGain: parseFloat(this.currentInputGain.toFixed(2)),
+      appliedSettings: this.appliedMicSettings
     };
   }
 
@@ -712,7 +757,7 @@ export class GuitarPitchDetector {
     }
 
     try {
-      const stream = await this.acquireAudioStream();
+      const { stream, tierUsed } = await this.acquireAudioStream();
       const audioTrack = stream.getAudioTracks()[0];
       if (!audioTrack || audioTrack.readyState !== 'live') {
         stream.getTracks().forEach((t) => t.stop());
@@ -722,6 +767,21 @@ export class GuitarPitchDetector {
           errorType: 'not_found',
         };
       }
+
+      const rawSettings = typeof audioTrack.getSettings === 'function' ? audioTrack.getSettings() : {};
+      this.appliedMicSettings = {
+        sampleRate: rawSettings.sampleRate,
+        channelCount: rawSettings.channelCount,
+        echoCancellation:
+          typeof rawSettings.echoCancellation === 'boolean'
+            ? rawSettings.echoCancellation
+            : typeof rawSettings.echoCancellation === 'string'
+              ? rawSettings.echoCancellation !== 'false' && rawSettings.echoCancellation !== 'none'
+              : undefined,
+        noiseSuppression: rawSettings.noiseSuppression,
+        autoGainControl: rawSettings.autoGainControl,
+        constraintTierUsed: tierUsed
+      };
 
       if (externalAudioCtx && externalAudioCtx.state !== 'closed') {
         this.audioCtx = externalAudioCtx;
@@ -736,7 +796,7 @@ export class GuitarPitchDetector {
             errorType: 'not_supported',
           };
         }
-        this.audioCtx = new AudioContextClass();
+        this.audioCtx = new AudioContextClass({ latencyHint: 'interactive' });
         this.isSharedAudioCtx = false;
       }
 
@@ -761,11 +821,16 @@ export class GuitarPitchDetector {
       this.lowpassFilter.frequency.setValueAtTime(this.highCutoff, this.audioCtx.currentTime);
       this.lowpassFilter.Q.setValueAtTime(0.707, this.audioCtx.currentTime);
 
+      // Condicionamento limitado de entrada para microfones com ganho nativo baixo (1.0x a 3.2x max, sem clipping)
+      this.currentInputGain = 1.8;
+      this.inputGainNode = this.audioCtx.createGain();
+      this.inputGainNode.gain.setValueAtTime(this.currentInputGain, this.audioCtx.currentTime);
+
       const isSubBassInstrument = this.lowCutoff <= 45;
       const sampleRateActual = this.audioCtx.sampleRate || 44100;
       const baseFftSize = isSubBassInstrument ? 8192 : Math.max(4096, this.bufferSize);
       const targetFftSize = sampleRateActual >= 88200 ? baseFftSize * 2 : baseFftSize;
-      const effectiveBufferSize = Math.min(16384, Math.max(2048, targetFftSize));
+      const effectiveBufferSize = Math.min(16384, Math.max(4096, targetFftSize));
       this.analyser = this.audioCtx.createAnalyser();
       this.analyser.fftSize = effectiveBufferSize;
       this.analyser.smoothingTimeConstant = 0;
@@ -776,7 +841,8 @@ export class GuitarPitchDetector {
 
       this.sourceNode.connect(this.highpassFilter);
       this.highpassFilter.connect(this.lowpassFilter);
-      this.lowpassFilter.connect(this.analyser);
+      this.lowpassFilter.connect(this.inputGainNode);
+      this.inputGainNode.connect(this.analyser);
       this.analyser.connect(this.silentSinkGainNode);
       this.silentSinkGainNode.connect(this.audioCtx.destination);
 
@@ -857,6 +923,22 @@ export class GuitarPitchDetector {
               this.consecutiveZeroBuffers = 0;
             }
 
+            // Controle automático limitado de ganho (evita clipping e auxilia sinais baixos de violão/guitarra)
+            if (this.inputGainNode && this.audioCtx) {
+              if (maxAbs > 0.45 && this.currentInputGain > 1.0) {
+                this.currentInputGain = Math.max(1.0, this.currentInputGain * 0.72);
+                this.inputGainNode.gain.setTargetAtTime(this.currentInputGain, this.audioCtx.currentTime, 0.02);
+              } else if (
+                maxAbs > 0.001 &&
+                maxAbs < 0.05 &&
+                pitch.detectionType === 'monophonic_note' &&
+                this.currentInputGain < 3.0
+              ) {
+                this.currentInputGain = Math.min(3.0, this.currentInputGain + 0.12);
+                this.inputGainNode.gain.setTargetAtTime(this.currentInputGain, this.audioCtx.currentTime, 0.08);
+              }
+            }
+
             pitch.contextState = this.audioCtx.state;
             pitch.trackMuted = isMuted;
             pitch.sampleRate = sRate;
@@ -879,7 +961,11 @@ export class GuitarPitchDetector {
       };
 
       this.animFrameId = requestAnimationFrame(loop);
-      return { success: true, sampleRate: this.lastSampleRate };
+      return {
+        success: true,
+        sampleRate: this.lastSampleRate,
+        appliedSettings: this.appliedMicSettings || undefined
+      };
     } catch (err: unknown) {
       this.stopListening();
       const errorObj = err as { name?: string; message?: string };
@@ -915,13 +1001,21 @@ export class GuitarPitchDetector {
     }
   }
 
-  private async acquireAudioStream(): Promise<MediaStream> {
+  private async acquireAudioStream(): Promise<{ stream: MediaStream; tierUsed: number }> {
     const constraintTiers: MediaStreamConstraints[] = [
       {
         audio: {
           echoCancellation: false,
           noiseSuppression: false,
           autoGainControl: false,
+          channelCount: { ideal: 1 },
+        },
+      },
+      {
+        audio: {
+          echoCancellation: { ideal: false },
+          noiseSuppression: { ideal: false },
+          autoGainControl: { ideal: false },
         },
       },
       {
@@ -934,9 +1028,10 @@ export class GuitarPitchDetector {
     ];
 
     let lastErr: unknown;
-    for (const constraints of constraintTiers) {
+    for (let idx = 0; idx < constraintTiers.length; idx++) {
       try {
-        return await navigator.mediaDevices.getUserMedia(constraints);
+        const stream = await navigator.mediaDevices.getUserMedia(constraintTiers[idx]);
+        return { stream, tierUsed: idx + 1 };
       } catch (err: unknown) {
         lastErr = err;
         const name = (err as { name?: string })?.name || '';
@@ -1013,6 +1108,13 @@ export class GuitarPitchDetector {
       this.lowpassFilter = null;
     }
 
+    if (this.inputGainNode) {
+      try {
+        this.inputGainNode.disconnect();
+      } catch {}
+      this.inputGainNode = null;
+    }
+
     if (this.analyser) {
       try {
         this.analyser.disconnect();
@@ -1051,6 +1153,7 @@ export class GuitarPitchDetector {
     this.transientFramesRemaining = 0;
     this.lastNoteKey = null;
     this.consecutiveZeroBuffers = 0;
+    this.appliedMicSettings = null;
   }
 
   /**
@@ -1243,13 +1346,21 @@ export class GuitarPitchDetector {
     const effectiveA4 = rangeOverride?.a4 ?? this.a4Calibration;
     const effectiveTarget = rangeOverride?.targetString !== undefined ? rangeOverride.targetString : this.targetString;
 
-    // 1. Energia RMS, dinâmica ataque/decaimento e proteção contra NaN/Infinity
+    // 1. Remoção de DC offset, Energia RMS, dinâmica ataque/decaimento e proteção contra NaN/Infinity
+    let sumSamples = 0;
+    for (let i = 0; i < bufferLen; i++) {
+      sumSamples += Number.isFinite(buffer[i]) ? buffer[i] : 0;
+    }
+    const dcMean = sumSamples / bufferLen;
+    const cleanBuf = new Float32Array(bufferLen);
+
     let sumSquares = 0;
     let firstQuarterSq = 0;
     let lastQuarterSq = 0;
     const qLen = Math.max(1, Math.floor(bufferLen / 4));
     for (let i = 0; i < bufferLen; i++) {
-      const sample = Number.isFinite(buffer[i]) ? buffer[i] : 0;
+      const sample = (Number.isFinite(buffer[i]) ? buffer[i] : 0) - dcMean;
+      cleanBuf[i] = sample;
       const sq = sample * sample;
       sumSquares += sq;
       if (i < qLen) firstQuarterSq += sq;
@@ -1258,15 +1369,16 @@ export class GuitarPitchDetector {
     const rms = Math.sqrt(sumSquares / bufferLen);
     const q1Rms = Math.sqrt(firstQuarterSq / qLen);
     const q4Rms = Math.sqrt(lastQuarterSq / qLen);
-    const intensity = Math.min(1.0, rms * 10);
+    const intensity = rms <= 0.0004 ? 0 : Math.min(1.0, Math.pow(rms / 0.25, 0.48));
 
+    const onsetMinRms = Math.max(0.006, this.silenceThreshold * 3);
     const prevRmsBeforeUpdate = this.prevRms;
     const isInterFrameJump =
       this.hasProcessedAnyFrame &&
-      rms > 0.025 &&
+      rms > onsetMinRms &&
       (prevRmsBeforeUpdate < this.silenceThreshold || rms > prevRmsBeforeUpdate * 1.7);
-    const isIntraBufferBurst = q4Rms > 0.005 && q1Rms > q4Rms * 2.1;
-    const isOnset = rms > 0.025 && (isInterFrameJump || isIntraBufferBurst || prevRmsBeforeUpdate === 0);
+    const isIntraBufferBurst = q4Rms > 0.002 && q1Rms > q4Rms * 2.1;
+    const isOnset = rms > onsetMinRms && (isInterFrameJump || isIntraBufferBurst || prevRmsBeforeUpdate === 0);
 
     let signalPhase: SignalPhase = 'steady';
     if (rms < this.silenceThreshold) {
@@ -1279,7 +1391,7 @@ export class GuitarPitchDetector {
     } else if (this.transientFramesRemaining > 0) {
       signalPhase = 'attack';
       this.transientFramesRemaining--;
-    } else if (prevRmsBeforeUpdate > 0.03 && rms < prevRmsBeforeUpdate * 0.72) {
+    } else if (prevRmsBeforeUpdate > 0.015 && rms < prevRmsBeforeUpdate * 0.72) {
       signalPhase = 'decay';
     }
 
@@ -1287,7 +1399,7 @@ export class GuitarPitchDetector {
     this.prevRms = rms;
     this.hasProcessedAnyFrame = true;
 
-    if (rms < 0.02) {
+    if (rms < 0.015) {
       this.noiseFloor = this.noiseFloor * 0.95 + rms * 0.05;
     }
 
@@ -1320,8 +1432,18 @@ export class GuitarPitchDetector {
       };
     }
 
+    // Normalização numérica interna para preservar precisão do YIN/FFT em sinais suaves de violão/guitarra
+    let analysisBuf = cleanBuf;
+    if (rms < 0.08) {
+      const scale = Math.min(35, 0.20 / Math.max(rms, 1e-6));
+      analysisBuf = new Float32Array(bufferLen);
+      for (let i = 0; i < bufferLen; i++) {
+        analysisBuf[i] = cleanBuf[i] * scale;
+      }
+    }
+
     // 3. Análise espectral FFT (para separar ruído branco/ambiente, energia fora de banda e polifonia real)
-    const spec = analyzeSpectrum(buffer, sampleRate, Math.max(25, effectiveLow), effectiveHigh);
+    const spec = analyzeSpectrum(analysisBuf, sampleRate, Math.max(25, effectiveLow), effectiveHigh);
 
     if (spec.isOutOfRangeHigh) {
       this.recentDetections = [];
@@ -1353,8 +1475,8 @@ export class GuitarPitchDetector {
       };
     }
 
-    // Ruído de banda larga: SFM alto e baixo crest factor espectral
-    if (spec.flatness > 0.32 && spec.crest < 4.0) {
+    // Ruído de banda larga: rejeita apenas ruído claro (permite que YIN avalie timbres harmônicos suaves)
+    if (spec.flatness > 0.48 && spec.crest < 3.8) {
       this.recentDetections = [];
       return {
         frequency: 0,
@@ -1384,8 +1506,13 @@ export class GuitarPitchDetector {
       };
     }
 
-    // Salvaguarda polifônica espectral: múltiplas notas fundamentais concorrentes não-harmônicas
-    if (spec.inharmonicCount >= 1 && rms >= Math.max(this.silenceThreshold * 1.5, 0.008)) {
+    // Salvaguarda polifônica espectral: múltiplas notas fundamentais concorrentes fortes e não-harmônicas
+    const secondStrongestMag = spec.peaks.length >= 2 ? spec.peaks[1].mag : 0;
+    if (
+      (spec.inharmonicCount >= 2 ||
+        (spec.inharmonicCount >= 1 && secondStrongestMag >= spec.dominantPeakMag * 0.38)) &&
+      rms >= Math.max(this.silenceThreshold * 1.5, 0.004)
+    ) {
       this.recentDetections = [];
       return {
         frequency: 0,
@@ -1416,18 +1543,18 @@ export class GuitarPitchDetector {
       };
     }
 
-    // 4. YIN direto em taxa total
+    // 4. YIN direto em taxa total (sobre analysisBuf normalizado e sem DC)
     let yinRes = this.runYinCore(
-      buffer,
+      analysisBuf,
       sampleRate,
       Math.max(45, effectiveLow),
       effectiveHigh,
-      0.15
+      0.16
     );
 
     // 5. Decimação adaptativa 2:1 com filtro anti-aliasing Butterworth para graves/subgraves
     if ((!yinRes || yinRes.freq < 65 || yinRes.confidence < 0.60) && effectiveLow < 55) {
-      const filtered2x = applyAntiAliasingLowpass(buffer, (sampleRate / 2) * 0.42, sampleRate);
+      const filtered2x = applyAntiAliasingLowpass(analysisBuf, (sampleRate / 2) * 0.42, sampleRate);
       const halfLen = Math.floor(bufferLen / 2);
       const decimated = new Float32Array(halfLen);
       for (let i = 0; i < halfLen; i++) {
@@ -1435,7 +1562,7 @@ export class GuitarPitchDetector {
       }
       const lowYin = this.runYinCore(decimated, sampleRate / 2, effectiveLow, 130, 0.16);
       if (lowYin) {
-        const origCorr = this.computeNormalizedAutocorrelation(buffer, sampleRate, lowYin.freq);
+        const origCorr = this.computeNormalizedAutocorrelation(analysisBuf, sampleRate, lowYin.freq);
         if (origCorr >= 0.55 && (!yinRes || lowYin.confidence > yinRes.confidence)) {
           yinRes = lowYin;
         }
@@ -1444,7 +1571,7 @@ export class GuitarPitchDetector {
 
     // 6. Decimação 4:1 com filtro anti-aliasing Butterworth para subgraves extremos (B0 = 30.87 Hz)
     if ((!yinRes || yinRes.freq < 45 || yinRes.confidence < 0.60) && effectiveLow <= 45 && bufferLen >= 2048) {
-      const filtered4x = applyAntiAliasingLowpass(buffer, (sampleRate / 4) * 0.42, sampleRate);
+      const filtered4x = applyAntiAliasingLowpass(analysisBuf, (sampleRate / 4) * 0.42, sampleRate);
       const quarterLen = Math.floor(bufferLen / 4);
       const quadDecimated = new Float32Array(quarterLen);
       for (let i = 0; i < quarterLen; i++) {
@@ -1452,15 +1579,15 @@ export class GuitarPitchDetector {
       }
       const subBassYin = this.runYinCore(quadDecimated, sampleRate / 4, effectiveLow, 90, 0.16);
       if (subBassYin) {
-        const origCorr = this.computeNormalizedAutocorrelation(buffer, sampleRate, subBassYin.freq);
+        const origCorr = this.computeNormalizedAutocorrelation(analysisBuf, sampleRate, subBassYin.freq);
         if (origCorr >= 0.55 && (!yinRes || subBassYin.confidence > yinRes.confidence)) {
           yinRes = subBassYin;
         }
       }
     }
 
-    // 6b. Resgate espectral de fundamental fraca (apenas quando há pico espectral local real em F0 = freq/2 ou freq/3)
-    if (yinRes && yinRes.freq >= Math.max(55, effectiveLow * 1.9)) {
+    // 6b. Resgate espectral de fundamental fraca (pico local em F0 = freq/div OU co-presença harmônica 2*F0 + 3*F0 em microfones com roll-off grave)
+    if (yinRes && yinRes.freq >= Math.max(55, effectiveLow * 1.85)) {
       for (const div of [2, 3]) {
         const subF0 = yinRes.freq / div;
         if (subF0 >= effectiveLow) {
@@ -1469,14 +1596,32 @@ export class GuitarPitchDetector {
               Math.abs(pk.freq - subF0) <= Math.max(subF0 * 0.09, spec.binHz * 1.1) &&
               Math.abs(yinRes!.freq - pk.freq) >= spec.binHz * 2.5
           );
-          if (subLocalPeak && subLocalPeak.mag >= spec.dominantPeakMag * 0.05) {
-            const subCorr = this.computeNormalizedAutocorrelation(buffer, sampleRate, subLocalPeak.freq);
-            const curCorr = this.computeNormalizedAutocorrelation(buffer, sampleRate, yinRes.freq);
-            if (subCorr >= 0.65 && subCorr >= curCorr * 0.85) {
+          const hasPeak2 = spec.peaks.some(
+            (pk) =>
+              Math.abs(pk.freq - subF0 * 2) <= Math.max(subF0 * 2 * 0.08, spec.binHz * 1.2) &&
+              pk.mag >= spec.dominantPeakMag * 0.12
+          );
+          const hasPeak3 = spec.peaks.some(
+            (pk) =>
+              Math.abs(pk.freq - subF0 * 3) <= Math.max(subF0 * 3 * 0.08, spec.binHz * 1.2) &&
+              Math.abs(pk.freq - yinRes!.freq) >= spec.binHz * 2.5 &&
+              pk.mag >= spec.dominantPeakMag * 0.12
+          );
+          const hasMissingFundamentalHarmonicPair = div === 2 && hasPeak2 && hasPeak3;
+
+          if (
+            (subLocalPeak && subLocalPeak.mag >= spec.dominantPeakMag * 0.025) ||
+            hasMissingFundamentalHarmonicPair
+          ) {
+            const targetSubFreq = subLocalPeak ? subLocalPeak.freq : subF0;
+            const subCorr = this.computeNormalizedAutocorrelation(analysisBuf, sampleRate, targetSubFreq);
+            const curCorr = this.computeNormalizedAutocorrelation(analysisBuf, sampleRate, yinRes.freq);
+            const minCorrThreshold = subLocalPeak ? 0.65 : 0.75;
+            if (subCorr >= minCorrThreshold && subCorr >= curCorr * 0.85) {
               const narrowLow = Math.max(effectiveLow, subF0 * 0.90);
               const narrowHigh = Math.min(effectiveHigh, subF0 * 1.10);
-              const refinedSub = this.runYinCore(buffer, sampleRate, narrowLow, narrowHigh, 0.25);
-              if (refinedSub && refinedSub.confidence >= 0.60) {
+              const refinedSub = this.runYinCore(analysisBuf, sampleRate, narrowLow, narrowHigh, 0.25);
+              if (refinedSub && refinedSub.confidence >= 0.58) {
                 yinRes = refinedSub;
                 break;
               }
@@ -1488,7 +1633,7 @@ export class GuitarPitchDetector {
 
     // 7. Validação de periodicidade real + proteção contra sub-harmônico fantasma de frequência acima de highCutoff
     const periodicity = yinRes
-      ? this.computeNormalizedAutocorrelation(buffer, sampleRate, yinRes.freq)
+      ? this.computeNormalizedAutocorrelation(analysisBuf, sampleRate, yinRes.freq)
       : 0;
 
     let globalMaxBin = 1;
@@ -1544,8 +1689,50 @@ export class GuitarPitchDetector {
       };
     }
 
-    // 8. Limiar de confiança e sinal fraco
-    if (!yinRes || yinRes.confidence < this.confidenceThreshold) {
+    // 8. Limiar de confiança e sinal fraco (preserva leitura provisória quando o sinal é periódico e válido, sem marcar como confirmada)
+    const effectiveConfPreview = yinRes ? Math.min(yinRes.confidence, Math.min(1, periodicity + 0.15)) : 0;
+    if (!yinRes || yinRes.confidence < this.confidenceThreshold || effectiveConfPreview < this.confidenceThreshold) {
+      const canEmitWeakValid =
+        yinRes !== null &&
+        yinRes.freq >= effectiveLow &&
+        yinRes.freq <= effectiveHigh &&
+        yinRes.confidence >= 0.45 &&
+        periodicity >= 0.58 &&
+        spec.flatness <= 0.42;
+
+      if (canEmitWeakValid && yinRes) {
+        const weakPitch = this.frequencyToPitch(yinRes.freq, effectiveA4, effectiveTarget);
+        this.recentDetections = [];
+        return {
+          frequency: yinRes.freq,
+          note: weakPitch.note,
+          notePt: weakPitch.note ? NOTE_NAMES_PT[weakPitch.note] || weakPitch.note : null,
+          octave: weakPitch.octave,
+          cents: weakPitch.cents,
+          rawCents: weakPitch.rawCents,
+          confidence: parseFloat(Math.max(0, effectiveConfPreview).toFixed(2)),
+          intensity,
+          isSilence: false,
+          isWeakSignal: true,
+          isWeakValid: true,
+          isOnset,
+          signalPhase,
+          isTransientContaminated,
+          detectionType: 'weak_signal',
+          isReliable: false,
+          normalizedPeriodicity: parseFloat(periodicity.toFixed(3)),
+          inharmonicPeaksCount: spec.inharmonicCount,
+          diagnosticMessage: 'Sinal fraco — leitura provisória (não confirmada)',
+          stability: 35,
+          stabilityLabel: 'Sinal fraco',
+          expectedFreq: weakPitch.expectedFreq,
+          exactExpectedFreq: weakPitch.exactExpectedFreq,
+          diffHz: weakPitch.diffHz,
+          exactDiffHz: weakPitch.exactDiffHz,
+          timestamp: Date.now()
+        };
+      }
+
       const isWeak = yinRes !== null && yinRes.confidence >= 0.30 && rms >= this.silenceThreshold;
       this.recentDetections = [];
       return {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { guitarPitchDetector, PitchDetectionResult, TargetStringRef } from '../../audio/guitarPitchDetector';
+import { guitarPitchDetector, PitchDetectionResult, TargetStringRef, MicAppliedSettings } from '../../audio/guitarPitchDetector';
 import { TunerSmoother, TunerSmoothedOutput, TunerStage } from '../../audio/tunerSmoother';
 import {
   ALL_INSTRUMENTS,
@@ -46,6 +46,7 @@ export const TunerView: React.FC<TunerViewProps> = ({ onOpenLessonTuning }) => {
   const [isListening, setIsListening] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [suspendedInBackground, setSuspendedInBackground] = useState(false);
+  const [micAppliedSettings, setMicAppliedSettings] = useState<MicAppliedSettings | null>(null);
   const wasListeningBeforeHiddenRef = useRef(false);
 
   // Calibração de referência A4
@@ -121,7 +122,14 @@ export const TunerView: React.FC<TunerViewProps> = ({ onOpenLessonTuning }) => {
     signalIntensity: 0,
     stability: 0,
     expectedFreq: 0,
-    stableFramesCount: 0
+    stableFramesCount: 0,
+    isUnconfirmed: false,
+    tentativeNote: null,
+    tentativeNotePt: null,
+    tentativeOctave: null,
+    tentativeFreq: 0,
+    tentativeCents: 0,
+    tentativeExpectedFreq: 0
   });
 
   const animLoopRef = useRef<number | null>(null);
@@ -151,14 +159,23 @@ export const TunerView: React.FC<TunerViewProps> = ({ onOpenLessonTuning }) => {
     }));
   }, [currentPreset, a4Calibration]);
 
-  // Atualiza limites e calibração no detector quando instrumento ou A4 mudam
+  // Atualiza limites e calibração no detector quando instrumento, modo ou A4 mudam
   useEffect(() => {
     guitarPitchDetector.setA4Reference(a4Calibration);
-    const low = currentPreset.recommendedLowCutoff || 25;
-    const high = currentPreset.recommendedHighCutoff || 1600;
-    guitarPitchDetector.setRange(low, high);
+    if (isChromaticMode) {
+      guitarPitchDetector.setRange(25, 1600);
+    } else {
+      const lowestFreq = activeStrings.reduce(
+        (min, s) => (s.exactFreq < min ? s.exactFreq : min),
+        activeStrings[0]?.exactFreq || 82.41
+      );
+      const computedLow = Math.max(25, Math.min(80, Math.floor(lowestFreq * 0.65)));
+      const low = currentPreset.recommendedLowCutoff || computedLow;
+      const high = currentPreset.recommendedHighCutoff || 1450;
+      guitarPitchDetector.setRange(low, high);
+    }
     smootherRef.current.setTolerance(tuningTolerance);
-  }, [a4Calibration, currentPreset, tuningTolerance]);
+  }, [a4Calibration, currentPreset, tuningTolerance, isChromaticMode, activeStrings]);
 
   // Configuração da corda alvo no detector (preserva frequência exata em ponto flutuante)
   useEffect(() => {
@@ -187,6 +204,7 @@ export const TunerView: React.FC<TunerViewProps> = ({ onOpenLessonTuning }) => {
       guitarPitchDetector.stopListening();
       smootherRef.current.reset();
       setIsListening(false);
+      setMicAppliedSettings(null);
       setErrorMessage(null);
       if (animLoopRef.current) {
         cancelAnimationFrame(animLoopRef.current);
@@ -210,8 +228,10 @@ export const TunerView: React.FC<TunerViewProps> = ({ onOpenLessonTuning }) => {
 
       if (!result.success) {
         setErrorMessage(result.error || 'Falha ao acessar o microfone.');
+        setMicAppliedSettings(null);
         setIsListening(false);
       } else {
+        setMicAppliedSettings(result.appliedSettings || null);
         setIsListening(true);
 
         const renderFrame = () => {
@@ -347,6 +367,21 @@ export const TunerView: React.FC<TunerViewProps> = ({ onOpenLessonTuning }) => {
     actionPrompt: 'Aguardando'
   };
 
+  const hasConfirmedNote = Boolean(displayState.note);
+  const hasTentativeNote = !hasConfirmedNote && Boolean(displayState.tentativeNote);
+  const activeDisplayNote = displayState.note || displayState.tentativeNote || null;
+  const activeDisplayNotePt = displayState.notePt || displayState.tentativeNotePt || null;
+  const activeDisplayOctave = displayState.note ? displayState.octave : (displayState.tentativeOctave ?? null);
+  const activeDisplayFreq = displayState.displayedFreq > 0
+    ? displayState.displayedFreq
+    : (displayState.tentativeFreq || 0);
+  const activeDisplayCents = displayState.note
+    ? displayState.displayedCents
+    : (hasTentativeNote ? (displayState.tentativeCents || 0) : 0);
+  const activeExpectedFreq = displayState.expectedFreq > 0
+    ? displayState.expectedFreq
+    : (displayState.tentativeExpectedFreq || 0);
+
   if (!isListening) {
     statusBadge = {
       text: 'Microfone desligado',
@@ -371,14 +406,23 @@ export const TunerView: React.FC<TunerViewProps> = ({ onOpenLessonTuning }) => {
       color: '#D97706',
       actionPrompt: 'Uma corda por vez'
     };
+  } else if (hasTentativeNote) {
+    const isTentativeFlat = activeDisplayCents < 0;
+    statusBadge = {
+      text: 'Sinal fraco — leitura provisória (não confirmada)',
+      subtext: `Tendência ${isTentativeFlat ? 'grave (♭)' : 'aguda (♯)'} — sustente a nota mais próxima do microfone para confirmar`,
+      bg: 'bg-amber-50 text-amber-800 border-amber-300',
+      color: '#D97706',
+      actionPrompt: isTentativeFlat ? '▲ Provável grave' : '▼ Provável aguda'
+    };
   } else if (displayState.isWeakSignal) {
     statusBadge = {
       text: rawSignalFeedback.detectionType === 'noise_or_unidentified'
         ? 'Não foi possível identificar a nota'
         : 'Sinal sonoro fraco',
       subtext: rawSignalFeedback.detectionType === 'noise_or_unidentified'
-        ? 'Ruído ou sinal inconclusivo — toque uma corda limpa próximo ao microfone'
-        : 'Toque a corda mais firme próximo ao microfone',
+        ? 'Ruído ou sinal inconclusivo — toque uma corda para começar'
+        : 'Toque uma corda normalmente próximo ao microfone',
       bg: 'bg-amber-50 text-amber-700 border-amber-300',
       color: '#D97706',
       actionPrompt: 'Não identificado'
@@ -416,13 +460,31 @@ export const TunerView: React.FC<TunerViewProps> = ({ onOpenLessonTuning }) => {
   // Agulha do medidor limitada entre -45° e +45°
   const needleRotation = Math.max(-45, Math.min(45, displayState.displayedAngle));
 
-  // Identifica se a corda atual coincide com a nota detectada
+  // Identifica corda correspondente (manual travada, correspondência exata ou corda mais próxima dentro de ±250¢)
   const detectedMatchingString = useMemo(() => {
-    if (!displayState.note) return null;
-    return activeStrings.find(
-      (s) => s.note === displayState.note && (displayState.octave === null || s.octave === displayState.octave)
+    if (!isChromaticMode && manualStringNumber !== null) {
+      return activeStrings.find((s) => s.stringNumber === manualStringNumber) || null;
+    }
+    if (!activeDisplayNote) return null;
+    const exactMatch = activeStrings.find(
+      (s) => s.note === activeDisplayNote && (activeDisplayOctave === null || s.octave === activeDisplayOctave)
     );
-  }, [displayState.note, displayState.octave, activeStrings]);
+    if (exactMatch) return exactMatch;
+
+    if (!isChromaticMode && activeDisplayFreq > 0) {
+      let closest: (typeof activeStrings)[number] | null = null;
+      let minCentsDiff = 250;
+      for (const s of activeStrings) {
+        const diff = Math.abs(1200 * Math.log2(activeDisplayFreq / s.exactFreq));
+        if (diff <= minCentsDiff) {
+          minCentsDiff = diff;
+          closest = s;
+        }
+      }
+      return closest;
+    }
+    return null;
+  }, [isChromaticMode, manualStringNumber, activeDisplayNote, activeDisplayOctave, activeDisplayFreq, activeStrings]);
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-12">
@@ -677,24 +739,62 @@ export const TunerView: React.FC<TunerViewProps> = ({ onOpenLessonTuning }) => {
 
         {/* Center Note Display */}
         <div className="space-y-2">
-          {displayState.note ? (
-            <div className="space-y-1">
+          {activeDisplayNote ? (
+            <div className="space-y-1.5">
               <div className="inline-flex items-baseline gap-2">
-                <span className="text-6xl sm:text-7xl font-black text-[#25252A] tracking-tight">
-                  {displayState.note}
+                <span
+                  className={`text-6xl sm:text-7xl font-black tracking-tight ${
+                    hasTentativeNote ? 'text-amber-700' : 'text-[#25252A]'
+                  }`}
+                >
+                  {activeDisplayNote}
                 </span>
                 <span className="text-2xl font-bold text-[#7B1E2B]">
-                  {displayState.octave !== null ? displayState.octave : ''}
+                  {activeDisplayOctave !== null ? activeDisplayOctave : ''}
                 </span>
               </div>
-              <p className="text-sm font-semibold text-[#666672]">
-                Nota {displayState.notePt || displayState.note}
+              <p className="text-sm font-semibold text-[#666672] flex flex-wrap items-center justify-center gap-2">
+                <span>
+                  Nota {activeDisplayNotePt || activeDisplayNote}
+                  {hasTentativeNote ? ' (não confirmada)' : ''}
+                </span>
                 {detectedMatchingString && (
-                  <span className="ml-2 font-mono-code text-xs bg-[#F8F7F4] px-2 py-0.5 rounded-md border border-[#D9D9D9]">
-                    {detectedMatchingString.label}
+                  <span className="font-mono-code text-xs bg-[#F8F7F4] px-2.5 py-0.5 rounded-md border border-[#D9D9D9] text-[#25252A]">
+                    {detectedMatchingString.label} • Alvo {detectedMatchingString.freq} Hz
                   </span>
                 )}
               </p>
+
+              {/* Indicador visual claro: Grave (♭) | Afinada (✓) | Aguda (♯) */}
+              <div className="flex items-center justify-center gap-1.5 pt-1">
+                <span
+                  className={`px-3 py-1 rounded-lg text-[11px] font-bold border transition ${
+                    !displayState.isInTune && activeDisplayCents < -tuningTolerance
+                      ? 'bg-[#F5E8EA] text-[#7B1E2B] border-[#7B1E2B]'
+                      : 'bg-[#F8F7F4] text-[#A0A0A8] border-[#E5E5E5]'
+                  }`}
+                >
+                  ♭ Grave (Baixa)
+                </span>
+                <span
+                  className={`px-3.5 py-1 rounded-lg text-[11px] font-black border transition ${
+                    displayState.isInTune
+                      ? 'bg-emerald-500 text-white border-emerald-600 shadow-xs'
+                      : 'bg-[#F8F7F4] text-[#A0A0A8] border-[#E5E5E5]'
+                  }`}
+                >
+                  ✓ Afinada
+                </span>
+                <span
+                  className={`px-3 py-1 rounded-lg text-[11px] font-bold border transition ${
+                    !displayState.isInTune && activeDisplayCents > tuningTolerance
+                      ? 'bg-[#F5E8EA] text-[#7B1E2B] border-[#7B1E2B]'
+                      : 'bg-[#F8F7F4] text-[#A0A0A8] border-[#E5E5E5]'
+                  }`}
+                >
+                  ♯ Aguda (Alta)
+                </span>
+              </div>
             </div>
           ) : (
             <div className="py-4">
@@ -703,9 +803,14 @@ export const TunerView: React.FC<TunerViewProps> = ({ onOpenLessonTuning }) => {
               </span>
               <p className="text-xs text-[#666672] mt-1 font-medium">
                 {isListening
-                  ? 'Toque uma corda no seu instrumento físico...'
+                  ? 'Toque uma corda para começar'
                   : 'Clique em "Ligar Microfone Real" para afinar'}
               </p>
+              {detectedMatchingString && (
+                <p className="text-[11px] font-mono-code text-[#7B1E2B] mt-1 font-bold">
+                  Corda selecionada: {detectedMatchingString.label} ({detectedMatchingString.note}{detectedMatchingString.octave} • Alvo {detectedMatchingString.freq} Hz)
+                </p>
+              )}
             </div>
           )}
 
@@ -776,7 +881,7 @@ export const TunerView: React.FC<TunerViewProps> = ({ onOpenLessonTuning }) => {
           <div className="bg-[#F8F7F4] p-3 rounded-2xl border border-[#D9D9D9] text-center">
             <span className="text-[10px] font-bold text-[#666672] uppercase block">Frequência Real</span>
             <span className="text-sm font-black text-[#25252A] font-mono-code">
-              {displayState.displayedFreq > 0 ? `${displayState.displayedFreq} Hz` : '--'}
+              {activeDisplayFreq > 0 ? `${activeDisplayFreq} Hz` : '--'}
             </span>
           </div>
 
@@ -786,13 +891,13 @@ export const TunerView: React.FC<TunerViewProps> = ({ onOpenLessonTuning }) => {
               className={`text-sm font-black font-mono-code ${
                 displayState.isInTune
                   ? 'text-emerald-600'
-                  : Math.abs(displayState.displayedCents) > 10
+                  : Math.abs(activeDisplayCents) > 10
                   ? 'text-[#7B1E2B]'
                   : 'text-amber-600'
               }`}
             >
-              {displayState.note
-                ? `${displayState.displayedCents > 0 ? '+' : ''}${displayState.displayedCents} ¢`
+              {activeDisplayNote
+                ? `${activeDisplayCents > 0 ? '+' : ''}${activeDisplayCents} ¢`
                 : '--'}
             </span>
           </div>
@@ -803,25 +908,29 @@ export const TunerView: React.FC<TunerViewProps> = ({ onOpenLessonTuning }) => {
               className={`text-xs font-black tracking-tight ${
                 displayState.isInTune
                   ? 'text-emerald-600'
-                  : displayState.displayedCents < 0
+                  : activeDisplayCents < 0
                   ? 'text-amber-600'
                   : 'text-[#7B1E2B]'
               }`}
             >
-              {displayState.note ? statusBadge.actionPrompt : '--'}
+              {activeDisplayNote ? statusBadge.actionPrompt : '--'}
             </span>
           </div>
 
           <div className="bg-[#F8F7F4] p-3 rounded-2xl border border-[#D9D9D9] text-center">
             <span className="text-[10px] font-bold text-[#666672] uppercase block">Frequência Alvo</span>
             <span className="text-sm font-black text-[#25252A] font-mono-code">
-              {displayState.expectedFreq > 0 ? `${displayState.expectedFreq} Hz` : '--'}
+              {activeExpectedFreq > 0
+                ? `${activeExpectedFreq} Hz`
+                : detectedMatchingString
+                ? `${detectedMatchingString.freq} Hz`
+                : '--'}
             </span>
           </div>
 
           <div className="bg-[#F8F7F4] p-3 rounded-2xl border border-[#D9D9D9] text-center">
             <span className="text-[10px] font-bold text-[#666672] uppercase block">Confiança DSP</span>
-            <span className="text-sm font-black text-emerald-600 font-mono-code">
+            <span className={`text-sm font-black font-mono-code ${hasTentativeNote ? 'text-amber-600' : 'text-emerald-600'}`}>
               {displayState.confidence > 0 ? `${Math.round(displayState.confidence * 100)}%` : '--'}
             </span>
           </div>
@@ -1131,6 +1240,23 @@ export const TunerView: React.FC<TunerViewProps> = ({ onOpenLessonTuning }) => {
                 ))}
               </div>
             </div>
+
+            {micAppliedSettings && (
+              <div className="bg-[#F8F7F4] border border-[#D9D9D9] rounded-2xl p-3 text-[11px] text-[#666672] space-y-1">
+                <p className="font-bold text-[#25252A]">Configuração aceita pelo microfone</p>
+                <p>
+                  Taxa: {micAppliedSettings.sampleRate || 44100} Hz • Eco:{' '}
+                  {micAppliedSettings.echoCancellation === false ? 'Desativado' : 'Ativo'} • Ruído:{' '}
+                  {micAppliedSettings.noiseSuppression === false ? 'Desativado' : 'Ativo'} • AGC:{' '}
+                  {micAppliedSettings.autoGainControl === false ? 'Desativado' : 'Ativo'}
+                </p>
+                {(micAppliedSettings.noiseSuppression === true || micAppliedSettings.echoCancellation === true) && (
+                  <p className="text-amber-700 font-medium">
+                    Seu navegador manteve filtros de voz ativos — para melhor leitura de cordas sustentadas, aproxime o instrumento ou desative melhorias de áudio no sistema.
+                  </p>
+                )}
+              </div>
+            )}
 
             <button
               onClick={() => setIsSettingsModalOpen(false)}
