@@ -22,13 +22,20 @@ import {
   assertFails,
   assertSucceeds,
   RulesTestEnvironment,
+  RulesTestContext,
+  TokenOptions,
 } from '@firebase/rules-unit-testing';
+import type { FirebaseApp } from 'firebase/app';
 import {
   collection,
+  connectFirestoreEmulator,
   deleteDoc,
   doc,
+  EmulatorMockTokenOptions,
+  Firestore,
   getDoc,
   getDocs,
+  getFirestore,
   query,
   setDoc,
   updateDoc,
@@ -36,6 +43,24 @@ import {
 } from 'firebase/firestore';
 import { fetchSystemRole, parseSystemRoleDoc } from '../services/firebase';
 import { matchesAdminLogEventFilter } from '../services/adminLogsService';
+
+const DEFAULT_FIRESTORE_DATABASE_ID =
+  'ai-studio-guitaracademyfor-e7ce9efa-82d3-4dd1-8b8e-58aa69749913';
+
+function resolveFirestoreDatabaseId(): string {
+  const configPath = path.resolve(process.cwd(), 'firebase-applet-config.json');
+  if (fs.existsSync(configPath)) {
+    const parsed = JSON.parse(fs.readFileSync(configPath, 'utf8')) as {
+      firestoreDatabaseId?: string;
+    };
+    if (parsed.firestoreDatabaseId && parsed.firestoreDatabaseId.trim()) {
+      return parsed.firestoreDatabaseId.trim();
+    }
+  }
+  return DEFAULT_FIRESTORE_DATABASE_ID;
+}
+
+const FIRESTORE_DATABASE_ID = resolveFirestoreDatabaseId();
 
 const PROJECT_ID =
   process.env.GCLOUD_PROJECT ||
@@ -134,7 +159,66 @@ describe('Zero-Trust RBAC Role Resolution (Client Fail-Closed Unit Tests)', () =
 describe('Firebase Emulator — Firestore Security Rules (Student vs Admin)', () => {
   let testEnv: RulesTestEnvironment | null = null;
   let emulatorAvailable = false;
+  let emulatorInitError: unknown = null;
   const { host, port } = parseEmulatorHost();
+
+  function getNamedFirestoreFromContext(
+    env: RulesTestEnvironment,
+    context: RulesTestContext,
+    mockUserToken?: EmulatorMockTokenOptions | string
+  ): Firestore {
+    const fsEmulator = env.emulators.firestore || { host, port };
+    const compatDb = context.firestore();
+    const compatApp = compatDb.app as unknown as { _delegate: FirebaseApp };
+    const namedDb = getFirestore(compatApp._delegate, FIRESTORE_DATABASE_ID);
+    connectFirestoreEmulator(namedDb, fsEmulator.host, fsEmulator.port, {
+      mockUserToken,
+    });
+    return namedDb;
+  }
+
+  function getAuthenticatedDb(
+    env: RulesTestEnvironment,
+    uid: string,
+    tokenOptions?: TokenOptions
+  ): Firestore {
+    const context = env.authenticatedContext(uid, tokenOptions);
+    return getNamedFirestoreFromContext(env, context, {
+      ...(tokenOptions as EmulatorMockTokenOptions | undefined),
+      sub: uid,
+      user_id: uid,
+    });
+  }
+
+  function getUnauthenticatedDb(env: RulesTestEnvironment): Firestore {
+    const context = env.unauthenticatedContext();
+    return getNamedFirestoreFromContext(env, context, undefined);
+  }
+
+  async function withNamedSecurityRulesDisabled(
+    env: RulesTestEnvironment,
+    callback: (adminDb: Firestore) => Promise<void>
+  ): Promise<void> {
+    await env.withSecurityRulesDisabled(async (context) => {
+      const adminDb = getNamedFirestoreFromContext(env, context, 'owner');
+      await callback(adminDb);
+    });
+  }
+
+  async function clearNamedFirestore(env: RulesTestEnvironment): Promise<void> {
+    const fsEmulator = env.emulators.firestore || { host, port };
+    await env.clearFirestore();
+    if (FIRESTORE_DATABASE_ID && FIRESTORE_DATABASE_ID !== '(default)') {
+      const endpoint = `http://${fsEmulator.host}:${fsEmulator.port}/emulator/v1/projects/${encodeURIComponent(env.projectId)}/databases/${encodeURIComponent(FIRESTORE_DATABASE_ID)}/documents`;
+      const resp = await fetch(endpoint, { method: 'DELETE' });
+      if (!resp.ok) {
+        const body = await resp.text();
+        throw new Error(
+          `Falha ao limpar documentos do banco nomeado "${FIRESTORE_DATABASE_ID}" no Firestore Emulator (${resp.status}): ${body}`
+        );
+      }
+    }
+  }
 
   const STUDENT_UID = 'student-uid-1';
   const OTHER_STUDENT_UID = 'student-uid-2';
@@ -155,20 +239,27 @@ describe('Firebase Emulator — Firestore Security Rules (Student vs Admin)', ()
           port,
         },
       });
-      // Verify that the endpoint actually responds as a Firestore Emulator
-      await env.clearFirestore();
+      // Verify that the endpoint actually responds as a Firestore Emulator and clear the named database
+      await clearNamedFirestore(env);
       testEnv = env;
       emulatorAvailable = true;
-    } catch {
+      emulatorInitError = null;
+    } catch (err) {
       testEnv = null;
       emulatorAvailable = false;
+      emulatorInitError = err;
+      if (process.env.REQUIRE_FIREBASE_EMULATOR === 'true') {
+        throw err;
+      }
     }
   });
 
   after(async () => {
     if (!emulatorAvailable) {
+      const detail =
+        emulatorInitError instanceof Error ? emulatorInitError.message : String(emulatorInitError || '');
       console.error(
-        `[WARNING] Firebase Firestore Emulator indisponivel em ${host}:${port}. Os 5 testes de regras do Emulator foram IGNORADOS (NAO APROVADOS).`
+        `[WARNING] Firebase Firestore Emulator indisponivel em ${host}:${port} (banco: ${FIRESTORE_DATABASE_ID}). Os 5 testes de regras do Emulator foram IGNORADOS (NAO APROVADOS).${detail ? ` Motivo: ${detail}` : ''}`
       );
     }
     if (testEnv) {
@@ -180,9 +271,8 @@ describe('Firebase Emulator — Firestore Security Rules (Student vs Admin)', ()
   beforeEach(async () => {
     if (!testEnv) return;
 
-    await testEnv.clearFirestore();
-    await testEnv.withSecurityRulesDisabled(async (context) => {
-      const adminDb = context.firestore();
+    await clearNamedFirestore(testEnv);
+    await withNamedSecurityRulesDisabled(testEnv, async (adminDb) => {
 
       await setDoc(doc(adminDb, 'system_roles', ADMIN_UID), {
         uid: ADMIN_UID,
@@ -282,7 +372,9 @@ describe('Firebase Emulator — Firestore Security Rules (Student vs Admin)', ()
 
   function requireEmulator(t: { skip: (message?: string) => void }): RulesTestEnvironment | null {
     if (!emulatorAvailable || !testEnv) {
-      const msg = `Firebase Firestore Emulator not running at ${host}:${port} (NOT PASSED — skipped)`;
+      const detail =
+        emulatorInitError instanceof Error ? emulatorInitError.message : String(emulatorInitError || '');
+      const msg = `Firebase Firestore Emulator not running at ${host}:${port} for database "${FIRESTORE_DATABASE_ID}" (NOT PASSED — skipped)${detail ? `: ${detail}` : ''}`;
       if (process.env.REQUIRE_FIREBASE_EMULATOR === 'true') {
         assert.fail(msg);
       }
@@ -296,10 +388,10 @@ describe('Firebase Emulator — Firestore Security Rules (Student vs Admin)', ()
     const env = requireEmulator(t);
     if (!env) return;
 
-    const studentDb = env.authenticatedContext(STUDENT_UID).firestore();
-    const teacherDb = env.authenticatedContext(TEACHER_UID).firestore();
-    const adminDb = env.authenticatedContext(ADMIN_UID).firestore();
-    const unauthDb = env.unauthenticatedContext().firestore();
+    const studentDb = getAuthenticatedDb(env, STUDENT_UID);
+    const teacherDb = getAuthenticatedDb(env, TEACHER_UID);
+    const adminDb = getAuthenticatedDb(env, ADMIN_UID);
+    const unauthDb = getUnauthenticatedDb(env);
 
     // Student cannot create or overwrite their own system_roles doc to gain admin
     await assertFails(
@@ -378,9 +470,9 @@ describe('Firebase Emulator — Firestore Security Rules (Student vs Admin)', ()
     const env = requireEmulator(t);
     if (!env) return;
 
-    const studentDb = env.authenticatedContext(STUDENT_UID).firestore();
+    const studentDb = getAuthenticatedDb(env, STUDENT_UID);
     const newStudentUid = 'student-new-signup';
-    const newStudentDb = env.authenticatedContext(newStudentUid).firestore();
+    const newStudentDb = getAuthenticatedDb(env, newStudentUid);
 
     // Student cannot update role, isAdmin, isTeacher, or permissions on their profile
     await assertFails(
@@ -463,7 +555,7 @@ describe('Firebase Emulator — Firestore Security Rules (Student vs Admin)', ()
     const env = requireEmulator(t);
     if (!env) return;
 
-    const studentDb = env.authenticatedContext(STUDENT_UID).firestore();
+    const studentDb = getAuthenticatedDb(env, STUDENT_UID);
 
     // Student can read ONLY their own system_roles doc, never list collection or read another user's role
     const ownRoleSnap = await assertSucceeds(getDoc(doc(studentDb, 'system_roles', STUDENT_UID)));
@@ -550,7 +642,7 @@ describe('Firebase Emulator — Firestore Security Rules (Student vs Admin)', ()
     );
 
     // Unauthenticated users are also blocked from system_roles, users and admin_logs
-    const unauthDb = env.unauthenticatedContext().firestore();
+    const unauthDb = getUnauthenticatedDb(env);
     await assertFails(getDocs(collection(unauthDb, 'system_roles')));
     await assertFails(getDoc(doc(unauthDb, 'system_roles', STUDENT_UID)));
     await assertFails(getDocs(collection(unauthDb, 'users')));
@@ -561,8 +653,8 @@ describe('Firebase Emulator — Firestore Security Rules (Student vs Admin)', ()
     const env = requireEmulator(t);
     if (!env) return;
 
-    const adminDb = env.authenticatedContext(ADMIN_UID).firestore();
-    const teacherDb = env.authenticatedContext(TEACHER_UID).firestore();
+    const adminDb = getAuthenticatedDb(env, ADMIN_UID);
+    const teacherDb = getAuthenticatedDb(env, TEACHER_UID);
 
     // Verified admin can list and get all system_roles, users, and admin_logs
     const rolesSnap = await assertSucceeds(getDocs(collection(adminDb, 'system_roles')));
@@ -645,9 +737,9 @@ describe('Firebase Emulator — Firestore Security Rules (Student vs Admin)', ()
     const env = requireEmulator(t);
     if (!env) return;
 
-    const studentDb = env.authenticatedContext(STUDENT_UID).firestore();
-    const otherStudentDb = env.authenticatedContext(OTHER_STUDENT_UID).firestore();
-    const otherTeacherDb = env.authenticatedContext(TEACHER_2_UID).firestore();
+    const studentDb = getAuthenticatedDb(env, STUDENT_UID);
+    const otherStudentDb = getAuthenticatedDb(env, OTHER_STUDENT_UID);
+    const otherTeacherDb = getAuthenticatedDb(env, TEACHER_2_UID);
 
     // Enrollments: student cannot create enrollment for another user, non-existent class, or forged approval
     await assertFails(
