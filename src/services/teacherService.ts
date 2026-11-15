@@ -22,8 +22,10 @@ import {
   getDocFromServer,
   getDocs,
   getDocsFromServer,
+  increment,
   setDoc,
   updateDoc,
+  writeBatch,
   arrayUnion,
   query,
   where,
@@ -63,6 +65,7 @@ const LEGACY_DEMO_STUDENT_IDS = new Set([
 const INACTIVE_ENROLLMENT_STATUSES = new Set(['cancelled', 'suspended', 'inactive']);
 const VALID_OFFICIAL_COURSES = new Set(['violao', 'canonical', 'solo', 'baixo', 'teclado', 'bateria']);
 const VALID_INVITE_CODE_REGEX = /^[A-Z0-9_\-.:]{1,128}$/;
+const VALID_DOC_ID_REGEX = /^[a-zA-Z0-9_\-.:]{1,128}$/;
 
 export function formatClassInstrumentLabel(courseId?: string, instrument?: string): string {
   if (typeof instrument === 'string' && instrument.trim()) return instrument.trim();
@@ -203,6 +206,8 @@ export class TeacherService {
       typeof options?.expiresAt === 'string' && options.expiresAt.trim()
         ? options.expiresAt.trim()
         : null;
+    const parsedExpiresMs = expiresAt ? Date.parse(expiresAt) : NaN;
+    const expiresAtMs = !Number.isNaN(parsedExpiresMs) ? parsedExpiresMs : null;
     const maxStudents =
       typeof options?.maxStudents === 'number' && options.maxStudents > 0
         ? Math.min(500, Math.round(options.maxStudents))
@@ -222,36 +227,42 @@ export class TeacherService {
       createdAt: nowIso,
       updatedAt: nowIso,
       expiresAt,
+      expiresAtMs,
       active: true,
       maxStudents,
+      enrolledCount: 0,
     };
 
     const currentClasses = this.loadLocalClasses();
     this.saveLocalClasses([...currentClasses, newClass]);
 
-    try {
-      await setDoc(doc(db, 'classes', classId), {
-        ...newClass,
-        updatedAt: serverTimestamp(),
-      });
-      await setDoc(doc(db, 'class_invites', code), {
-        classId,
-        code,
-        name: newClass.name,
-        description: newClass.description,
-        courseId,
-        instrument,
-        teacherId,
-        teacherEmail,
-        teacherName,
-        createdAt: nowIso,
-        expiresAt,
-        maxStudents,
-        active: true,
-        updatedAt: serverTimestamp(),
-      });
-    } catch {
-      // offline
+    if (auth.currentUser) {
+      try {
+        const batch = writeBatch(db);
+        batch.set(doc(db, 'classes', classId), {
+          ...newClass,
+          updatedAt: serverTimestamp(),
+        });
+        batch.set(doc(db, 'class_invites', code), {
+          classId,
+          code,
+          name: newClass.name,
+          description: newClass.description,
+          courseId,
+          instrument,
+          teacherId,
+          teacherName,
+          createdAt: nowIso,
+          expiresAt,
+          expiresAtMs,
+          maxStudents,
+          active: true,
+          updatedAt: serverTimestamp(),
+        });
+        await batch.commit();
+      } catch {
+        // offline
+      }
     }
 
     return newClass;
@@ -339,6 +350,7 @@ export class TeacherService {
         let candidateClass: ClassGroup | undefined;
         let isInviteClosed = false;
         let expiresAt: string | null = null;
+        let expiresAtMs: number | null = null;
 
         if (inviteSnap.exists()) {
           const inv = inviteSnap.data() || {};
@@ -347,6 +359,12 @@ export class TeacherService {
           }
           if (typeof inv.expiresAt === 'string' && inv.expiresAt.trim()) {
             expiresAt = inv.expiresAt.trim();
+          }
+          if (typeof inv.expiresAtMs === 'number' && Number.isFinite(inv.expiresAtMs)) {
+            expiresAtMs = inv.expiresAtMs;
+          } else if (expiresAt) {
+            const parsed = Date.parse(expiresAt);
+            if (!Number.isNaN(parsed)) expiresAtMs = parsed;
           }
           if (inv.classId && inv.teacherId) {
             candidateClass = {
@@ -357,11 +375,12 @@ export class TeacherService {
               courseId: inv.courseId || 'geral',
               instrument: formatClassInstrumentLabel(inv.courseId, inv.instrument),
               teacherId: String(inv.teacherId),
-              teacherEmail: String(inv.teacherEmail || ''),
+              teacherEmail: '',
               teacherName: String(inv.teacherName || 'Professor Guitar Academy'),
               createdAt: String(inv.createdAt || new Date().toISOString()),
               updatedAt: new Date().toISOString(),
               expiresAt,
+              expiresAtMs,
               active: inv.active !== false,
               maxStudents: Number(inv.maxStudents || 60),
             };
@@ -381,6 +400,12 @@ export class TeacherService {
                 if (raw.active === false) isInviteClosed = true;
                 if (typeof raw.expiresAt === 'string' && raw.expiresAt.trim()) {
                   expiresAt = raw.expiresAt.trim();
+                }
+                if (typeof raw.expiresAtMs === 'number' && Number.isFinite(raw.expiresAtMs)) {
+                  expiresAtMs = raw.expiresAtMs;
+                } else if (expiresAt) {
+                  const parsed = Date.parse(expiresAt);
+                  if (!Number.isNaN(parsed)) expiresAtMs = parsed;
                 }
               }
             }
@@ -408,29 +433,29 @@ export class TeacherService {
           };
         }
 
-        if (expiresAt) {
-          const expMs = Date.parse(expiresAt);
-          if (!Number.isNaN(expMs) && expMs < Date.now()) {
-            return {
-              valid: false,
-              reason: 'expired',
-              message: 'Este código de convite expirou. Solicite um novo código ao seu professor.',
-              classGroup: candidateClass,
-              source: 'firestore',
-            };
-          }
+        if (expiresAtMs !== null && expiresAtMs < Date.now()) {
+          return {
+            valid: false,
+            reason: 'expired',
+            message: 'Este código de convite expirou. Solicite um novo código ao seu professor.',
+            classGroup: candidateClass,
+            source: 'firestore',
+          };
         }
 
-        // Verifica matrícula duplicada do usuário autenticado na turma
+        // Verifica matrícula duplicada ou suspensão do usuário autenticado na turma
         if (effectiveUid) {
           let alreadyActive = false;
+          let isSuspended = false;
           try {
             const subSnap = await getDocFromServer(
               doc(db, 'classes', candidateClass.id, 'students', effectiveUid)
             ).catch(() => getDoc(doc(db, 'classes', candidateClass.id, 'students', effectiveUid)));
             if (subSnap.exists()) {
               const st = String(subSnap.data()?.status || 'active').toLowerCase();
-              if (!INACTIVE_ENROLLMENT_STATUSES.has(st)) {
+              if (st === 'suspended') {
+                isSuspended = true;
+              } else if (!INACTIVE_ENROLLMENT_STATUSES.has(st)) {
                 alreadyActive = true;
               }
             }
@@ -438,22 +463,35 @@ export class TeacherService {
             // Ignora falha pontual
           }
 
-          if (!alreadyActive) {
+          if (!alreadyActive && !isSuspended) {
             try {
-              const enrQ = query(
-                collection(db, 'enrollments'),
-                where('studentId', '==', effectiveUid)
-              );
-              const enrSnap = await getDocsFromServer(enrQ).catch(() => getDocs(enrQ));
-              alreadyActive = enrSnap.docs.some((d) => {
-                const data = d.data();
-                if (data?.classId !== candidateClass!.id) return false;
-                const st = String(data?.status || 'active').toLowerCase();
-                return !INACTIVE_ENROLLMENT_STATUSES.has(st);
-              });
+              const deterministicId = `enroll-${candidateClass.id}-${effectiveUid}`;
+              if (VALID_DOC_ID_REGEX.test(deterministicId)) {
+                const detSnap = await getDocFromServer(
+                  doc(db, 'enrollments', deterministicId)
+                ).catch(() => getDoc(doc(db, 'enrollments', deterministicId)));
+                if (detSnap.exists()) {
+                  const st = String(detSnap.data()?.status || 'active').toLowerCase();
+                  if (st === 'suspended') {
+                    isSuspended = true;
+                  } else if (!INACTIVE_ENROLLMENT_STATUSES.has(st)) {
+                    alreadyActive = true;
+                  }
+                }
+              }
             } catch {
               // Ignora
             }
+          }
+
+          if (isSuspended) {
+            return {
+              valid: false,
+              reason: 'closed',
+              message: 'Sua matrícula nesta turma está suspensa. Entre em contato com seu professor.',
+              classGroup: candidateClass,
+              source: 'firestore',
+            };
           }
 
           if (alreadyActive) {
@@ -466,6 +504,22 @@ export class TeacherService {
               source: 'firestore',
             };
           }
+        }
+
+        if (
+          typeof candidateClass.enrolledCount === 'number' &&
+          typeof candidateClass.maxStudents === 'number' &&
+          candidateClass.maxStudents > 0 &&
+          candidateClass.enrolledCount >= candidateClass.maxStudents
+        ) {
+          return {
+            valid: false,
+            reason: 'full',
+            message: 'Esta turma já atingiu o limite máximo de alunos matriculados.',
+            classGroup: candidateClass,
+            currentStudentCount: candidateClass.enrolledCount,
+            source: 'firestore',
+          };
         }
 
         return {
@@ -683,16 +737,33 @@ export class TeacherService {
         }
 
         matchedClass = validation.classGroup;
-        const deterministicId = `enroll-${matchedClass.id}-${cleanStudentUid}`.slice(0, 128);
-        let enrollmentId = deterministicId;
+        const enrollmentId = `enroll-${matchedClass.id}-${cleanStudentUid}`;
+        if (!VALID_DOC_ID_REGEX.test(enrollmentId)) {
+          return {
+            success: false,
+            message: 'Identificador de matrícula inválido para esta turma.',
+            error: 'ID de matrícula inválido.',
+            classGroup: matchedClass,
+          };
+        }
 
-        // Se existir matrícula anterior cancelada no slot determinístico, gera novo ID válido
+        const detEnrollRef = doc(db, 'enrollments', enrollmentId);
+        let detEnrollExists = false;
         try {
-          const existingDetSnap = await getDocFromServer(doc(db, 'enrollments', deterministicId)).catch(() =>
-            getDoc(doc(db, 'enrollments', deterministicId))
+          const existingDetSnap = await getDocFromServer(detEnrollRef).catch(() =>
+            getDoc(detEnrollRef)
           );
           if (existingDetSnap.exists()) {
+            detEnrollExists = true;
             const existingStatus = String(existingDetSnap.data()?.status || 'active').toLowerCase();
+            if (existingStatus === 'suspended') {
+              return {
+                success: false,
+                message: 'Sua matrícula nesta turma está suspensa. Entre em contato com seu professor.',
+                error: 'Matrícula suspensa.',
+                classGroup: matchedClass,
+              };
+            }
             if (!INACTIVE_ENROLLMENT_STATUSES.has(existingStatus)) {
               return {
                 success: false,
@@ -701,10 +772,9 @@ export class TeacherService {
                 classGroup: matchedClass,
               };
             }
-            enrollmentId = `enroll-${matchedClass.id}-${cleanStudentUid}-${Date.now()}`.slice(0, 128);
           }
         } catch {
-          // Prossegue com ID determinístico
+          // Prossegue com verificação na subcoleção
         }
 
         const nowIso = new Date().toISOString();
@@ -728,7 +798,6 @@ export class TeacherService {
           updatedAt: serverTimestamp(),
         };
 
-        // Garante que não exista registro cancelado impedindo create em /classes/{classId}/students/{uid}
         const subDocRef = doc(db, 'classes', matchedClass.id, 'students', cleanStudentUid);
         let subDocExists = false;
         try {
@@ -736,6 +805,14 @@ export class TeacherService {
           if (subSnap.exists()) {
             subDocExists = true;
             const subStatus = String(subSnap.data()?.status || 'active').toLowerCase();
+            if (subStatus === 'suspended') {
+              return {
+                success: false,
+                message: 'Sua matrícula nesta turma está suspensa. Entre em contato com seu professor.',
+                error: 'Matrícula suspensa.',
+                classGroup: matchedClass,
+              };
+            }
             if (!INACTIVE_ENROLLMENT_STATUSES.has(subStatus)) {
               return {
                 success: false,
@@ -750,27 +827,28 @@ export class TeacherService {
         }
 
         try {
+          // WriteBatch atômico: garante integridade 1-para-1 entre classes/{classId}/students/{uid},
+          // enrollments/enroll-{classId}-{uid} e incremento atômico de classes/{classId}.enrolledCount
+          const batch = writeBatch(db);
+          batch.update(doc(db, 'classes', matchedClass.id), {
+            enrolledCount: increment(1),
+            updatedAt: serverTimestamp(),
+          });
           if (subDocExists) {
-            await Promise.all([
-              updateDoc(subDocRef, {
-                studentName: safeStudentName,
-                studentEmail: safeStudentEmail,
-                studentPhotoUrl: safePhotoUrl,
-                lastActivityAt: nowIso,
-                updatedAt: serverTimestamp(),
-              }),
-              setDoc(doc(db, 'enrollments', enrollmentId), firestorePayload),
-            ]);
+            batch.update(subDocRef, firestorePayload);
           } else {
-            await Promise.all([
-              setDoc(subDocRef, firestorePayload),
-              setDoc(doc(db, 'enrollments', enrollmentId), firestorePayload),
-            ]);
+            batch.set(subDocRef, firestorePayload);
           }
+          if (detEnrollExists) {
+            batch.update(detEnrollRef, firestorePayload);
+          } else {
+            batch.set(detEnrollRef, firestorePayload);
+          }
+          await batch.commit();
         } catch (writeErr: any) {
           const msg =
             writeErr?.code === 'permission-denied'
-              ? 'A turma está fechada ou o servidor recusou a matrícula pelas regras de segurança.'
+              ? 'Não foi possível concluir a matrícula: a turma atingiu o limite máximo de vagas, foi encerrada ou o código expirou.'
               : 'Erro ao gravar matrícula no Firebase. Verifique sua conexão e tente novamente.';
           return {
             success: false,
@@ -1032,8 +1110,12 @@ export class TeacherService {
           })
         );
 
+        const classesById = new Map(classes.map((c) => [c.id, c]));
+        const serverSubSnapOk = new Set<string>();
+
         classSnaps.forEach((snap, idx) => {
           const currentClassId = targetClassIds[idx];
+          serverSubSnapOk.add(currentClassId);
           snap.docs.forEach((d) => {
             const raw = { id: d.id, ...d.data() } as ClassEnrollment;
             if (!raw.classId) raw.classId = currentClassId;
@@ -1057,6 +1139,21 @@ export class TeacherService {
         }
 
         const deduped = deduplicateRealEnrollments(gathered);
+
+        // Reconciliação silenciosa de enrolledCount em turmas existentes quando o professor/admin acessa o painel
+        targetClassIds.forEach((cId) => {
+          if (!serverSubSnapOk.has(cId)) return;
+          const clsObj = classesById.get(cId);
+          if (!clsObj) return;
+          const realCount = deduped.filter((e) => e.classId === cId).length;
+          if (clsObj.enrolledCount !== realCount) {
+            updateDoc(doc(db, 'classes', cId), {
+              enrolledCount: realCount,
+              updatedAt: serverTimestamp(),
+            }).catch(() => {});
+          }
+        });
+
         const preservedOther = this.loadLocalEnrollments().filter(
           (e) => e.teacherId !== teacherId && isRealEnrollmentRecord(e)
         );
@@ -1095,8 +1192,8 @@ export class TeacherService {
     const updated = [event, ...events].slice(0, 500);
     this.saveLocalEvents(updated);
 
-    // Se houver turma associada e online, envia ao Firestore
-    if (event.classId) {
+    // Se houver turma associada e usuário autenticado online, envia ao Firestore
+    if (event.classId && auth.currentUser) {
       try {
         setDoc(doc(db, 'classes', event.classId, 'events', event.id), {
           ...event,

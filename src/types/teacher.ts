@@ -13,8 +13,10 @@ export interface ClassGroup {
   createdAt: string;
   updatedAt: string;
   expiresAt?: string | null;
+  expiresAtMs?: number | null;
   active: boolean;
   maxStudents?: number;
+  enrolledCount?: number;
 }
 
 export interface InviteValidationResult {

@@ -162,6 +162,7 @@ export interface ServerAuthDependencies {
     classGroup?: Record<string, any>;
     enrollment?: Record<string, any>;
   }>;
+  adminDbForClasses?: any;
 }
 
 const VALID_ROLES = new Set(['student', 'teacher', 'admin']);
@@ -1166,16 +1167,17 @@ Responda ESTRITAMENTE em JSON com plano de intervenção coletiva:
   };
 
   async function validateInviteServerSide(cleanCode: string, callerUid: string) {
-    const adminDb = getAdminDb();
+    const adminDb = deps.adminDbForClasses || getAdminDb();
     const inviteSnap = await adminDb.collection('class_invites').doc(cleanCode).get();
 
     let classSnap: FirebaseFirestore.DocumentSnapshot<FirebaseFirestore.DocumentData> | null = null;
     let inviteData: Record<string, any> | null = null;
 
     if (inviteSnap.exists) {
-      inviteData = inviteSnap.data() || {};
-      if (inviteData.classId && UID_REGEX.test(String(inviteData.classId))) {
-        classSnap = await adminDb.collection('classes').doc(String(inviteData.classId)).get();
+      const resolvedInviteData: Record<string, any> = inviteSnap.data() || {};
+      inviteData = resolvedInviteData;
+      if (resolvedInviteData.classId && UID_REGEX.test(String(resolvedInviteData.classId))) {
+        classSnap = await adminDb.collection('classes').doc(String(resolvedInviteData.classId)).get();
       }
     } else {
       const qSnap = await adminDb
@@ -1198,6 +1200,14 @@ Responda ESTRITAMENTE em JSON com plano de intervenção coletiva:
 
     const classData = classSnap?.exists ? classSnap.data() || {} : {};
     const mergedClassId = String(classSnap?.id || inviteData?.classId || '');
+    if (!mergedClassId || !UID_REGEX.test(mergedClassId)) {
+      return {
+        valid: false,
+        reason: 'not_found',
+        message: 'Turma associada ao código de convite não é válida.',
+      };
+    }
+
     const isInviteActive = inviteData ? inviteData.active !== false : true;
     const isClassActive = classSnap?.exists ? classData.active !== false : isInviteActive;
 
@@ -1210,15 +1220,21 @@ Responda ESTRITAMENTE em JSON com plano de intervenção coletiva:
     }
 
     const rawExpiresAt = classData.expiresAt || inviteData?.expiresAt || null;
-    if (typeof rawExpiresAt === 'string' && rawExpiresAt.trim()) {
-      const expMs = Date.parse(rawExpiresAt.trim());
-      if (!Number.isNaN(expMs) && expMs < Date.now()) {
-        return {
-          valid: false,
-          reason: 'expired',
-          message: 'Este código de convite expirou. Solicite um novo código ao seu professor.',
-        };
-      }
+    const rawExpiresAtMs =
+      typeof classData.expiresAtMs === 'number'
+        ? classData.expiresAtMs
+        : typeof inviteData?.expiresAtMs === 'number'
+        ? inviteData.expiresAtMs
+        : typeof rawExpiresAt === 'string' && rawExpiresAt.trim()
+        ? Date.parse(rawExpiresAt.trim())
+        : NaN;
+
+    if (!Number.isNaN(rawExpiresAtMs) && rawExpiresAtMs < Date.now()) {
+      return {
+        valid: false,
+        reason: 'expired',
+        message: 'Este código de convite expirou. Solicite um novo código ao seu professor.',
+      };
     }
 
     const courseIdRaw =
@@ -1239,7 +1255,7 @@ Responda ESTRITAMENTE em JSON com plano de intervenção coletiva:
         String(classData.instrument || inviteData?.instrument || '')
       ),
       teacherId: String(classData.teacherId || inviteData?.teacherId || ''),
-      teacherEmail: String(classData.teacherEmail || inviteData?.teacherEmail || ''),
+      teacherEmail: '',
       teacherName: String(classData.teacherName || inviteData?.teacherName || 'Professor Guitar Academy'),
       createdAt:
         typeof classData.createdAt === 'string'
@@ -1253,19 +1269,32 @@ Responda ESTRITAMENTE em JSON com plano de intervenção coletiva:
       maxStudents: Number(classData.maxStudents || inviteData?.maxStudents || 60),
     };
 
-    // Verifica matrícula duplicada e lotação real da turma
+    const deterministicId = `enroll-${mergedClassId}-${callerUid}`;
+    if (!UID_REGEX.test(deterministicId)) {
+      return {
+        valid: false,
+        reason: 'invalid_format',
+        message: 'Identificador de matrícula excede o limite permitido.',
+      };
+    }
+
+    // Verifica matrícula duplicada, suspensão e lotação real da turma
     const [classStudentsSnap, deterministicEnrollSnap] = await Promise.all([
       adminDb.collection('classes').doc(mergedClassId).collection('students').get(),
-      adminDb.collection('enrollments').doc(`enroll-${mergedClassId}-${callerUid}`.slice(0, 128)).get(),
+      adminDb.collection('enrollments').doc(deterministicId).get(),
     ]);
 
     const activeStudentIds = new Set<string>();
     let alreadyInSubcol = false;
-    classStudentsSnap.docs.forEach((d) => {
+    let isSuspended = false;
+    classStudentsSnap.docs.forEach((d: any) => {
       const data = d.data() || {};
       const st = typeof data.status === 'string' ? data.status.trim().toLowerCase() : 'active';
+      const sId = typeof data.studentId === 'string' && data.studentId ? data.studentId : d.id;
+      if (sId === callerUid && st === 'suspended') {
+        isSuspended = true;
+      }
       if (!INACTIVE_ENROLLMENT_STATUSES_SRV.has(st)) {
-        const sId = typeof data.studentId === 'string' && data.studentId ? data.studentId : d.id;
         activeStudentIds.add(sId);
         if (sId === callerUid) alreadyInSubcol = true;
       }
@@ -1276,6 +1305,20 @@ Responda ESTRITAMENTE em JSON com plano de intervenção coletiva:
       deterministicData && typeof deterministicData.status === 'string'
         ? deterministicData.status.trim().toLowerCase()
         : '';
+    if (deterministicStatus === 'suspended') {
+      isSuspended = true;
+    }
+
+    if (isSuspended) {
+      return {
+        valid: false,
+        reason: 'closed',
+        message: 'Sua matrícula nesta turma está suspensa. Entre em contato com seu professor.',
+        classGroup: resolvedClassGroup,
+        currentStudentCount: activeStudentIds.size,
+      };
+    }
+
     const alreadyInEnrollments =
       Boolean(deterministicData) && !INACTIVE_ENROLLMENT_STATUSES_SRV.has(deterministicStatus);
 
@@ -1312,6 +1355,260 @@ Responda ESTRITAMENTE em JSON com plano de intervenção coletiva:
     };
   }
 
+  class JoinClassDomainError extends Error {
+    statusCode: number;
+    reason: string;
+    classGroup?: Record<string, any>;
+    alreadyEnrolled?: boolean;
+
+    constructor(
+      statusCode: number,
+      reason: string,
+      message: string,
+      classGroup?: Record<string, any>,
+      alreadyEnrolled?: boolean
+    ) {
+      super(message);
+      this.statusCode = statusCode;
+      this.reason = reason;
+      this.classGroup = classGroup;
+      this.alreadyEnrolled = alreadyEnrolled;
+    }
+  }
+
+  async function joinClassTransactionalServerSide(params: {
+    cleanCode: string;
+    callerUid: string;
+    studentName: string;
+    studentEmail: string;
+    studentPhotoUrl: string | null;
+  }) {
+    const adminDb = deps.adminDbForClasses || getAdminDb();
+    const { cleanCode, callerUid, studentName, studentEmail, studentPhotoUrl } = params;
+
+    return await adminDb.runTransaction(async (tx: any) => {
+      // FASE 1: Todas as leituras dentro da transação serializável (all reads before writes)
+      const inviteRef = adminDb.collection('class_invites').doc(cleanCode);
+      const inviteSnap = await tx.get(inviteRef);
+      const inviteData = inviteSnap.exists ? inviteSnap.data() || {} : null;
+
+      let classRef: FirebaseFirestore.DocumentReference<FirebaseFirestore.DocumentData> | null = null;
+      let classSnap: FirebaseFirestore.DocumentSnapshot<FirebaseFirestore.DocumentData> | null = null;
+
+      if (inviteData?.classId && UID_REGEX.test(String(inviteData.classId))) {
+        classRef = adminDb.collection('classes').doc(String(inviteData.classId));
+        classSnap = await tx.get(classRef);
+      } else if (!inviteSnap.exists) {
+        const classQuery = adminDb.collection('classes').where('code', '==', cleanCode).limit(1);
+        const classQuerySnap = await tx.get(classQuery);
+        const firstDoc = classQuerySnap.docs[0];
+        if (firstDoc) {
+          classSnap = firstDoc;
+          classRef = firstDoc.ref;
+        }
+      }
+
+      if (!inviteSnap.exists && (!classSnap || !classSnap.exists)) {
+        throw new JoinClassDomainError(
+          400,
+          'not_found',
+          'Código de convite não encontrado. Confira o código com seu professor.'
+        );
+      }
+
+      const classData = classSnap?.exists ? classSnap.data() || {} : {};
+      const mergedClassId = String(classSnap?.id || inviteData?.classId || '');
+      if (!mergedClassId || !UID_REGEX.test(mergedClassId) || !classRef || !classSnap?.exists) {
+        throw new JoinClassDomainError(
+          400,
+          'closed',
+          'Esta turma ou código de convite foi encerrado pelo professor.'
+        );
+      }
+
+      const isInviteActive = inviteData ? inviteData.active !== false : true;
+      const isClassActive = classData.active !== false;
+      if (!isInviteActive || !isClassActive) {
+        throw new JoinClassDomainError(
+          400,
+          'closed',
+          'Esta turma ou código de convite foi encerrado pelo professor.'
+        );
+      }
+
+      const rawExpiresAt = classData.expiresAt || inviteData?.expiresAt || null;
+      const rawExpiresAtMs =
+        typeof classData.expiresAtMs === 'number'
+          ? classData.expiresAtMs
+          : typeof inviteData?.expiresAtMs === 'number'
+          ? inviteData.expiresAtMs
+          : typeof rawExpiresAt === 'string' && rawExpiresAt.trim()
+          ? Date.parse(rawExpiresAt.trim())
+          : NaN;
+
+      if (!Number.isNaN(rawExpiresAtMs) && rawExpiresAtMs < Date.now()) {
+        throw new JoinClassDomainError(
+          400,
+          'expired',
+          'Este código de convite expirou. Solicite um novo código ao seu professor.'
+        );
+      }
+
+      const enrollmentId = `enroll-${mergedClassId}-${callerUid}`;
+      if (!UID_REGEX.test(enrollmentId)) {
+        throw new JoinClassDomainError(
+          400,
+          'invalid_format',
+          'Identificador de matrícula inválido ou acima do limite permitido.'
+        );
+      }
+
+      const courseIdRaw =
+        typeof classData.courseId === 'string' && classData.courseId.trim()
+          ? classData.courseId.trim()
+          : typeof inviteData?.courseId === 'string' && inviteData.courseId.trim()
+          ? inviteData.courseId.trim()
+          : undefined;
+
+      const maxStudentsRaw = Number(classData.maxStudents || inviteData?.maxStudents || 60);
+      const maxStudents =
+        Number.isFinite(maxStudentsRaw) && maxStudentsRaw > 0 ? Math.min(500, Math.round(maxStudentsRaw)) : 60;
+
+      const resolvedClassGroup = {
+        id: mergedClassId,
+        name: String(classData.name || inviteData?.name || 'Turma Guitar Academy'),
+        code: String(classData.code || inviteData?.code || cleanCode),
+        description: String(classData.description || inviteData?.description || ''),
+        ...(courseIdRaw ? { courseId: courseIdRaw } : {}),
+        instrument: formatInstrumentFromCourse(
+          courseIdRaw,
+          String(classData.instrument || inviteData?.instrument || '')
+        ),
+        teacherId: String(classData.teacherId || inviteData?.teacherId || ''),
+        teacherEmail: '',
+        teacherName: String(classData.teacherName || inviteData?.teacherName || 'Professor Guitar Academy'),
+        createdAt:
+          typeof classData.createdAt === 'string'
+            ? classData.createdAt
+            : typeof inviteData?.createdAt === 'string'
+            ? inviteData.createdAt
+            : new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        expiresAt: typeof rawExpiresAt === 'string' ? rawExpiresAt : null,
+        active: true,
+        maxStudents,
+      };
+
+      const classStudentsColRef = classRef.collection('students');
+      const ownSubRef = classStudentsColRef.doc(callerUid);
+      const ownEnrollRef = adminDb.collection('enrollments').doc(enrollmentId);
+      const officialCourseId =
+        courseIdRaw && VALID_COURSE_IDS.has(courseIdRaw) ? courseIdRaw : undefined;
+      const userRef = officialCourseId ? adminDb.collection('users').doc(callerUid) : null;
+
+      const [classStudentsSnap, ownSubSnap, ownEnrollSnap, userSnap] = await Promise.all([
+        tx.get(classStudentsColRef),
+        tx.get(ownSubRef),
+        tx.get(ownEnrollRef),
+        userRef ? tx.get(userRef) : Promise.resolve(null),
+      ]);
+
+      const activeStudentIds = new Set<string>();
+      classStudentsSnap.docs.forEach((d: any) => {
+        const data = d.data() || {};
+        const st = typeof data.status === 'string' ? data.status.trim().toLowerCase() : 'active';
+        if (!INACTIVE_ENROLLMENT_STATUSES_SRV.has(st)) {
+          const sId = typeof data.studentId === 'string' && data.studentId ? data.studentId : d.id;
+          activeStudentIds.add(sId);
+        }
+      });
+
+      const subStatus = ownSubSnap.exists
+        ? String(ownSubSnap.data()?.status || 'active').trim().toLowerCase()
+        : '';
+      const enrollStatus = ownEnrollSnap.exists
+        ? String(ownEnrollSnap.data()?.status || 'active').trim().toLowerCase()
+        : '';
+
+      if (subStatus === 'suspended' || enrollStatus === 'suspended') {
+        throw new JoinClassDomainError(
+          403,
+          'closed',
+          'Sua matrícula nesta turma está suspensa. Entre em contato com seu professor.',
+          resolvedClassGroup
+        );
+      }
+
+      if (
+        (ownSubSnap.exists && !INACTIVE_ENROLLMENT_STATUSES_SRV.has(subStatus)) ||
+        (ownEnrollSnap.exists && !INACTIVE_ENROLLMENT_STATUSES_SRV.has(enrollStatus)) ||
+        activeStudentIds.has(callerUid)
+      ) {
+        throw new JoinClassDomainError(
+          409,
+          'already_enrolled',
+          `Você já está matriculado na turma "${resolvedClassGroup.name}".`,
+          resolvedClassGroup,
+          true
+        );
+      }
+
+      // Garantia transacional de última vaga: dois alunos concorrentes jamais excedem maxStudents
+      if (maxStudents > 0 && activeStudentIds.size >= maxStudents) {
+        throw new JoinClassDomainError(
+          409,
+          'full',
+          'Esta turma já atingiu o limite máximo de alunos matriculados.',
+          resolvedClassGroup
+        );
+      }
+
+      // FASE 2: Escritas atômicas 1-para-1 entre subcoleção, matrícula raiz e contador da turma
+      const nowIso = new Date().toISOString();
+      const courseIdField = officialCourseId ? { courseId: officialCourseId } : {};
+
+      const firestorePayload: Record<string, any> = {
+        id: enrollmentId,
+        classId: mergedClassId,
+        ...courseIdField,
+        studentId: callerUid,
+        studentName,
+        studentEmail,
+        studentPhotoUrl,
+        teacherId: resolvedClassGroup.teacherId,
+        joinedAt: nowIso,
+        status: 'active',
+        lastActivityAt: nowIso,
+        updatedAt: FieldValue.serverTimestamp(),
+      };
+
+      tx.set(ownSubRef, firestorePayload);
+      tx.set(ownEnrollRef, firestorePayload);
+      tx.update(classRef, {
+        enrolledCount: activeStudentIds.size + 1,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+
+      if (userRef && userSnap?.exists && officialCourseId) {
+        tx.update(userRef, {
+          enrolledCourses: FieldValue.arrayUnion(officialCourseId),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      }
+
+      return {
+        matchedClass: {
+          ...resolvedClassGroup,
+          enrolledCount: activeStudentIds.size + 1,
+        },
+        enrollment: {
+          ...firestorePayload,
+          updatedAt: nowIso,
+        },
+      };
+    });
+  }
+
   app.post('/api/classes/validate-invite', requireAuth, async (req, res) => {
     const caller = (req as any).user;
     const cleanCode = String(req.body?.code || '').trim().toUpperCase();
@@ -1336,7 +1633,7 @@ Responda ESTRITAMENTE em JSON com plano de intervenção coletiva:
         const result = await deps.validateClassInvite({ code: cleanCode, callerUid: caller.uid });
         return res.json(result);
       }
-      if (!canWriteAuditLogToFirestore()) {
+      if (!deps.adminDbForClasses && !canWriteAuditLogToFirestore()) {
         return res.status(503).json({
           error: 'Credenciais administrativas do Firebase Admin SDK não estão disponíveis neste servidor.',
           code: 'admin/credentials-unavailable',
@@ -1409,81 +1706,38 @@ Responda ESTRITAMENTE em JSON com plano de intervenção coletiva:
         return res.status(result.statusCode || (result.success ? 200 : 400)).json(result);
       }
 
-      if (!canWriteAuditLogToFirestore()) {
+      if (!deps.adminDbForClasses && !canWriteAuditLogToFirestore()) {
         return res.status(503).json({
           error: 'Credenciais administrativas do Firebase Admin SDK não estão disponíveis neste servidor.',
           code: 'admin/credentials-unavailable',
         });
       }
 
-      const validation = await validateInviteServerSide(cleanCode, caller.uid);
-      if (!validation.valid || !validation.classGroup) {
-        const statusCode =
-          validation.reason === 'already_enrolled' || validation.reason === 'full' ? 409 : 400;
-        return res.status(statusCode).json({
-          success: false,
-          reason: validation.reason,
-          message: validation.message,
-          classGroup: validation.classGroup,
-        });
-      }
-
-      const matchedClass = validation.classGroup;
-      const adminDb = getAdminDb();
-      const nowIso = new Date().toISOString();
-      const enrollmentId = `enroll-${matchedClass.id}-${caller.uid}`.slice(0, 128);
-      const courseIdField =
-        matchedClass.courseId && VALID_COURSE_IDS.has(matchedClass.courseId)
-          ? { courseId: matchedClass.courseId }
-          : {};
-
-      const firestorePayload: Record<string, any> = {
-        id: enrollmentId,
-        classId: matchedClass.id,
-        ...courseIdField,
-        studentId: caller.uid,
+      const { matchedClass, enrollment } = await joinClassTransactionalServerSide({
+        cleanCode,
+        callerUid: caller.uid,
         studentName: safeStudentName,
         studentEmail: safeStudentEmail,
         studentPhotoUrl: safePhotoUrl,
-        teacherId: matchedClass.teacherId,
-        joinedAt: nowIso,
-        status: 'active',
-        lastActivityAt: nowIso,
-        updatedAt: FieldValue.serverTimestamp(),
-      };
-
-      const batch = adminDb.batch();
-      batch.set(
-        adminDb.collection('classes').doc(matchedClass.id).collection('students').doc(caller.uid),
-        firestorePayload
-      );
-      batch.set(adminDb.collection('enrollments').doc(enrollmentId), firestorePayload);
-
-      // Atualiza enrolledCourses no perfil do usuário se a turma estiver vinculada a um curso oficial (sem tocar em role)
-      if (courseIdField.courseId) {
-        const userRef = adminDb.collection('users').doc(caller.uid);
-        const userSnap = await userRef.get();
-        if (userSnap.exists) {
-          batch.update(userRef, {
-            enrolledCourses: FieldValue.arrayUnion(courseIdField.courseId),
-            updatedAt: FieldValue.serverTimestamp(),
-          });
-        }
-      }
-
-      await batch.commit();
+      });
 
       return res.json({
         success: true,
         message: `Você ingressou com sucesso na turma "${matchedClass.name}" do Professor ${matchedClass.teacherName}!`,
         classGroup: matchedClass,
-        enrollment: {
-          ...firestorePayload,
-          updatedAt: nowIso,
-        },
+        enrollment,
       });
     } catch (err: any) {
-      console.error('[Classes] Erro ao registrar matrícula na turma:', err?.message || err);
+      if (err instanceof JoinClassDomainError) {
+        return res.status(err.statusCode).json({
+          success: false,
+          reason: err.reason,
+          alreadyEnrolled: err.alreadyEnrolled,
+          message: err.message,
+          classGroup: err.classGroup,
+        });
+      }
+      console.error('[Classes] Erro transacional ao registrar matrícula na turma:', err?.message || err);
       return res.status(500).json({
         success: false,
         message: 'Não foi possível concluir a matrícula na turma. Tente novamente.',

@@ -6680,6 +6680,38 @@ assert(
   '38.04 Fluxo completo validateInviteCode -> joinClassWithInviteCode -> bloqueio de duplicidade -> getStudentEnrollments funciona corretamente'
 );
 
+// =============================================================
+// GRUPO 39 — AUDITORIA FINAL DE SEGURANÇA DO SISTEMA DE CONVITES
+// =============================================================
+console.log('\n--- GRUPO 39: AUDITORIA FINAL DE SEGURANÇA DO SISTEMA DE CONVITES ---');
+
+const teacherServiceAuditSrc = fs.readFileSync('src/services/teacherService.ts', 'utf-8');
+const serverAuditSrc = fs.readFileSync('server.ts', 'utf-8');
+
+assert(
+  rulesAudit.includes('hasValidEnrolledCountIncrement') &&
+  rulesAudit.includes('canStudentUpdateClassCount') &&
+  rulesAudit.includes('hasAfterMatchingEnrollment') &&
+  rulesAudit.includes('hasAfterMatchingClassStudent') &&
+  rulesAudit.includes('expectedEnrollmentId') &&
+  rulesAudit.includes('isInviteNotExpired'),
+  '39.01 firestore.rules impõe integridade atômica 1-para-1 entre classes/{classId}/students/{uid}, enrollments/{enrollId} e incremento validado no servidor de enrolledCount <= maxStudents'
+);
+
+assert(
+  serverAuditSrc.includes('adminDb.runTransaction') &&
+  serverAuditSrc.includes('joinClassTransactionalServerSide') &&
+  serverAuditSrc.includes('activeStudentIds.size >= maxStudents'),
+  '39.02 server.ts utiliza Firestore runTransaction serializável para prevenir race condition na última vaga'
+);
+
+assert(
+  teacherServiceAuditSrc.includes('writeBatch(db)') &&
+  teacherServiceAuditSrc.includes('increment(1)') &&
+  !teacherServiceAuditSrc.includes('enroll-${matchedClass.id}-${cleanStudentUid}-${Date.now()}'),
+  '39.03 TeacherService usa WriteBatch atômico com increment(1) e ID determinístico 1-para-1 sem timestamp aleatório'
+);
+
 console.log('\n===========================================================');
 console.log(`TOTAL DE TESTES: ${totalTests}`);
 console.log(`PASSOU: ${passedTests}`);

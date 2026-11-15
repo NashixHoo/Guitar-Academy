@@ -36,10 +36,13 @@ import {
   getDoc,
   getDocs,
   getFirestore,
+  increment,
   query,
+  serverTimestamp,
   setDoc,
   updateDoc,
   where,
+  writeBatch,
 } from 'firebase/firestore';
 import {
   fetchSystemRole,
@@ -1143,25 +1146,65 @@ describe('Firebase Emulator — Firestore Security Rules (Student vs Admin)', ()
       })
     );
 
-    // Valid self-enrollment in an active class with matching teacherId succeeds
-    await assertSucceeds(
-      setDoc(doc(studentDb, 'enrollments', 'enroll-legit-1'), {
+    // Non-atomic / orphan enrollment writes MUST fail (1-to-1 integrity + server-validated enrolledCount required)
+    const detEnrollId = `enroll-class-101-${STUDENT_UID}`;
+    await assertFails(
+      setDoc(doc(studentDb, 'enrollments', detEnrollId), {
+        id: detEnrollId,
         studentId: STUDENT_UID,
         classId: 'class-101',
         teacherId: TEACHER_UID,
         status: 'active',
       })
     );
-
-    // Student can join an active class via classes/{classId}/students/{studentId} and then read that class
-    await assertSucceeds(
+    await assertFails(
       setDoc(doc(studentDb, 'classes', 'class-101', 'students', STUDENT_UID), {
         studentId: STUDENT_UID,
         classId: 'class-101',
         teacherId: TEACHER_UID,
         studentName: 'Aluno Teste',
+        status: 'active',
       })
     );
+    await assertFails(
+      setDoc(doc(studentDb, 'enrollments', 'enroll-arbitrary-forged-id'), {
+        studentId: STUDENT_UID,
+        classId: 'class-101',
+        teacherId: TEACHER_UID,
+        status: 'active',
+      })
+    );
+    // Client cannot tamper with enrolledCount or maxStudents directly
+    await assertFails(
+      updateDoc(doc(studentDb, 'classes', 'class-101'), {
+        enrolledCount: 0,
+        maxStudents: 999,
+      })
+    );
+
+    // Atomic WriteBatch updating classes/{classId}.enrolledCount + students/{uid} + enrollments/{detId} succeeds
+    const validBatch = writeBatch(studentDb);
+    validBatch.update(doc(studentDb, 'classes', 'class-101'), {
+      enrolledCount: increment(1),
+      updatedAt: serverTimestamp(),
+    });
+    validBatch.set(doc(studentDb, 'classes', 'class-101', 'students', STUDENT_UID), {
+      id: detEnrollId,
+      studentId: STUDENT_UID,
+      classId: 'class-101',
+      teacherId: TEACHER_UID,
+      studentName: 'Aluno Teste',
+      status: 'active',
+    });
+    validBatch.set(doc(studentDb, 'enrollments', detEnrollId), {
+      id: detEnrollId,
+      studentId: STUDENT_UID,
+      classId: 'class-101',
+      teacherId: TEACHER_UID,
+      studentName: 'Aluno Teste',
+      status: 'active',
+    });
+    await assertSucceeds(validBatch.commit());
     await assertSucceeds(getDoc(doc(studentDb, 'classes', 'class-101')));
     await assertSucceeds(getDoc(doc(studentDb, 'classes', 'class-101', 'students', STUDENT_UID)));
 
@@ -1177,7 +1220,7 @@ describe('Firebase Emulator — Firestore Security Rules (Student vs Admin)', ()
       })
     );
     await assertFails(
-      updateDoc(doc(studentDb, 'enrollments', 'enroll-legit-1'), {
+      updateDoc(doc(studentDb, 'enrollments', detEnrollId), {
         teacherId: TEACHER_2_UID,
       })
     );
@@ -1238,6 +1281,69 @@ describe('Firebase Emulator — Firestore Security Rules (Student vs Admin)', ()
         studentId: OTHER_STUDENT_UID,
       })
     );
+  });
+
+  it('enforces server-verified maxStudents limit and invite expiration on atomic batches', async (t) => {
+    const env = requireEmulator(t);
+    if (!env) return;
+
+    await withNamedSecurityRulesDisabled(env, async (adminDb) => {
+      await setDoc(doc(adminDb, 'classes', 'class-cap-1'), {
+        id: 'class-cap-1',
+        name: 'Turma Limite 1 Vaga',
+        code: 'GA-CAP1',
+        teacherId: TEACHER_UID,
+        active: true,
+        maxStudents: 1,
+        enrolledCount: 0,
+      });
+      await setDoc(doc(adminDb, 'classes', 'class-expired'), {
+        id: 'class-expired',
+        name: 'Turma Expirada',
+        code: 'GA-EXP1',
+        teacherId: TEACHER_UID,
+        active: true,
+        maxStudents: 10,
+        enrolledCount: 0,
+        expiresAtMs: Date.now() - 60_000,
+      });
+    });
+
+    const studentDb = getAuthenticatedDb(env, STUDENT_UID);
+    const otherStudentDb = getAuthenticatedDb(env, OTHER_STUDENT_UID);
+
+    const buildJoinBatch = (dbClient: Firestore, clsId: string, uid: string) => {
+      const enrollId = `enroll-${clsId}-${uid}`;
+      const b = writeBatch(dbClient);
+      b.update(doc(dbClient, 'classes', clsId), {
+        enrolledCount: increment(1),
+        updatedAt: serverTimestamp(),
+      });
+      b.set(doc(dbClient, 'classes', clsId, 'students', uid), {
+        id: enrollId,
+        studentId: uid,
+        classId: clsId,
+        teacherId: TEACHER_UID,
+        status: 'active',
+      });
+      b.set(doc(dbClient, 'enrollments', enrollId), {
+        id: enrollId,
+        studentId: uid,
+        classId: clsId,
+        teacherId: TEACHER_UID,
+        status: 'active',
+      });
+      return b;
+    };
+
+    // 1. Expired class invite blocked by request.time.toMillis() <= expiresAtMs
+    await assertFails(buildJoinBatch(studentDb, 'class-expired', STUDENT_UID).commit());
+
+    // 2. First student takes the 1 available seat
+    await assertSucceeds(buildJoinBatch(studentDb, 'class-cap-1', STUDENT_UID).commit());
+
+    // 3. Second student cannot exceed maxStudents=1 even with a valid atomic batch
+    await assertFails(buildJoinBatch(otherStudentDb, 'class-cap-1', OTHER_STUDENT_UID).commit());
   });
 });
 
@@ -1775,6 +1881,303 @@ describe('Backend Express HTTP — Zero-Trust Auth, RBAC & CORS (Real Server Req
     assert.equal(joinBody.enrollment?.studentId, 'student-http-1');
     assert.equal(joinBody.enrollment?.classId, 'cls-http-1');
     assert.equal(joinBody.enrollment?.status, 'active');
+  });
+
+  it('prevents last-seat overbooking under concurrent requests and enforces 1-to-1 integrity in POST /api/classes/join transaction', async () => {
+    // In-memory serializable transactional Firestore adapter (optimistic concurrency control + conflict retry)
+    const docsStore = new Map<string, { data: Record<string, any>; version: number }>();
+    const clone = (val: any) => JSON.parse(JSON.stringify(val));
+
+    const seedDoc = (pathKey: string, data: Record<string, any>) => {
+      docsStore.set(pathKey, { data: clone(data), version: 1 });
+    };
+
+    seedDoc('class_invites/GA-RACE-1', {
+      classId: 'cls-race-1',
+      code: 'GA-RACE-1',
+      name: 'Turma Última Vaga',
+      courseId: 'violao',
+      instrument: 'Violão',
+      teacherId: 'teacher-http-1',
+      teacherName: 'Prof. Concorrência',
+      maxStudents: 2,
+      active: true,
+    });
+    seedDoc('classes/cls-race-1', {
+      id: 'cls-race-1',
+      name: 'Turma Última Vaga',
+      code: 'GA-RACE-1',
+      courseId: 'violao',
+      instrument: 'Violão',
+      teacherId: 'teacher-http-1',
+      teacherName: 'Prof. Concorrência',
+      maxStudents: 2,
+      enrolledCount: 1,
+      active: true,
+    });
+    // 1 student already enrolled -> strictly 1 last seat remaining
+    seedDoc('classes/cls-race-1/students/existing-stu-0', {
+      id: 'enroll-cls-race-1-existing-stu-0',
+      classId: 'cls-race-1',
+      studentId: 'existing-stu-0',
+      teacherId: 'teacher-http-1',
+      status: 'active',
+    });
+    seedDoc('enrollments/enroll-cls-race-1-existing-stu-0', {
+      id: 'enroll-cls-race-1-existing-stu-0',
+      classId: 'cls-race-1',
+      studentId: 'existing-stu-0',
+      teacherId: 'teacher-http-1',
+      status: 'active',
+    });
+    seedDoc('class_invites/GA-EXP-RACE', {
+      classId: 'cls-exp-1',
+      code: 'GA-EXP-RACE',
+      name: 'Turma Expirada',
+      teacherId: 'teacher-http-1',
+      maxStudents: 10,
+      expiresAtMs: Date.now() - 30_000,
+      active: true,
+    });
+    seedDoc('classes/cls-exp-1', {
+      id: 'cls-exp-1',
+      name: 'Turma Expirada',
+      code: 'GA-EXP-RACE',
+      teacherId: 'teacher-http-1',
+      maxStudents: 10,
+      expiresAtMs: Date.now() - 30_000,
+      active: true,
+    });
+    seedDoc('users/student-http-1', { uid: 'student-http-1', enrolledCourses: [] });
+    seedDoc('users/student-http-2', { uid: 'student-http-2', enrolledCourses: [] });
+
+    class TxConflictError extends Error {}
+
+    const makeDocRef = (docPath: string): any => ({
+      path: docPath,
+      id: docPath.split('/').pop()!,
+      get: async () => {
+        const entry = docsStore.get(docPath);
+        return {
+          id: docPath.split('/').pop()!,
+          exists: Boolean(entry),
+          ref: makeDocRef(docPath),
+          data: () => (entry ? clone(entry.data) : undefined),
+        };
+      },
+      collection: (sub: string) => makeColRef(`${docPath}/${sub}`),
+    });
+
+    const makeColRef = (colPath: string): any => ({
+      path: colPath,
+      doc: (docId: string) => makeDocRef(`${colPath}/${docId}`),
+      where: (field: string, _op: string, value: any) => ({
+        limit: (_n: number) => ({
+          _colPath: colPath,
+          _field: field,
+          _value: value,
+        }),
+      }),
+    });
+
+    const normalizeFieldValues = (input: Record<string, any>, existing: Record<string, any> = {}) => {
+      const out = { ...existing };
+      for (const [k, v] of Object.entries(input)) {
+        if (v && typeof v === 'object' && v.constructor?.name === 'ArrayUnionTransform') {
+          const current = Array.isArray(out[k]) ? out[k] : [];
+          const elements = (v as any).elements || [];
+          out[k] = Array.from(new Set([...current, ...elements]));
+        } else if (v && typeof v === 'object' && v.constructor?.name === 'ServerTimestampTransform') {
+          out[k] = new Date().toISOString();
+        } else {
+          out[k] = v;
+        }
+      }
+      return out;
+    };
+
+    const transactionalAdapter = {
+      collection: (name: string) => makeColRef(name),
+      runTransaction: async (fn: (tx: any) => Promise<any>) => {
+        for (let attempt = 0; attempt < 5; attempt++) {
+          const readVersions = new Map<string, number>();
+          const colReadSnapshots = new Map<string, Map<string, number>>();
+          const stagedWrites: Array<{ path: string; mode: 'set' | 'update'; data: Record<string, any> }> = [];
+
+          const tx = {
+            get: async (target: any) => {
+              if (target.path && !target._colPath && docsStore !== undefined && target.doc === undefined) {
+                // docRef
+                const cur = docsStore.get(target.path);
+                readVersions.set(target.path, cur ? cur.version : 0);
+                return {
+                  id: target.id,
+                  exists: Boolean(cur),
+                  ref: target,
+                  data: () => (cur ? clone(cur.data) : undefined),
+                };
+              }
+              if (target._colPath) {
+                const matches: any[] = [];
+                const snapMap = new Map<string, number>();
+                for (const [k, v] of docsStore.entries()) {
+                  if (k.startsWith(`${target._colPath}/`) && k.slice(target._colPath.length + 1).indexOf('/') === -1) {
+                    snapMap.set(k, v.version);
+                    if (v.data[target._field] === target._value) {
+                      matches.push({ id: k.split('/').pop(), exists: true, ref: makeDocRef(k), data: () => clone(v.data) });
+                    }
+                  }
+                }
+                colReadSnapshots.set(target._colPath, snapMap);
+                return { empty: matches.length === 0, docs: matches };
+              }
+              // subcollection ref
+              const prefix = `${target.path}/`;
+              const docsList: any[] = [];
+              const snapMap = new Map<string, number>();
+              for (const [k, v] of docsStore.entries()) {
+                if (k.startsWith(prefix) && !k.slice(prefix.length).includes('/')) {
+                  snapMap.set(k, v.version);
+                  docsList.push({ id: k.split('/').pop(), exists: true, ref: makeDocRef(k), data: () => clone(v.data) });
+                }
+              }
+              colReadSnapshots.set(target.path, snapMap);
+              return { empty: docsList.length === 0, docs: docsList };
+            },
+            set: (ref: any, data: Record<string, any>) => {
+              stagedWrites.push({ path: ref.path, mode: 'set', data });
+            },
+            update: (ref: any, data: Record<string, any>) => {
+              stagedWrites.push({ path: ref.path, mode: 'update', data });
+            },
+          };
+
+          try {
+            const result = await fn(tx);
+            // Yield microtask to force concurrent overlap between competing HTTP requests
+            await Promise.resolve();
+
+            // Verify serializability against concurrent commits
+            for (const [p, v] of readVersions.entries()) {
+              const nowVer = docsStore.get(p)?.version || 0;
+              if (nowVer !== v) throw new TxConflictError(`Conflict on ${p}`);
+            }
+            for (const [colPath, snapMap] of colReadSnapshots.entries()) {
+              const prefix = `${colPath}/`;
+              for (const [k, v] of docsStore.entries()) {
+                if (k.startsWith(prefix) && !k.slice(prefix.length).includes('/')) {
+                  if (snapMap.get(k) !== v.version) {
+                    throw new TxConflictError(`Collection conflict on ${k}`);
+                  }
+                }
+              }
+            }
+
+            // Commit atomically
+            for (const w of stagedWrites) {
+              const cur = docsStore.get(w.path);
+              const nextData =
+                w.mode === 'update' && cur
+                  ? normalizeFieldValues(w.data, cur.data)
+                  : normalizeFieldValues(w.data, {});
+              docsStore.set(w.path, { data: nextData, version: (cur?.version || 0) + 1 });
+            }
+            return result;
+          } catch (err) {
+            if (err instanceof TxConflictError && attempt < 4) {
+              continue;
+            }
+            throw err;
+          }
+        }
+        throw new Error('Transaction aborted after retries');
+      },
+    };
+
+    const raceTokens: Record<string, { uid: string; email: string }> = {
+      'race-stu-1': { uid: 'student-http-1', email: 's1@guitaracademy.test' },
+      'race-stu-2': { uid: 'student-http-2', email: 's2@guitaracademy.test' },
+    };
+
+    const txApp = createServerApp({
+      verifyIdToken: async (token: string) => {
+        const dec = raceTokens[token];
+        if (!dec) throw new Error('Invalid token');
+        return dec;
+      },
+      getSystemRole: async () => ({ exists: true, role: 'student' }),
+      adminDbForClasses: transactionalAdapter,
+    });
+
+    await new Promise<void>((resolve, reject) => {
+      const txSrv = http.createServer(txApp);
+      txSrv.listen(0, '127.0.0.1', async () => {
+        const addr = txSrv.address();
+        const txUrl = addr && typeof addr !== 'string' ? `http://127.0.0.1:${addr.port}` : '';
+        try {
+          // 1. Concurrent last-seat race: 2 students attempt simultaneously for 1 remaining seat
+          const [res1, res2] = await Promise.all([
+            fetch(`${txUrl}/api/classes/join`, {
+              method: 'POST',
+              headers: {
+                Authorization: 'Bearer race-stu-1',
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ code: 'GA-RACE-1', studentName: 'Aluno Um' }),
+            }),
+            fetch(`${txUrl}/api/classes/join`, {
+              method: 'POST',
+              headers: {
+                Authorization: 'Bearer race-stu-2',
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ code: 'GA-RACE-1', studentName: 'Aluno Dois' }),
+            }),
+          ]);
+
+          const statuses = [res1.status, res2.status].sort((a, b) => a - b);
+          assert.deepEqual(statuses, [200, 409]);
+
+          const body1 = (await res1.json()) as { success: boolean; reason?: string };
+          const body2 = (await res2.json()) as { success: boolean; reason?: string };
+          const winnerBody = res1.status === 200 ? body1 : body2;
+          const loserBody = res1.status === 409 ? body1 : body2;
+          assert.equal(winnerBody.success, true);
+          assert.equal(loserBody.success, false);
+          assert.equal(loserBody.reason, 'full');
+
+          // Verify 1-to-1 integrity and authoritative seat count never exceeded maxStudents (2)
+          const activeSubDocs = Array.from(docsStore.keys()).filter((k) =>
+            k.startsWith('classes/cls-race-1/students/')
+          );
+          const rootEnrDocs = Array.from(docsStore.keys()).filter((k) =>
+            k.startsWith('enrollments/enroll-cls-race-1-')
+          );
+          assert.equal(activeSubDocs.length, 2);
+          assert.equal(rootEnrDocs.length, 2);
+          assert.equal(docsStore.get('classes/cls-race-1')?.data.enrolledCount, 2);
+
+          // 2. Expired invite is rejected by backend transaction
+          const expRes = await fetch(`${txUrl}/api/classes/join`, {
+            method: 'POST',
+            headers: {
+              Authorization: 'Bearer race-stu-1',
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ code: 'GA-EXP-RACE' }),
+          });
+          assert.equal(expRes.status, 400);
+          const expBody = (await expRes.json()) as { reason?: string };
+          assert.equal(expBody.reason, 'expired');
+
+          txSrv.closeAllConnections?.();
+          txSrv.close(() => resolve());
+        } catch (err) {
+          txSrv.closeAllConnections?.();
+          txSrv.close(() => reject(err));
+        }
+      });
+    });
   });
 });
 

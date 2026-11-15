@@ -83,7 +83,9 @@
         "teacherEmail": { "type": "string", "description": "E-mail do professor" },
         "teacherName": { "type": "string", "description": "Nome do professor" },
         "maxStudents": { "type": "number", "description": "Limite máximo de vagas" },
+        "enrolledCount": { "type": "number", "description": "Contagem atômica de alunos ativos na turma" },
         "expiresAt": { "type": "string", "description": "Data de expiração opcional (ISO 8601)" },
+        "expiresAtMs": { "type": "number", "description": "Timestamp de expiração em milissegundos (epoch ms)" },
         "active": { "type": "boolean", "description": "Indica se a turma está ativa" },
         "createdAt": { "type": "string", "description": "Data de criação" }
       },
@@ -189,6 +191,7 @@
         "teacherName": { "type": "string", "description": "Nome do professor" },
         "maxStudents": { "type": "number", "description": "Limite máximo de vagas" },
         "expiresAt": { "type": "string", "description": "Data de expiração opcional (ISO 8601)" },
+        "expiresAtMs": { "type": "number", "description": "Timestamp de expiração em milissegundos (epoch ms)" },
         "active": { "type": "boolean", "description": "Convite ativo" }
       },
       "required": ["classId", "code", "teacherId", "active"]

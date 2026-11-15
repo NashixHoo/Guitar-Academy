@@ -81,6 +81,136 @@ service cloud.firestore {
         hasNoPrivilegeFields(data);
     }
 
+    // Validação estrita de vínculo na subcoleção (/classes/{classId}/students/{studentId})
+    function isValidClassStudent(data, classId, studentId) {
+      return data.keys().hasAll(['studentId', 'classId', 'teacherId', 'status']) &&
+        data.keys().hasOnly([
+          'id', 'studentId', 'studentName', 'studentEmail', 'studentPhotoUrl',
+          'classId', 'courseId', 'teacherId', 'status',
+          'joinedAt', 'lastActivityAt', 'createdAt', 'updatedAt'
+        ]) &&
+        data.studentId == studentId &&
+        data.classId == classId &&
+        isValidId(data.teacherId) &&
+        data.status is string &&
+        data.status in ['pending', 'active', 'approved', 'suspended', 'cancelled'] &&
+        (!('id' in data) || isValidId(data.id)) &&
+        (!('studentName' in data) || (data.studentName is string && data.studentName.size() <= 120)) &&
+        (!('studentEmail' in data) || (data.studentEmail is string && data.studentEmail.size() <= 254)) &&
+        (!('studentPhotoUrl' in data) || data.studentPhotoUrl == null || (data.studentPhotoUrl is string && data.studentPhotoUrl.size() <= 1024)) &&
+        (!('courseId' in data) || (data.courseId is string && data.courseId.size() <= 64)) &&
+        hasNoPrivilegeFields(data);
+    }
+
+    // Validação estrita de convite (/class_invites/{inviteCode}) sem expor PII de alunos
+    function isValidClassInvite(data) {
+      return data.keys().hasAll(['classId', 'code', 'teacherId', 'active']) &&
+        data.keys().hasOnly([
+          'classId', 'code', 'name', 'description', 'courseId', 'instrument',
+          'teacherId', 'teacherEmail', 'teacherName', 'createdAt', 'expiresAt',
+          'expiresAtMs', 'maxStudents', 'active', 'updatedAt'
+        ]) &&
+        isValidId(data.classId) &&
+        isValidId(data.code) &&
+        isValidId(data.teacherId) &&
+        data.active is bool &&
+        (!('name' in data) || (data.name is string && data.name.size() <= 120)) &&
+        (!('description' in data) || (data.description is string && data.description.size() <= 500)) &&
+        (!('courseId' in data) || (data.courseId is string && data.courseId.size() <= 64)) &&
+        (!('instrument' in data) || (data.instrument is string && data.instrument.size() <= 80)) &&
+        (!('teacherEmail' in data) || (data.teacherEmail is string && data.teacherEmail.size() <= 254)) &&
+        (!('teacherName' in data) || (data.teacherName is string && data.teacherName.size() <= 120)) &&
+        (!('expiresAt' in data) || data.expiresAt == null || (data.expiresAt is string && data.expiresAt.size() <= 40)) &&
+        (!('expiresAtMs' in data) || data.expiresAtMs == null || data.expiresAtMs is int) &&
+        (!('maxStudents' in data) || (data.maxStudents is int && data.maxStudents >= 1 && data.maxStudents <= 500)) &&
+        hasNoPrivilegeFields(data);
+    }
+
+    function isInviteNotExpired(data) {
+      return !('expiresAtMs' in data) ||
+        data.expiresAtMs == null ||
+        (data.expiresAtMs is int && request.time.toMillis() <= data.expiresAtMs);
+    }
+
+    function hasValidEnrolledCountIncrement(beforeData, afterData) {
+      return afterData.enrolledCount is int &&
+        (
+          (!('enrolledCount' in beforeData) && afterData.enrolledCount == 1) ||
+          ('enrolledCount' in beforeData && beforeData.enrolledCount is int && beforeData.enrolledCount >= 0 && afterData.enrolledCount == beforeData.enrolledCount + 1)
+        ) &&
+        (!('maxStudents' in beforeData) ||
+         !(beforeData.maxStudents is int || beforeData.maxStudents is float) ||
+         beforeData.maxStudents <= 0 ||
+         afterData.enrolledCount <= beforeData.maxStudents);
+    }
+
+    function expectedEnrollmentId(classId, studentId) {
+      return 'enroll-' + classId + '-' + studentId;
+    }
+
+    function classStudentExists(classId, uid) {
+      return exists(/databases/$(database)/documents/classes/$(classId)/students/$(uid));
+    }
+
+    function classExistsAndActive(classId) {
+      return exists(/databases/$(database)/documents/classes/$(classId)) &&
+        get(/databases/$(database)/documents/classes/$(classId)).data.active == true &&
+        isInviteNotExpired(get(/databases/$(database)/documents/classes/$(classId)).data);
+    }
+
+    function classTeacherId(classId) {
+      return get(/databases/$(database)/documents/classes/$(classId)).data.teacherId;
+    }
+
+    function classOwnerAfterExists(classId, uid) {
+      return existsAfter(/databases/$(database)/documents/classes/$(classId)) &&
+        getAfter(/databases/$(database)/documents/classes/$(classId)).data.teacherId == uid;
+    }
+
+    function hasAfterClassEnrolledIncrement(classId) {
+      return hasValidEnrolledCountIncrement(
+        get(/databases/$(database)/documents/classes/$(classId)).data,
+        getAfter(/databases/$(database)/documents/classes/$(classId)).data
+      );
+    }
+
+    function hasAfterMatchingEnrollment(enrollId, studentId, classId, teacherId, statusVal) {
+      return existsAfter(/databases/$(database)/documents/enrollments/$(enrollId)) &&
+        getAfter(/databases/$(database)/documents/enrollments/$(enrollId)).data.studentId == studentId &&
+        getAfter(/databases/$(database)/documents/enrollments/$(enrollId)).data.classId == classId &&
+        getAfter(/databases/$(database)/documents/enrollments/$(enrollId)).data.teacherId == teacherId &&
+        getAfter(/databases/$(database)/documents/enrollments/$(enrollId)).data.status == statusVal;
+    }
+
+    function hasAfterMatchingClassStudent(classId, studentId, teacherId, statusVal) {
+      return existsAfter(/databases/$(database)/documents/classes/$(classId)/students/$(studentId)) &&
+        getAfter(/databases/$(database)/documents/classes/$(classId)/students/$(studentId)).data.studentId == studentId &&
+        getAfter(/databases/$(database)/documents/classes/$(classId)/students/$(studentId)).data.classId == classId &&
+        getAfter(/databases/$(database)/documents/classes/$(classId)/students/$(studentId)).data.teacherId == teacherId &&
+        getAfter(/databases/$(database)/documents/classes/$(classId)/students/$(studentId)).data.status == statusVal;
+    }
+
+    function canStudentUpdateClassCount(classId, uid, enrollId, beforeClassData, afterClassData) {
+      return isAuthenticated() &&
+        beforeClassData.active == true &&
+        isInviteNotExpired(beforeClassData) &&
+        afterClassData.diff(beforeClassData).affectedKeys().hasOnly(['enrolledCount', 'updatedAt']) &&
+        afterClassData.updatedAt == request.time &&
+        hasValidEnrolledCountIncrement(beforeClassData, afterClassData) &&
+        (!exists(/databases/$(database)/documents/classes/$(classId)/students/$(uid)) ||
+         get(/databases/$(database)/documents/classes/$(classId)/students/$(uid)).data.status == 'cancelled') &&
+        existsAfter(/databases/$(database)/documents/classes/$(classId)/students/$(uid)) &&
+        getAfter(/databases/$(database)/documents/classes/$(classId)/students/$(uid)).data.studentId == uid &&
+        getAfter(/databases/$(database)/documents/classes/$(classId)/students/$(uid)).data.classId == classId &&
+        getAfter(/databases/$(database)/documents/classes/$(classId)/students/$(uid)).data.teacherId == beforeClassData.teacherId &&
+        getAfter(/databases/$(database)/documents/classes/$(classId)/students/$(uid)).data.status in ['pending', 'active'] &&
+        existsAfter(/databases/$(database)/documents/enrollments/$(enrollId)) &&
+        getAfter(/databases/$(database)/documents/enrollments/$(enrollId)).data.studentId == uid &&
+        getAfter(/databases/$(database)/documents/enrollments/$(enrollId)).data.classId == classId &&
+        getAfter(/databases/$(database)/documents/enrollments/$(enrollId)).data.teacherId == beforeClassData.teacherId &&
+        getAfter(/databases/$(database)/documents/enrollments/$(enrollId)).data.status == getAfter(/databases/$(database)/documents/classes/$(classId)/students/$(uid)).data.status;
+    }
+
     // Validação estrita de progresso (/student_progress/{progressId})
     function isValidStudentProgress(data) {
       return ('userId' in data || 'studentId' in data) &&
@@ -206,7 +336,7 @@ service cloud.firestore {
 
     // 4. Turmas Pedagógicas (/classes/{classId}):
     // Professores gerenciam apenas suas próprias turmas; administradores têm supervisão.
-    // Alunos somente podem consultar a turma se forem matriculados nela.
+    // Alunos somente podem consultar a turma se forem matriculados nela e só podem incrementar enrolledCount atomicamente ao se matricular.
     match /classes/{classId} {
       allow get: if isAuthenticated() && isValidId(classId) && (
         isAdmin() ||
@@ -214,13 +344,30 @@ service cloud.firestore {
         exists(/databases/$(database)/documents/classes/$(classId)/students/$(request.auth.uid))
       );
       allow list: if isTeacher() && (isAdmin() || resource.data.teacherId == request.auth.uid);
-      allow create: if isValidId(classId) && (
+      allow create: if isValidId(classId) &&
+        hasNoPrivilegeFields(request.resource.data) &&
+        (!('maxStudents' in request.resource.data) || (request.resource.data.maxStudents is int && request.resource.data.maxStudents >= 1 && request.resource.data.maxStudents <= 500)) &&
+        (!('expiresAtMs' in request.resource.data) || request.resource.data.expiresAtMs == null || request.resource.data.expiresAtMs is int) && (
+          isAdmin() ||
+          (isTeacher() &&
+           request.resource.data.teacherId == request.auth.uid &&
+           (!('enrolledCount' in request.resource.data) || request.resource.data.enrolledCount == 0))
+        );
+      allow update: if isValidId(classId) &&
+        hasNoPrivilegeFields(request.resource.data) && (
+          isAdmin() ||
+          (isTeacher() && resource.data.teacherId == request.auth.uid && request.resource.data.teacherId == resource.data.teacherId) ||
+          canStudentUpdateClassCount(
+            classId,
+            request.auth.uid,
+            expectedEnrollmentId(classId, request.auth.uid),
+            resource.data,
+            request.resource.data
+          )
+        );
+      allow delete: if isValidId(classId) && (
         isAdmin() ||
-        (isTeacher() && request.resource.data.teacherId == request.auth.uid)
-      );
-      allow update, delete: if isValidId(classId) && (
-        isAdmin() ||
-        (isTeacher() && resource.data.teacherId == request.auth.uid && request.resource.data.teacherId == resource.data.teacherId)
+        (isTeacher() && resource.data.teacherId == request.auth.uid)
       );
 
       // Matrículas de Alunos na Turma:
@@ -228,34 +375,55 @@ service cloud.firestore {
         allow get: if isValidId(studentId) && (
           isOwner(studentId) ||
           isAdmin() ||
-          (isTeacher() && get(/databases/$(database)/documents/classes/$(classId)).data.teacherId == request.auth.uid)
+          (isTeacher() && classTeacherId(classId) == request.auth.uid)
         );
         allow list: if isAdmin() || (
-          isTeacher() && get(/databases/$(database)/documents/classes/$(classId)).data.teacherId == request.auth.uid
+          isTeacher() && classTeacherId(classId) == request.auth.uid
         );
         allow create: if isValidId(studentId) &&
-          hasNoElevatedUserFields(request.resource.data) &&
-          (!('studentId' in request.resource.data) || request.resource.data.studentId == studentId) &&
+          isValidClassStudent(request.resource.data, classId, studentId) &&
           exists(/databases/$(database)/documents/classes/$(classId)) && (
             isAdmin() ||
-            (isTeacher() && get(/databases/$(database)/documents/classes/$(classId)).data.teacherId == request.auth.uid) ||
+            (isTeacher() && classTeacherId(classId) == request.auth.uid) ||
             (isOwner(studentId) &&
-             get(/databases/$(database)/documents/classes/$(classId)).data.active == true &&
-             request.resource.data.teacherId == get(/databases/$(database)/documents/classes/$(classId)).data.teacherId)
+             request.resource.data.status in ['pending', 'active'] &&
+             classExistsAndActive(classId) &&
+             request.resource.data.teacherId == classTeacherId(classId) &&
+             hasAfterMatchingEnrollment(
+               expectedEnrollmentId(classId, studentId),
+               studentId,
+               classId,
+               request.resource.data.teacherId,
+               request.resource.data.status
+             ) &&
+             hasAfterClassEnrolledIncrement(classId))
           );
         allow update: if isValidId(studentId) &&
-          hasNoPrivilegeFields(request.resource.data) &&
-          (!('studentId' in resource.data) || request.resource.data.studentId == resource.data.studentId) &&
-          (!('teacherId' in resource.data) || request.resource.data.teacherId == resource.data.teacherId) &&
-          (!('classId' in resource.data) || request.resource.data.classId == resource.data.classId) && (
+          isValidClassStudent(request.resource.data, classId, studentId) &&
+          request.resource.data.studentId == resource.data.studentId &&
+          request.resource.data.teacherId == resource.data.teacherId &&
+          request.resource.data.classId == resource.data.classId && (
             isAdmin() ||
-            (isTeacher() && get(/databases/$(database)/documents/classes/$(classId)).data.teacherId == request.auth.uid) ||
+            (isTeacher() && classTeacherId(classId) == request.auth.uid) ||
             (isOwner(studentId) &&
-             request.resource.data.diff(resource.data).affectedKeys().hasOnly(['studentName', 'studentEmail', 'studentPhotoUrl', 'lastActivityAt', 'updatedAt']))
+             request.resource.data.status == resource.data.status &&
+             request.resource.data.diff(resource.data).affectedKeys().hasOnly(['studentName', 'studentEmail', 'studentPhotoUrl', 'lastActivityAt', 'updatedAt'])) ||
+            (isOwner(studentId) &&
+             resource.data.status == 'cancelled' &&
+             request.resource.data.status in ['pending', 'active'] &&
+             classExistsAndActive(classId) &&
+             hasAfterMatchingEnrollment(
+               expectedEnrollmentId(classId, studentId),
+               studentId,
+               classId,
+               request.resource.data.teacherId,
+               request.resource.data.status
+             ) &&
+             hasAfterClassEnrolledIncrement(classId))
           );
         allow delete: if isValidId(studentId) && (
           isAdmin() ||
-          (isTeacher() && get(/databases/$(database)/documents/classes/$(classId)).data.teacherId == request.auth.uid)
+          (isTeacher() && classTeacherId(classId) == request.auth.uid)
         );
       }
 
@@ -263,7 +431,7 @@ service cloud.firestore {
       match /events/{eventId} {
         allow read: if isValidId(eventId) && (
           isAdmin() ||
-          (isTeacher() && get(/databases/$(database)/documents/classes/$(classId)).data.teacherId == request.auth.uid)
+          (isTeacher() && classTeacherId(classId) == request.auth.uid)
         );
         allow create: if isAuthenticated() && isValidId(eventId) &&
           request.resource.data.studentUid == request.auth.uid &&
@@ -273,22 +441,25 @@ service cloud.firestore {
     }
 
     // 4b. Códigos de Convite de Turma (/class_invites/{inviteCode}):
-    // Permite consulta pontual por código para ingresso de alunos sem expor listagem de turmas.
+    // Permite consulta pontual por código para ingresso de alunos sem expor listagem de turmas nem dados de alunos.
     match /class_invites/{inviteCode} {
       allow get: if isAuthenticated() && isValidId(inviteCode);
       allow list: if false;
-      allow create: if isValidId(inviteCode) && (
-        isAdmin() ||
-        (isTeacher() &&
-         request.resource.data.teacherId == request.auth.uid &&
-         isValidId(request.resource.data.classId))
-      );
-      allow update: if isValidId(inviteCode) && (
-        isAdmin() ||
-        (isTeacher() &&
-         resource.data.teacherId == request.auth.uid &&
-         request.resource.data.teacherId == resource.data.teacherId)
-      );
+      allow create: if isValidId(inviteCode) &&
+        isValidClassInvite(request.resource.data) && (
+          isAdmin() ||
+          (isTeacher() &&
+           request.resource.data.teacherId == request.auth.uid &&
+           classOwnerAfterExists(request.resource.data.classId, request.auth.uid))
+        );
+      allow update: if isValidId(inviteCode) &&
+        isValidClassInvite(request.resource.data) && (
+          isAdmin() ||
+          (isTeacher() &&
+           resource.data.teacherId == request.auth.uid &&
+           request.resource.data.teacherId == resource.data.teacherId &&
+           request.resource.data.classId == resource.data.classId)
+        );
       allow delete: if isValidId(inviteCode) && (
         isAdmin() ||
         (isTeacher() && resource.data.teacherId == request.auth.uid)
@@ -296,7 +467,8 @@ service cloud.firestore {
     }
 
     // 5. Matrículas (/enrollments/{enrollmentId})
-    // Prevenção estrita de falsificação, aprovação indevida e modificação cruzada entre usuários.
+    // Prevenção estrita de falsificação, aprovação indevida e modificação cruzada entre usuários,
+    // exigindo integridade 1-para-1 atômica com classes/{classId}/students/{uid} e controle de vagas.
     match /enrollments/{enrollmentId} {
       allow get: if isAuthenticated() && isValidId(enrollmentId) && (
         resource.data.studentId == request.auth.uid ||
@@ -313,12 +485,21 @@ service cloud.firestore {
           isAdmin() ||
           (isTeacher() && request.resource.data.teacherId == request.auth.uid) ||
           (request.resource.data.studentId == request.auth.uid &&
+           enrollmentId == expectedEnrollmentId(request.resource.data.classId, request.auth.uid) &&
+           (!('id' in request.resource.data) || request.resource.data.id == enrollmentId) &&
            request.resource.data.status in ['pending', 'active'] &&
            !('approvedBy' in request.resource.data) &&
            !('approvedAt' in request.resource.data) &&
-           exists(/databases/$(database)/documents/classes/$(request.resource.data.classId)) &&
-           get(/databases/$(database)/documents/classes/$(request.resource.data.classId)).data.active == true &&
-           get(/databases/$(database)/documents/classes/$(request.resource.data.classId)).data.teacherId == request.resource.data.teacherId)
+           classExistsAndActive(request.resource.data.classId) &&
+           request.resource.data.teacherId == classTeacherId(request.resource.data.classId) &&
+           !classStudentExists(request.resource.data.classId, request.auth.uid) &&
+           hasAfterMatchingClassStudent(
+             request.resource.data.classId,
+             request.auth.uid,
+             request.resource.data.teacherId,
+             request.resource.data.status
+           ) &&
+           hasAfterClassEnrolledIncrement(request.resource.data.classId))
         );
       allow update: if isAuthenticated() && isValidId(enrollmentId) &&
         isValidEnrollment(request.resource.data) &&
@@ -328,8 +509,19 @@ service cloud.firestore {
           isAdmin() ||
           (isTeacher() && resource.data.teacherId == request.auth.uid) ||
           (resource.data.studentId == request.auth.uid &&
-           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt', 'lastActivityAt']) &&
-           request.resource.data.status == 'cancelled')
+           enrollmentId == expectedEnrollmentId(resource.data.classId, request.auth.uid) &&
+           resource.data.status == 'cancelled' &&
+           request.resource.data.status in ['pending', 'active'] &&
+           !('approvedBy' in request.resource.data) &&
+           !('approvedAt' in request.resource.data) &&
+           classExistsAndActive(resource.data.classId) &&
+           hasAfterMatchingClassStudent(
+             resource.data.classId,
+             request.auth.uid,
+             resource.data.teacherId,
+             request.resource.data.status
+           ) &&
+           hasAfterClassEnrolledIncrement(resource.data.classId))
         );
       allow delete: if isAdmin() && isValidId(enrollmentId);
     }
