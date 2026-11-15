@@ -510,6 +510,8 @@ export interface AdaptiveRecommendation {
 }
 
 export * from './teacher';
+export * from './accessControl';
+export * from './commerce';
 export * from '../academia/core/types';
 export * from '../academia/curriculum/masterCurriculumRegistry';
 

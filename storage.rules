@@ -1,0 +1,39 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Verifica papel administrativo diretamente no banco Firestore configurado
+    function isStorageAdmin() {
+      return request.auth != null &&
+        firestore.exists(/databases/ai-studio-guitaracademyfor-e7ce9efa-82d3-4dd1-8b8e-58aa69749913/documents/system_roles/$(request.auth.uid)) &&
+        firestore.get(/databases/ai-studio-guitaracademyfor-e7ce9efa-82d3-4dd1-8b8e-58aa69749913/documents/system_roles/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Verifica se o módulo comercial e a exibição de publicidade estão explicitamente ativos
+    function isCommerceAdsActive() {
+      return firestore.exists(/databases/ai-studio-guitaracademyfor-e7ce9efa-82d3-4dd1-8b8e-58aa69749913/documents/platform_config/commerce) &&
+        firestore.get(/databases/ai-studio-guitaracademyfor-e7ce9efa-82d3-4dd1-8b8e-58aa69749913/documents/platform_config/commerce).data.commerceEnabled == true &&
+        firestore.get(/databases/ai-studio-guitaracademyfor-e7ce9efa-82d3-4dd1-8b8e-58aa69749913/documents/platform_config/commerce).data.advertisementsEnabled == true;
+    }
+
+    // Imagens de campanhas publicitárias comerciais:
+    // - Upload restrito a administradores verificados, com validação de MIME e tamanho máximo de 5 MB
+    // - Exclusão bloqueada (preserva versões anteriores em banner_vN.*)
+    // - Leitura pública/autenticada bloqueada enquanto o modo comercial e advertisementsEnabled estiverem desligados
+    match /commerce/advertisements/{advertisementId}/{fileName} {
+      allow read: if isStorageAdmin() || (request.auth != null && isCommerceAdsActive());
+      allow create, update: if isStorageAdmin() &&
+        advertisementId.matches('^[a-zA-Z0-9_\\-]{3,128}$') &&
+        fileName.matches('^banner(_v[0-9]{1,5})?\\.(webp|png|jpe?g)$') &&
+        request.resource != null &&
+        request.resource.size > 0 &&
+        request.resource.size <= 5 * 1024 * 1024 &&
+        request.resource.contentType in ['image/webp', 'image/png', 'image/jpeg'];
+      allow delete: if false;
+    }
+
+    // Negar qualquer outro acesso no Storage por padrão (Fail-Closed)
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -51,6 +51,8 @@ import {
   createInitialPedagogicalProfile,
 } from '../../pedagogy/adaptiveEngine';
 import { COURSE_TRACK_VISUALS, SCREEN_ARTWORKS } from '../../data/visualGallery';
+import type { StudentEffectiveAccessSnapshot } from '../../types/accessControl';
+import { getCatalogCourse, getCatalogLesson } from '../../services/academicCatalog';
 
 interface DashboardViewProps {
   progress: UserProgress;
@@ -59,6 +61,7 @@ interface DashboardViewProps {
   onSelectLesson: (lessonId: string) => void;
   onOpenJoinClass?: () => void;
   studentEnrollments?: StudentEnrolledClassInfo[];
+  accessSnapshot?: StudentEffectiveAccessSnapshot;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
@@ -68,6 +71,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onSelectLesson,
   onOpenJoinClass,
   studentEnrollments = [],
+  accessSnapshot,
 }) => {
   // Goal setting & feedback states
   const [isGoalSettingsModalOpen, setIsGoalSettingsModalOpen] = useState<boolean>(false);
@@ -302,11 +306,61 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         )}
       </div>
 
+      {/* DIRECIONAMENTO INICIAL DO ADMINISTRADOR (SE CONFIGURADO) */}
+      {accessSnapshot?.primaryPlacement && (
+        <div className="bg-white dark:bg-[#25252A] border border-[#7B1E2B]/40 dark:border-[#C5A059]/40 rounded-3xl p-4 sm:p-5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-start gap-3.5 min-w-0 flex-1">
+            <div className="w-11 h-11 rounded-2xl bg-[#FAF1F2] dark:bg-[#381A25] text-[#7B1E2B] dark:text-[#FF6B81] border border-[#E8D3D6] dark:border-[#522536] flex items-center justify-center shrink-0">
+              <Compass className="w-5 h-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <span className="text-[10px] font-mono-code font-bold uppercase tracking-wider text-[#7B1E2B] dark:text-[#FF6B81] block">
+                Ponto Inicial Direcionado pela Coordenação
+              </span>
+              <h3 className="text-sm sm:text-base font-black text-[#25252A] dark:text-[#F8F7F4] mt-0.5">
+                {getCatalogCourse(accessSnapshot.primaryPlacement.courseId)?.title} • Módulo{' '}
+                {accessSnapshot.primaryPlacement.moduleNumber}
+              </h3>
+              <p className="text-xs text-[#666672] dark:text-[#B8B3C0] mt-0.5 leading-relaxed">
+                Aula recomendada:{' '}
+                <strong className="text-[#25252A] dark:text-white">
+                  {getCatalogLesson(
+                    accessSnapshot.primaryPlacement.lessonId,
+                    accessSnapshot.primaryPlacement.courseId
+                  )?.title || accessSnapshot.primaryPlacement.lessonId}
+                </strong>
+                {accessSnapshot.primaryPlacement.reason ? ` — ${accessSnapshot.primaryPlacement.reason}` : ''}
+              </p>
+            </div>
+          </div>
+
+          {accessSnapshot.primaryPlacement.isAccessible ? (
+            <button
+              type="button"
+              onClick={() => onSelectLesson(accessSnapshot.primaryPlacement!.lessonId)}
+              className="luxury-btn-primary text-white px-4 sm:px-5 py-3 rounded-2xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-xs shrink-0 w-full sm:w-auto cursor-pointer"
+            >
+              <Play className="w-4 h-4 shrink-0" />
+              <span>Ir para Ponto Inicial</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => onNavigateTab('curriculum')}
+              className="px-4 py-2.5 rounded-2xl bg-[#F8F7F4] dark:bg-[#1A1A20] border border-[#D9D9D9] dark:border-[#33333E] text-xs font-bold text-[#666672] dark:text-[#B8B3C0] shrink-0"
+            >
+              Acesso em verificação
+            </button>
+          )}
+        </div>
+      )}
+
       {/* FASE 2: CONTINUE SUA FORMAÇÃO (HERO DE CONTINUIDADE PEDAGÓGICA) */}
       <ContinueFormationCard
         progress={progress}
         onSelectLesson={onSelectLesson}
         onNavigateTab={onNavigateTab}
+        accessSnapshot={accessSnapshot}
       />
 
       {/* FASE 4: STATUS DO CURSO PRINCIPAL & DESBLOQUEIO DE INSTRUMENTOS (REGRA DOS 50%) */}
@@ -388,6 +442,30 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </span>
             )}
           </div>
+
+          {accessSnapshot && accessSnapshot.activeGrants.length > 0 && (
+            <div className="pt-2 border-t border-[#E8E6E1] dark:border-[#33333E] flex flex-wrap items-center gap-2 text-[11px]">
+              <span className="font-bold text-emerald-700 dark:text-emerald-400 inline-flex items-center gap-1">
+                <Unlock className="w-3.5 h-3.5" />
+                <span>Liberações especiais ativas ({accessSnapshot.activeGrants.length}):</span>
+              </span>
+              {Object.values(accessSnapshot.courses)
+                .filter((c) =>
+                  c.origins.some((o) =>
+                    ['admin_permanent', 'admin_temporary', 'admin_trial', 'admin_special'].includes(o.source)
+                  )
+                )
+                .map((c) => (
+                  <span
+                    key={c.courseId}
+                    className="px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 font-semibold"
+                  >
+                    {COURSE_METADATA_MAP[c.courseId].name}
+                    {!c.fullCourseUnlocked ? ` (${c.unlockedLessonIds.length} aulas)` : ''}
+                  </span>
+                ))}
+            </div>
+          )}
         </div>
       </div>
 

@@ -83,7 +83,33 @@ export type AdminLogEventType =
   | 'security_audit_viewed'
   | 'auth_token_rejected'
   | 'role_access_denied'
-  | 'admin_role_lookup';
+  | 'admin_role_lookup'
+  | 'course_access_granted'
+  | 'course_access_updated'
+  | 'course_access_revoked'
+  | 'course_access_reactivated'
+  | 'student_placement_updated'
+  | 'commerce_product_created'
+  | 'commerce_product_updated'
+  | 'commerce_price_version_created'
+  | 'commerce_promotion_created'
+  | 'commerce_promotion_updated'
+  | 'commerce_coupon_updated'
+  | 'commerce_config_updated'
+  | 'commerce_unauthorized_attempt'
+  | 'commerce_advertisement_created'
+  | 'commerce_advertisement_updated'
+  | 'commerce_advertisement_image_uploaded'
+  | 'commerce_class_offer_created'
+  | 'commerce_class_offer_updated'
+  | 'commerce_reservation_updated'
+  | 'commerce_waitlist_summoned'
+  | 'commerce_order_created'
+  | 'commerce_payment_confirmed'
+  | 'commerce_payment_invalid'
+  | 'commerce_payment_refunded'
+  | 'commerce_subscription_updated'
+  | 'commerce_financial_adjustment';
 
 export type AdminLogFilterGroup =
   | 'all'
@@ -211,7 +237,13 @@ export function matchesAdminLogEventFilter(
       eventType === 'role_change' ||
       eventType.startsWith('role_') ||
       eventType === 'admin_role_lookup' ||
-      eventType === 'student_status_updated'
+      eventType === 'student_status_updated' ||
+      eventType === 'course_access_granted' ||
+      eventType === 'course_access_updated' ||
+      eventType === 'course_access_revoked' ||
+      eventType === 'course_access_reactivated' ||
+      eventType === 'student_placement_updated' ||
+      eventType.startsWith('commerce_')
     );
   }
   return eventType === filter;

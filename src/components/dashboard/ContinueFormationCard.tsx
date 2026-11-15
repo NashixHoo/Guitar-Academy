@@ -6,14 +6,17 @@ import {
   COURSES_CATALOG,
   CourseId,
 } from '../../services/learningEngine';
-import { Play, Sparkles, BookOpen, ArrowRight, Award, Compass, CheckCircle2 } from 'lucide-react';
+import { Play, Sparkles, BookOpen, ArrowRight, Award, Compass, CheckCircle2, Lock, Unlock } from 'lucide-react';
 import { IniciarIcon, AulasIcon } from '../common/GuitarIcons';
+import type { StudentEffectiveAccessSnapshot } from '../../types/accessControl';
+import { canStudentAccessCourse } from '../../services/accessAuthorizationEngine';
 
 interface ContinueFormationCardProps {
   progress: UserProgress;
   onSelectLesson: (lessonId: string) => void;
   onNavigateTab: (tab: NavigationTab) => void;
   onSwitchCourse?: (courseId: CourseId) => void;
+  accessSnapshot?: StudentEffectiveAccessSnapshot;
 }
 
 export const ContinueFormationCard: React.FC<ContinueFormationCardProps> = ({
@@ -21,6 +24,7 @@ export const ContinueFormationCard: React.FC<ContinueFormationCardProps> = ({
   onSelectLesson,
   onNavigateTab,
   onSwitchCourse,
+  accessSnapshot,
 }) => {
   const continuity = getLearningContinuity(progress);
   const activeCourse = continuity.activeCourse;
@@ -138,32 +142,59 @@ export const ContinueFormationCard: React.FC<ContinueFormationCardProps> = ({
           </div>
 
           {otherCourses.map((course) => {
+            const courseAccess = accessSnapshot
+              ? canStudentAccessCourse(accessSnapshot, course.id)
+              : null;
+            const isCourseAccessible = courseAccess ? courseAccess.allowed : true;
+            const firstUnlockedLessonId =
+              accessSnapshot?.courses[course.id]?.unlockedLessonIds[0] || course.nextLesson?.id;
+
             return (
               <div
                 key={course.id}
                 onClick={() => {
+                  if (!isCourseAccessible) {
+                    onNavigateTab('curriculum');
+                    return;
+                  }
                   if (onSwitchCourse) {
                     onSwitchCourse(course.id);
                   }
-                  if (course.nextLesson) {
-                    onSelectLesson(course.nextLesson.id);
+                  const targetLessonId =
+                    course.nextLesson &&
+                    (!accessSnapshot ||
+                      accessSnapshot.courses[course.id]?.lessons[course.nextLesson.id]?.allowed)
+                      ? course.nextLesson.id
+                      : firstUnlockedLessonId;
+                  if (targetLessonId) {
+                    onSelectLesson(targetLessonId);
                   } else {
                     onNavigateTab('curriculum');
                   }
                 }}
                 className="p-3.5 rounded-2xl bg-[#F8F7F4] hover:bg-[#F5E8EA] dark:bg-[#22141A] dark:hover:bg-[#381A25] border border-[#E8E6E1] dark:border-[#422933] cursor-pointer transition group"
               >
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-2">
                   <span className="text-xs font-bold text-[#25252A] dark:text-[#F8F7F4] group-hover:text-[#7B1E2B] dark:group-hover:text-[#FF6B81] transition-colors">
                     {course.title}
                   </span>
-                  <span className="text-[10px] font-mono-code font-bold text-[#7B1E2B] dark:text-[#FF6B81]">
-                    {course.progressPercent}%
+                  <span className="text-[10px] font-mono-code font-bold text-[#7B1E2B] dark:text-[#FF6B81] inline-flex items-center gap-1 shrink-0">
+                    {!isCourseAccessible ? (
+                      <Lock className="w-3 h-3 text-amber-600" />
+                    ) : courseAccess?.partialAccess ? (
+                      <span>Parcial</span>
+                    ) : (
+                      <span>{course.progressPercent}%</span>
+                    )}
                   </span>
                 </div>
 
                 <p className="text-[11px] text-[#666672] dark:text-[#B8B3C0] mt-1 line-clamp-1">
-                  {course.nextLesson ? `Próxima: ${course.nextLesson.title}` : 'Curso concluído!'}
+                  {!isCourseAccessible
+                    ? 'Requer 50% no curso base ou liberação admin'
+                    : course.nextLesson
+                    ? `Próxima: ${course.nextLesson.title}`
+                    : 'Curso concluído!'}
                 </p>
 
                 <div className="w-full bg-[#EAE8E3] dark:bg-[#2E1B23] rounded-full h-1.5 mt-2 overflow-hidden">
@@ -178,7 +209,7 @@ export const ContinueFormationCard: React.FC<ContinueFormationCardProps> = ({
                     {course.completedCount}/{course.totalLessons} aulas
                   </span>
                   <span className="text-[#7B1E2B] dark:text-[#FF6B81] font-bold flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform">
-                    <span>Acessar</span>
+                    <span>{isCourseAccessible ? 'Acessar' : 'Ver requisitos'}</span>
                     <ArrowRight className="w-3 h-3" />
                   </span>
                 </div>

@@ -21,6 +21,8 @@ import {
   UserCheck,
   UserX,
   Info,
+  Store,
+  Banknote,
 } from 'lucide-react';
 import { ClassGroup } from '../../types/teacher';
 import { CURRICULUM_LEVELS } from '../../data/curriculum';
@@ -42,10 +44,16 @@ import {
   updateAdminUserAccountStatus,
 } from '../../services/adminUsersService';
 import type { UserRole } from '../../types';
+import { StudentAccessManagementPanel } from './StudentAccessManagementPanel';
+import { CommerceManagementPanel } from './CommerceManagementPanel';
+import { FinancialDashboardPanel } from './FinancialDashboardPanel';
 
 type AdminTabKey =
   | 'overview'
   | 'students'
+  | 'access'
+  | 'commerce'
+  | 'financial'
   | 'classes'
   | 'courses'
   | 'reports'
@@ -67,6 +75,7 @@ function formatDateTimePtBr(isoValue: string | null): string {
 export const AdminPortalView: React.FC = () => {
   const { user, logOut, setAdminPreviewMode, refreshUserProfile } = useAuth();
   const [activeTab, setActiveTab] = useState<AdminTabKey>('overview');
+  const [selectedAccessStudentUid, setSelectedAccessStudentUid] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive' | 'suspended'>('all');
   const [roleFilter, setRoleFilter] = useState<'all' | UserRole>('all');
@@ -391,6 +400,18 @@ export const AdminPortalView: React.FC = () => {
           </button>
 
           <button
+            onClick={() => setActiveTab('access')}
+            className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition shrink-0 cursor-pointer ${
+              activeTab === 'access'
+                ? 'bg-[#7B1E2B] text-white shadow-sm'
+                : 'text-[#A1A1AA] hover:bg-[#27272A] hover:text-white'
+            }`}
+          >
+            <KeyRound className="w-4 h-4 text-[#C5A059]" />
+            <span>Gerenciar Acesso</span>
+          </button>
+
+          <button
             onClick={() => setActiveTab('classes')}
             className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition shrink-0 cursor-pointer ${
               activeTab === 'classes'
@@ -424,6 +445,30 @@ export const AdminPortalView: React.FC = () => {
           >
             <FileSpreadsheet className="w-4 h-4" />
             <span>Relatórios & Evasão</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('commerce')}
+            className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition shrink-0 cursor-pointer ${
+              activeTab === 'commerce'
+                ? 'bg-[#7B1E2B] text-white shadow-sm'
+                : 'text-[#A1A1AA] hover:bg-[#27272A] hover:text-white'
+            }`}
+          >
+            <Store className="w-4 h-4 text-[#C5A059]" />
+            <span>Comercial e Monetização</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('financial')}
+            className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition shrink-0 cursor-pointer ${
+              activeTab === 'financial'
+                ? 'bg-[#7B1E2B] text-white shadow-sm'
+                : 'text-[#A1A1AA] hover:bg-[#27272A] hover:text-white'
+            }`}
+          >
+            <Banknote className="w-4 h-4 text-[#C5A059]" />
+            <span>Financeiro</span>
           </button>
 
           <button
@@ -902,46 +947,61 @@ export const AdminPortalView: React.FC = () => {
                               </td>
 
                               <td className="py-3 px-4 text-right">
-                                {isSelf ? (
-                                  <span className="text-[10px] text-[#71717A] font-mono-code">
-                                    Sessão atual
-                                  </span>
-                                ) : !account.hasUserProfileDoc ? (
-                                  <span
-                                    className="text-[10px] text-amber-400/90 font-mono-code"
-                                    title="Documento users/{uid} ainda não criado pelo login do usuário"
-                                  >
-                                    Sem doc em users/
-                                  </span>
-                                ) : account.accountStatus !== 'suspended' ? (
+                                <div className="inline-flex flex-wrap items-center justify-end gap-1.5">
                                   <button
-                                    onClick={() => void handleToggleAccountStatus(account, 'suspended')}
-                                    disabled={isUpdating}
-                                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-950/40 hover:bg-rose-950 text-rose-400 text-[11px] font-semibold border border-rose-800/40 transition cursor-pointer disabled:opacity-50"
-                                    title="Persistir suspensão da conta em users/{uid}.accountStatus"
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedAccessStudentUid(account.uid);
+                                      setActiveTab('access');
+                                    }}
+                                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#271C1F] hover:bg-[#7B1E2B] text-[#C5A059] hover:text-white text-[11px] font-semibold border border-[#7B1E2B]/50 transition cursor-pointer"
+                                    title="Gerenciar liberações de cursos, módulos, aulas e direcionamento inicial deste aluno"
                                   >
-                                    {isUpdating ? (
-                                      <RefreshCw className="w-3 h-3 animate-spin" />
-                                    ) : (
-                                      <UserX className="w-3 h-3" />
-                                    )}
-                                    <span>Suspender</span>
+                                    <KeyRound className="w-3 h-3" />
+                                    <span>Gerenciar acesso</span>
                                   </button>
-                                ) : (
-                                  <button
-                                    onClick={() => void handleToggleAccountStatus(account, 'active')}
-                                    disabled={isUpdating}
-                                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-950/40 hover:bg-emerald-950 text-emerald-400 text-[11px] font-semibold border border-emerald-800/40 transition cursor-pointer disabled:opacity-50"
-                                    title="Reativar conta em users/{uid}.accountStatus"
-                                  >
-                                    {isUpdating ? (
-                                      <RefreshCw className="w-3 h-3 animate-spin" />
-                                    ) : (
-                                      <UserCheck className="w-3 h-3" />
-                                    )}
-                                    <span>Reativar</span>
-                                  </button>
-                                )}
+
+                                  {isSelf ? (
+                                    <span className="text-[10px] text-[#71717A] font-mono-code">
+                                      Sessão atual
+                                    </span>
+                                  ) : !account.hasUserProfileDoc ? (
+                                    <span
+                                      className="text-[10px] text-amber-400/90 font-mono-code"
+                                      title="Documento users/{uid} ainda não criado pelo login do usuário"
+                                    >
+                                      Sem doc em users/
+                                    </span>
+                                  ) : account.accountStatus !== 'suspended' ? (
+                                    <button
+                                      onClick={() => void handleToggleAccountStatus(account, 'suspended')}
+                                      disabled={isUpdating}
+                                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-950/40 hover:bg-rose-950 text-rose-400 text-[11px] font-semibold border border-rose-800/40 transition cursor-pointer disabled:opacity-50"
+                                      title="Persistir suspensão da conta em users/{uid}.accountStatus"
+                                    >
+                                      {isUpdating ? (
+                                        <RefreshCw className="w-3 h-3 animate-spin" />
+                                      ) : (
+                                        <UserX className="w-3 h-3" />
+                                      )}
+                                      <span>Suspender</span>
+                                    </button>
+                                  ) : (
+                                    <button
+                                      onClick={() => void handleToggleAccountStatus(account, 'active')}
+                                      disabled={isUpdating}
+                                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-950/40 hover:bg-emerald-950 text-emerald-400 text-[11px] font-semibold border border-emerald-800/40 transition cursor-pointer disabled:opacity-50"
+                                      title="Reativar conta em users/{uid}.accountStatus"
+                                    >
+                                      {isUpdating ? (
+                                        <RefreshCw className="w-3 h-3 animate-spin" />
+                                      ) : (
+                                        <UserCheck className="w-3 h-3" />
+                                      )}
+                                      <span>Reativar</span>
+                                    </button>
+                                  )}
+                                </div>
                               </td>
                             </tr>
                           );
@@ -953,6 +1013,22 @@ export const AdminPortalView: React.FC = () => {
               </div>
             </div>
           )}
+
+          {/* ABA 2B: GERENCIAR ACESSO E DIRECIONAMENTO DO ALUNO */}
+          {activeTab === 'access' && (
+            <StudentAccessManagementPanel
+              users={users}
+              initialSelectedUid={selectedAccessStudentUid}
+              onSelectStudentUid={setSelectedAccessStudentUid}
+              onNotify={showToast}
+            />
+          )}
+
+          {/* ABA 2C: COMERCIAL E MONETIZAÇÃO (FASE 2/3 — FAIL-CLOSED / SOMENTE ADMIN) */}
+          {activeTab === 'commerce' && <CommerceManagementPanel onNotify={showToast} />}
+
+          {/* ABA 2D: FINANCEIRO (FASE 3 — ESTRITAMENTE RESTRITO A ADMINISTRADORES) */}
+          {activeTab === 'financial' && <FinancialDashboardPanel onNotify={showToast} />}
 
           {/* ABA 3: MATRÍCULAS & TURMAS (DADOS REAIS DO FIRESTORE) */}
           {activeTab === 'classes' && (

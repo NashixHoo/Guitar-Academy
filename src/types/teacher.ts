@@ -29,6 +29,7 @@ export interface InviteValidationResult {
     | 'expired'
     | 'full'
     | 'already_enrolled'
+    | 'legacy_unvalidated'
     | 'unauthenticated'
     | 'error';
   message: string;

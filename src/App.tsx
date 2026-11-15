@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { Lock, X } from 'lucide-react';
 import { NavigationTab, UserProgress, Lesson } from './types';
 import { storageService } from './services/storageService';
 import { themeService } from './services/themeService';
@@ -51,6 +52,12 @@ import { ChordModalProvider } from './contexts/ChordModalContext';
 import { ChordPreviewModal } from './components/chords/ChordPreviewModal';
 import { TeacherService } from './services/teacherService';
 import { StudentEnrolledClassInfo } from './types/teacher';
+import { fetchMyAccessContext } from './services/accessGrantsService';
+import {
+  resolveStudentAccessSnapshot,
+  canStudentAccessLesson,
+} from './services/accessAuthorizationEngine';
+import type { CourseAccessGrant, StudentAcademicPlacement } from './types/accessControl';
 
 function MainAppContent() {
   const { user, loading, isAdmin, isTeacher, adminPreviewMode, showLegacyModal } = useAuth();
@@ -59,6 +66,9 @@ function MainAppContent() {
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showJoinClassModal, setShowJoinClassModal] = useState(false);
   const [studentEnrollments, setStudentEnrollments] = useState<StudentEnrolledClassInfo[]>([]);
+  const [rawAccessGrants, setRawAccessGrants] = useState<CourseAccessGrant[]>([]);
+  const [rawAccessPlacements, setRawAccessPlacements] = useState<StudentAcademicPlacement[]>([]);
+  const [accessDeniedNotice, setAccessDeniedNotice] = useState<string | null>(null);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
   const [currentTab, setCurrentTab] = useState<NavigationTab>('home');
@@ -78,18 +88,73 @@ function MainAppContent() {
     themeService.applyTheme(active);
   }, []);
 
-  // Sincroniza o progresso isolado e matrículas reais do estudante sempre que o usuário ativo alternar
+  const reloadAccessContext = useCallback(
+    async (uid: string, activeProgress: UserProgress, activeEnrollments: StudentEnrolledClassInfo[]) => {
+      try {
+        const ctx = await fetchMyAccessContext(uid, activeProgress, activeEnrollments);
+        setRawAccessGrants(ctx.grants);
+        setRawAccessPlacements(ctx.placements);
+      } catch {
+        setRawAccessGrants([]);
+        setRawAccessPlacements([]);
+      }
+    },
+    []
+  );
+
+  // Sincroniza o progresso isolado, matrículas e concessões reais do estudante sempre que o usuário ativo alternar
   useEffect(() => {
     const loaded = storageService.loadProgress(user?.uid);
     setProgress(loaded);
     if (user?.uid) {
       void TeacherService.getStudentEnrollments(user.uid)
-        .then((list) => setStudentEnrollments(list))
-        .catch(() => setStudentEnrollments([]));
+        .then((list) => {
+          setStudentEnrollments(list);
+          return reloadAccessContext(user.uid, loaded, list);
+        })
+        .catch(() => {
+          setStudentEnrollments([]);
+          return reloadAccessContext(user.uid, loaded, []);
+        });
     } else {
       setStudentEnrollments([]);
+      setRawAccessGrants([]);
+      setRawAccessPlacements([]);
     }
-  }, [user]);
+  }, [user, reloadAccessContext]);
+
+  // Atualiza permissões automaticamente após alterações administrativas ou entrada em turma
+  useEffect(() => {
+    if (!user?.uid) return;
+    const handleRefreshAccess = () => {
+      const latestProgress = storageService.loadProgress(user.uid);
+      void TeacherService.getStudentEnrollments(user.uid)
+        .then((list) => {
+          setStudentEnrollments(list);
+          return reloadAccessContext(user.uid, latestProgress, list);
+        })
+        .catch(() => reloadAccessContext(user.uid, latestProgress, studentEnrollments));
+    };
+    window.addEventListener('guitar-academy:access-updated', handleRefreshAccess);
+    window.addEventListener('guitar-academy:enrollment-updated', handleRefreshAccess);
+    return () => {
+      window.removeEventListener('guitar-academy:access-updated', handleRefreshAccess);
+      window.removeEventListener('guitar-academy:enrollment-updated', handleRefreshAccess);
+    };
+  }, [user?.uid, reloadAccessContext, studentEnrollments]);
+
+  const effectiveAccessSnapshot = useMemo(
+    () =>
+      resolveStudentAccessSnapshot({
+        studentUid: user?.uid || 'guest',
+        isAdminUser: false,
+        progress,
+        grants: rawAccessGrants,
+        enrollments: studentEnrollments,
+        placements: rawAccessPlacements,
+      }),
+    [user?.uid, progress, rawAccessGrants, studentEnrollments, rawAccessPlacements]
+  );
 
   // Ouvinte de histórico popstate do navegador (botão voltar físico ou browser)
   useEffect(() => {
@@ -262,6 +327,17 @@ function MainAppContent() {
   };
 
   const handleSelectLesson = (lessonId: string) => {
+    const lessonAccess = canStudentAccessLesson(effectiveAccessSnapshot, lessonId);
+    if (!lessonAccess || !lessonAccess.allowed) {
+      setAccessDeniedNotice(
+        lessonAccess?.blockedReason ||
+          'Esta aula ainda não está liberada para sua conta. Confira seu progresso ou solicitações com a coordenação.'
+      );
+      navigateToTab('curriculum', null, true);
+      return;
+    }
+
+    setAccessDeniedNotice(null);
     // Ao abrir uma aula a partir de qualquer contexto, garante que a aula inicie estritamente no topo (scrollTop = 0)
     navigateToTab('curriculum', lessonId, true);
     setProgress((_prev) => {
@@ -271,7 +347,11 @@ function MainAppContent() {
   };
 
   const handleGoToFirstLesson = () => {
-    handleSelectLesson('lesson-1');
+    const preferredCourse =
+      effectiveAccessSnapshot.primaryPlacement?.isAccessible
+        ? effectiveAccessSnapshot.primaryPlacement.lessonId
+        : progress.currentLessonId || 'lesson-1';
+    handleSelectLesson(preferredCourse);
   };
 
   const handleSelectChordFromSearch = (symbol: string, chordId?: string) => {
@@ -332,6 +412,10 @@ function MainAppContent() {
   const activeLesson: Lesson | undefined = selectedLessonId
     ? allLessons.find((l) => l.id === selectedLessonId)
     : undefined;
+  const activeLessonAccess = activeLesson
+    ? canStudentAccessLesson(effectiveAccessSnapshot, activeLesson.id)
+    : null;
+  const isActiveLessonAllowed = Boolean(activeLesson && activeLessonAccess?.allowed);
 
   // FLUXO DE ENTRADA OBRIGATÓRIA:
   // 1. Apresentação da Splash Screen de abertura
@@ -422,6 +506,29 @@ function MainAppContent() {
             {...touchHandlers}
             className="flex-1 min-w-0 w-full h-full px-3.5 pt-4 pb-28 sm:pb-32 pb-[calc(6rem+env(safe-area-inset-bottom,16px))] sm:pb-[calc(7rem+env(safe-area-inset-bottom,16px))] lg:px-8 lg:pt-6 overflow-y-auto overflow-x-hidden overscroll-contain"
           >
+            {accessDeniedNotice && (
+              <div
+                role="alert"
+                className="mb-4 rounded-2xl border border-[#7B1E2B]/30 bg-[#FFF5F6] px-4 py-3 text-xs text-[#5E1621] shadow-xs flex items-start justify-between gap-3"
+              >
+                <div className="flex items-start gap-2.5">
+                  <Lock className="w-4 h-4 text-[#7B1E2B] shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-bold text-[#7B1E2B]">Acesso à aula bloqueado</p>
+                    <p className="text-[#4A4A55] mt-0.5">{accessDeniedNotice}</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setAccessDeniedNotice(null)}
+                  className="p-1 rounded-lg text-[#7B1E2B] hover:bg-[#7B1E2B]/10 transition"
+                  aria-label="Fechar aviso de acesso bloqueado"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+
             <div key={currentTab} className="page-enter">
               {/* TAB 1: Início (Estudar) */}
               {currentTab === 'home' && (
@@ -432,35 +539,60 @@ function MainAppContent() {
                   onSelectLesson={handleSelectLesson}
                   onOpenJoinClass={() => setShowJoinClassModal(true)}
                   studentEnrollments={studentEnrollments}
+                  accessSnapshot={effectiveAccessSnapshot}
                 />
               )}
 
               {/* TAB 2: Minha Formação (Currículo ou Aula Ativa) */}
               {currentTab === 'curriculum' && (
                 activeLesson ? (
-                  <div className="space-y-4">
-                    <button
-                      onClick={handleGoBack}
-                      className="px-4 py-2 rounded-xl bg-white hover:bg-[#F5E8EA] text-[#7B1E2B] text-xs font-bold transition border border-[#D9D9D9] flex items-center gap-1.5 shadow-xs"
-                      aria-label="Voltar à lista de níveis e aulas"
-                    >
-                      ← Voltar à lista de níveis e aulas
-                    </button>
-                    <LessonViewer
-                      lesson={activeLesson}
-                      progress={progress}
-                      onUpdateProgress={setProgress}
-                      onSelectLesson={handleSelectLesson}
-                      onOpenMetronomeAtBpm={handleOpenMetronomeAtBpm}
-                      onOpenTuner={() => navigateToTab('tuner', null)}
-                    />
-                  </div>
+                  isActiveLessonAllowed ? (
+                    <div className="space-y-4">
+                      <button
+                        onClick={handleGoBack}
+                        className="px-4 py-2 rounded-xl bg-white hover:bg-[#F5E8EA] text-[#7B1E2B] text-xs font-bold transition border border-[#D9D9D9] flex items-center gap-1.5 shadow-xs"
+                        aria-label="Voltar à lista de níveis e aulas"
+                      >
+                        ← Voltar à lista de níveis e aulas
+                      </button>
+                      <LessonViewer
+                        lesson={activeLesson}
+                        progress={progress}
+                        onUpdateProgress={setProgress}
+                        onSelectLesson={handleSelectLesson}
+                        onOpenMetronomeAtBpm={handleOpenMetronomeAtBpm}
+                        onOpenTuner={() => navigateToTab('tuner', null)}
+                      />
+                    </div>
+                  ) : (
+                    <div className="max-w-xl mx-auto my-8 rounded-2xl border border-[#D9D9D9] bg-white p-6 text-center shadow-sm space-y-3">
+                      <div className="w-12 h-12 rounded-2xl bg-[#F5E8EA] text-[#7B1E2B] flex items-center justify-center mx-auto">
+                        <Lock className="w-6 h-6" />
+                      </div>
+                      <h2 className="text-base font-bold text-[#25252A]">Conteúdo não liberado</h2>
+                      <p className="text-xs text-[#666672] leading-relaxed">
+                        {activeLessonAccess?.blockedReason ||
+                          'Esta aula requer liberação administrativa ou conclusão de 50% do curso principal.'}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedLessonId(null);
+                          navigateToTab('curriculum', null, true);
+                        }}
+                        className="px-4 py-2.5 rounded-xl bg-[#7B1E2B] hover:bg-[#611520] text-white text-xs font-bold transition"
+                      >
+                        ← Voltar ao Currículo de Cursos
+                      </button>
+                    </div>
+                  )
                 ) : (
                   <CurriculumView
                     progress={progress}
                     onSelectLesson={handleSelectLesson}
                     onOpenJoinClass={() => setShowJoinClassModal(true)}
                     studentEnrollments={studentEnrollments}
+                    accessSnapshot={effectiveAccessSnapshot}
                   />
                 )
               )}

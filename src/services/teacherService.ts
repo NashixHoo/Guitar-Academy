@@ -848,7 +848,7 @@ export class TeacherService {
         } catch (writeErr: any) {
           const msg =
             writeErr?.code === 'permission-denied'
-              ? 'Não foi possível concluir a matrícula: a turma atingiu o limite máximo de vagas, foi encerrada ou o código expirou.'
+              ? 'Não foi possível concluir a matrícula: a turma atingiu o limite máximo de vagas, aguarda validação de vagas, foi encerrada ou o código expirou.'
               : 'Erro ao gravar matrícula no Firebase. Verifique sua conexão e tente novamente.';
           return {
             success: false,
@@ -1112,17 +1112,30 @@ export class TeacherService {
 
         const classesById = new Map(classes.map((c) => [c.id, c]));
         const serverSubSnapOk = new Set<string>();
+        const subcolActiveUidsByClass = new Map<string, Set<string>>();
 
         classSnaps.forEach((snap, idx) => {
           const currentClassId = targetClassIds[idx];
-          serverSubSnapOk.add(currentClassId);
+          const fromServer = !snap.metadata?.fromCache;
+          if (fromServer) {
+            serverSubSnapOk.add(currentClassId);
+          }
+          const activeSet = new Set<string>();
           snap.docs.forEach((d) => {
-            const raw = { id: d.id, ...d.data() } as ClassEnrollment;
+            const rawData = d.data() || {};
+            const raw = { id: d.id, ...rawData } as ClassEnrollment;
             if (!raw.classId) raw.classId = currentClassId;
+            if (!raw.studentId) raw.studentId = d.id;
+            const statusNorm =
+              typeof raw.status === 'string' ? raw.status.trim().toLowerCase() : 'active';
+            if (!INACTIVE_ENROLLMENT_STATUSES.has(statusNorm)) {
+              activeSet.add(raw.studentId);
+            }
             if ((!raw.teacherId || raw.teacherId === teacherId) && raw.classId === currentClassId) {
               gathered.push(raw);
             }
           });
+          subcolActiveUidsByClass.set(currentClassId, activeSet);
         });
 
         try {
@@ -1140,15 +1153,19 @@ export class TeacherService {
 
         const deduped = deduplicateRealEnrollments(gathered);
 
-        // Reconciliação silenciosa de enrolledCount em turmas existentes quando o professor/admin acessa o painel
+        // Reconciliação secundária apenas a partir de snapshot vindo estritamente do servidor (!fromCache)
         targetClassIds.forEach((cId) => {
           if (!serverSubSnapOk.has(cId)) return;
           const clsObj = classesById.get(cId);
           if (!clsObj) return;
-          const realCount = deduped.filter((e) => e.classId === cId).length;
-          if (clsObj.enrolledCount !== realCount) {
+          const realSubcolCount = subcolActiveUidsByClass.get(cId)?.size ?? 0;
+          const currentValid =
+            typeof clsObj.enrolledCount === 'number' &&
+            Number.isInteger(clsObj.enrolledCount) &&
+            clsObj.enrolledCount >= 0;
+          if (!currentValid || clsObj.enrolledCount !== realSubcolCount) {
             updateDoc(doc(db, 'classes', cId), {
-              enrolledCount: realCount,
+              enrolledCount: realSubcolCount,
               updatedAt: serverTimestamp(),
             }).catch(() => {});
           }

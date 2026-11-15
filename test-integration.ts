@@ -6712,6 +6712,635 @@ assert(
   '39.03 TeacherService usa WriteBatch atômico com increment(1) e ID determinístico 1-para-1 sem timestamp aleatório'
 );
 
+// =============================================================
+// GRUPO 40 — FASE FINAL: MIGRAÇÃO SEGURA DE TURMAS LEGADAS
+// =============================================================
+console.log('\n--- GRUPO 40: MIGRAÇÃO SEGURA DE TURMAS LEGADAS & ENROLLEDCOUNT ---');
+
+const reconcilerSrc = fs.readFileSync('src/services/classCountReconciler.ts', 'utf-8');
+const reconcileScriptSrc = fs.readFileSync('scripts/reconcile-legacy-classes.ts', 'utf-8');
+const {
+  classifyClassStudentStatus,
+  doesStatusOccupySeat,
+  computeAuthoritativeClassOccupancy,
+  isValidatedEnrolledCount,
+} = await import('./src/services/classCountReconciler');
+
+assert(
+  !rulesAudit.includes("!('enrolledCount' in beforeData) && afterData.enrolledCount == 1") &&
+  rulesAudit.includes('hasValidatedEnrolledCount') &&
+  rulesAudit.includes('hasNoStringExpiresAt'),
+  '40.01 firestore.rules bloqueia matrículas em turmas legadas sem enrolledCount validado e preserva compatibilidade de convites sem expiração'
+);
+
+assert(
+  reconcilerSrc.includes('runTransaction') &&
+  reconcilerSrc.includes('reconcileSingleClassTransactionally') &&
+  reconcilerSrc.includes('reconcileAllLegacyClasses') &&
+  serverAuditSrc.includes('/api/admin/classes/reconcile') &&
+  serverAuditSrc.includes('legacy_unvalidated') &&
+  reconcileScriptSrc.includes('--apply') &&
+  reconcileScriptSrc.includes('--dry-run'),
+  '40.02 Reconciliador transacional idempotente, rota administrativa /api/admin/classes/reconcile e script CLI dry-run por padrão estão presentes'
+);
+
+const g40Occupancy = computeAuthoritativeClassOccupancy([
+  { id: 'u1', data: { studentId: 'u1', status: 'active' } },
+  { id: 'u2', data: { studentId: 'u2', status: 'pending' } },
+  { id: 'u3', data: { studentId: 'u3', status: 'approved' } },
+  { id: 'u4', data: { studentId: 'u4' } },
+  { id: 'u5', data: { studentId: 'u5', status: 'cancelled' } },
+  { id: 'u6', data: { studentId: 'u6', status: 'suspended' } },
+  { id: 'u7', data: { studentId: 'u7', status: 'inactive' } },
+]);
+
+assert(
+  g40Occupancy.activeCount === 4 &&
+  g40Occupancy.countsByStatus.cancelled === 1 &&
+  g40Occupancy.countsByStatus.suspended === 1 &&
+  g40Occupancy.countsByStatus.inactive === 1 &&
+  classifyClassStudentStatus(undefined) === 'legacy_active' &&
+  doesStatusOccupySeat('pending') === true &&
+  doesStatusOccupySeat('cancelled') === false &&
+  isValidatedEnrolledCount(0) === true &&
+  isValidatedEnrolledCount(undefined) === false &&
+  isValidatedEnrolledCount(-1) === false,
+  '40.03 Classificação de status e cálculo autoritativo contabilizam apenas active/pending/approved/legado excluindo cancelled/suspended/inactive'
+);
+
+assert(
+  teacherServiceAuditSrc.includes('fromCache') &&
+  teacherServiceAuditSrc.includes('subcolActiveUidsByClass'),
+  '40.04 TeacherService só reconcilia a partir de snapshot vindo do servidor (!fromCache) usando exclusivamente classes/{classId}/students'
+);
+
+// =============================================================
+// GRUPO 41 — FASE 1: GESTÃO ACADÊMICA AVANÇADA & MOTOR DE AUTORIZAÇÃO
+// =============================================================
+console.log('\n--- GRUPO 41: CATÁLOGO REAL, CONCESSÕES GRANULARES & DIRECIONAMENTO INICIAL ---');
+
+const {
+  ACADEMIC_CATALOG_INSTRUMENTS,
+  ACADEMIC_CATALOG_COURSES,
+  ACADEMIC_CATALOG_COURSE_LIST,
+  validateGrantTarget,
+  validatePlacementTarget,
+} = await import('./src/services/academicCatalog');
+const {
+  resolveStudentAccessSnapshot,
+  canStudentAccessCourse,
+  canStudentAccessModule,
+  canStudentAccessLesson,
+  resolveStudentEntryPoint,
+} = await import('./src/services/accessAuthorizationEngine');
+
+const realTotalLessons = ACADEMIC_CATALOG_COURSE_LIST.reduce((acc, c) => acc + c.totalLessons, 0);
+assert(
+  ACADEMIC_CATALOG_INSTRUMENTS.length === 5 &&
+  Object.keys(ACADEMIC_CATALOG_COURSES).length === 6 &&
+  realTotalLessons === 152,
+  `41.01 Catálogo acadêmico mapeia exatamente 5 instrumentos, 6 cursos e 152 aulas reais (obtido: ${realTotalLessons})`
+);
+
+const g41FakeTarget = validateGrantTarget({
+  scopeType: 'course',
+  courseId: 'curso-ficticio' as any,
+});
+const g41CrossTarget = validatePlacementTarget({
+  courseId: 'violao',
+  moduleId: 'baixo-mod-0',
+  lessonId: 'violao-l1',
+});
+assert(
+  g41FakeTarget.valid === false && g41CrossTarget.valid === false,
+  '41.02 Validadores do catálogo rejeitam IDs fictícios e combinações inválidas curso/módulo/aula'
+);
+
+const g41Snapshot = resolveStudentAccessSnapshot({
+  studentUid: 'stu-g41',
+  progress: {
+    ...INITIAL_PROGRESS,
+    primaryCourseId: 'violao',
+    completedLessons: ['violao-lesson-1'],
+  },
+  grants: [
+    {
+      id: 'g41-mod',
+      studentUid: 'stu-g41',
+      scopeType: 'module',
+      grantType: 'special',
+      source: 'admin_special',
+      status: 'active',
+      courseId: 'canonical',
+      moduleId: 'canonical-level-2',
+      idempotencyKey: 'k1',
+      grantedBy: 'adm-1',
+      createdAt: '2026-11-15T00:00:00.000Z',
+      updatedAt: '2026-11-15T00:00:00.000Z',
+    },
+  ],
+  placements: [
+    {
+      id: 'p41',
+      studentUid: 'stu-g41',
+      courseId: 'violao',
+      moduleId: 'violao-mod-5',
+      moduleNumber: 5,
+      lessonId: 'violao-lesson-25',
+      mode: 'custom_start',
+      status: 'active',
+      assignedBy: 'adm-1',
+      createdAt: '2026-11-15T00:00:00.000Z',
+      updatedAt: '2026-11-15T00:00:00.000Z',
+    },
+  ],
+});
+
+assert(
+  canStudentAccessCourse(g41Snapshot, 'canonical').partialAccess === true &&
+  canStudentAccessModule(g41Snapshot, 'canonical', 'canonical-level-2') === true &&
+  canStudentAccessModule(g41Snapshot, 'canonical', 'canonical-level-0') === false &&
+  canStudentAccessLesson(g41Snapshot, 'lesson-1', 'canonical')?.allowed === false &&
+  resolveStudentEntryPoint(g41Snapshot, { ...INITIAL_PROGRESS, primaryCourseId: 'violao' }).lessonId === 'violao-lesson-25',
+  '41.03 Motor central resolve acesso parcial por módulo e ponto inicial direcionado preservando o restante bloqueado'
+);
+
+// =============================================================
+// GRUPO 42 — FASE 2: GUITAR ACADEMY COMMERCE CORE (FAIL-CLOSED)
+// =============================================================
+console.log('\n--- GRUPO 42: COMMERCE CORE, VERSIONAMENTO IMUTÁVEL & FAIL-CLOSED ---');
+
+const {
+  DEFAULT_COMMERCE_CONFIG,
+  normalizeCommerceConfig,
+  validateProductCreateInput,
+  validateNewPriceVersionInput,
+  evaluateAndCalculateCoupon,
+  createAppliedPriceSnapshot,
+  buildEntitlementsFromPurchase,
+  resolveCommerceAndAcademicAccess,
+} = await import('./src/services/commerceCore');
+
+assert(
+  DEFAULT_COMMERCE_CONFIG.commerceEnabled === false &&
+  DEFAULT_COMMERCE_CONFIG.catalogVisible === false &&
+  DEFAULT_COMMERCE_CONFIG.checkoutEnabled === false &&
+  DEFAULT_COMMERCE_CONFIG.promotionsEnabled === false &&
+  DEFAULT_COMMERCE_CONFIG.advertisementsEnabled === false &&
+  DEFAULT_COMMERCE_CONFIG.paidClassesEnabled === false &&
+  DEFAULT_COMMERCE_CONFIG.subscriptionsEnabled === false,
+  '42.01 Configuração comercial padrão inicia 100% desativada (Fail-Closed)'
+);
+
+const g42Corrupt = normalizeCommerceConfig({ commerceEnabled: 'true', checkoutEnabled: true });
+assert(
+  g42Corrupt.commerceEnabled === false && g42Corrupt.checkoutEnabled === false,
+  '42.02 Configuração corrompida reverte integralmente para false sem habilitar cobrança'
+);
+
+const g42Prod = validateProductCreateInput({
+  name: 'Curso Completo Violão',
+  description: 'Domínio Total',
+  productType: 'individual_course',
+  courseIds: ['violao'],
+});
+const g42BadProd = validateProductCreateInput({
+  name: 'Falso',
+  description: 'Curso inventado',
+  productType: 'individual_course',
+  courseIds: ['fake-course'],
+});
+assert(
+  g42Prod.valid === true && g42Prod.data.visibility === 'hidden' && g42BadProd.valid === false,
+  '42.03 Validador de produto exige courseIds reais e força visibility=hidden na criação'
+);
+
+const g42PriceCheck = validateNewPriceVersionInput({
+  productId: 'prod-1',
+  amount: 199.9,
+  currency: 'BRL',
+  billingInterval: 'one_time',
+});
+assert(
+  g42PriceCheck.valid === true && g42PriceCheck.data.amountCents === 19990,
+  '42.04 Validador de versão de preço converte corretamente para centavos inteiros'
+);
+
+const g42SampleProduct = {
+  productId: 'prod-1',
+  name: 'Curso Completo Violão',
+  description: 'Domínio Total',
+  productType: 'individual_course' as const,
+  courseIds: ['violao' as const],
+  status: 'active' as const,
+  visibility: 'hidden' as const,
+  createdAt: '2026-11-15T00:00:00.000Z',
+  updatedAt: '2026-11-15T00:00:00.000Z',
+  createdBy: 'admin-1',
+};
+
+const g42SamplePrice = {
+  priceId: 'price-1',
+  productId: 'prod-1',
+  currency: 'BRL' as const,
+  amount: 200,
+  amountCents: 20000,
+  billingInterval: 'one_time' as const,
+  isPromotional: false,
+  version: 1,
+  status: 'active' as const,
+  createdAt: '2026-11-15T00:00:00.000Z',
+  createdBy: 'admin-1',
+};
+
+const g42CouponBlockedWhenDisabled = evaluateAndCalculateCoupon({
+  code: 'VIOLAO10',
+  product: g42SampleProduct,
+  price: g42SamplePrice,
+  promotion: null,
+  config: DEFAULT_COMMERCE_CONFIG,
+});
+assert(
+  g42CouponBlockedWhenDisabled.valid === false &&
+  g42CouponBlockedWhenDisabled.reason === 'promotions_disabled',
+  '42.05 Cupons são bloqueados quando promotionsEnabled=false na configuração global'
+);
+
+const g42Snapshot = createAppliedPriceSnapshot({
+  product: g42SampleProduct,
+  price: g42SamplePrice,
+  discountAmountCents: 4000,
+  couponCode: 'VIOLAO20',
+});
+assert(
+  g42Snapshot.baseAmountCents === 20000 &&
+  g42Snapshot.discountAmountCents === 4000 &&
+  g42Snapshot.finalAmountCents === 16000,
+  '42.06 Snapshot imutável preserva valores base, desconto e final para pedidos futuros'
+);
+
+const g42RefundedPurchase = buildEntitlementsFromPurchase({
+  entitlementId: 'ord-g42',
+  product: g42SampleProduct,
+  status: 'revoked',
+});
+const g42Coex = resolveCommerceAndAcademicAccess({
+  studentUid: 'stu-g42',
+  grants: [
+    {
+      id: 'grant-g42',
+      studentUid: 'stu-g42',
+      scopeType: 'course',
+      grantType: 'permanent',
+      source: 'admin_permanent',
+      status: 'active',
+      courseId: 'violao',
+      idempotencyKey: 'k-g42',
+      grantedBy: 'adm-1',
+      createdAt: '2026-11-15T00:00:00.000Z',
+      updatedAt: '2026-11-15T00:00:00.000Z',
+    },
+  ],
+  entitlements: g42RefundedPurchase,
+});
+assert(
+  canStudentAccessCourse(g42Coex, 'violao').allowed === true &&
+  g42Coex.courses.violao.primarySource === 'admin_permanent',
+  '42.07 Reembolso comercial nunca remove concessão gratuita independente do administrador'
+);
+
+// =============================================================
+// GRUPO 43 — FASE 3: CAMPANHAS, STORAGE, TURMAS PAGAS, PEDIDOS,
+// WEBHOOKS, ASSINATURAS E FINANCEIRO (INTEGRADO ÀS FASES 1 & 2)
+// =============================================================
+console.log('\n--- GRUPO 43: PUBLICIDADE, STORAGE, TURMAS PAGAS, WEBHOOKS, ASSINATURAS & FINANCEIRO ---');
+
+const {
+  validateBannerFileUpload,
+  validateAdvertisementCreateInput,
+  isAdvertisementVisibleToStudent,
+  validateClassOfferCreateInput,
+  computeAvailableOfferSeats,
+  canOfferAcceptReservation,
+  isReservationExpired,
+  isWaitlistSummonExpired,
+  pickNextWaitlistCandidate,
+  assertNoSensitiveCardData,
+  validateWebhookPaymentConsistency,
+  applySubscriptionLifecycleTransition,
+  computeFinancialSummaryReport,
+} = await import('./src/services/commercePhase3Core');
+const { DisabledFailClosedGatewayProvider } = await import('./src/services/paymentGateway');
+const { computeWebhookHmacSignature, verifyWebhookHmacSignature } = await import(
+  './src/services/paymentWebhookVerifier'
+);
+
+const storageRulesSrc = fs.readFileSync('storage.rules', 'utf-8');
+const firebaseJsonSrc = fs.readFileSync('firebase.json', 'utf-8');
+const finPanelSrc = fs.readFileSync('src/components/admin/FinancialDashboardPanel.tsx', 'utf-8');
+const phase3PanelsSrc = fs.readFileSync('src/components/admin/CommercePhase3SubPanels.tsx', 'utf-8');
+const phase3ServiceSrc = fs.readFileSync('src/services/commercePhase3Service.ts', 'utf-8');
+
+assert(
+  storageRulesSrc.includes('/commerce/advertisements/{advertisementId}/{fileName}') &&
+  storageRulesSrc.includes('allow delete: if false;') &&
+  storageRulesSrc.includes('request.resource.size <= 5 * 1024 * 1024') &&
+  storageRulesSrc.includes('advertisementsEnabled == true') &&
+  firebaseJsonSrc.includes('"storage"'),
+  '43.01 storage.rules protege upload admin-only <= 5MB WEBP/PNG/JPEG, bloqueia exclusão de versões antigas e oculta banners quando advertisementsEnabled=false'
+);
+
+assert(
+  rulesAudit.includes('match /advertisements/{advertisementId}') &&
+  rulesAudit.includes('match /class_offers/{offerId}') &&
+  rulesAudit.includes('match /class_reservations/{reservationId}') &&
+  rulesAudit.includes('match /orders/{orderId}') &&
+  rulesAudit.includes('match /payments/{paymentId}') &&
+  rulesAudit.includes('match /payment_events/{eventId}') &&
+  rulesAudit.includes('match /subscriptions/{subscriptionId}') &&
+  rulesAudit.includes('match /commerce_entitlements/{entitlementId}') &&
+  rulesAudit.includes('match /financial_adjustments/{adjustmentId}'),
+  '43.02 firestore.rules protege todas as 10 coleções operacionais e financeiras da Fase 3 com isolamento estrito por UID e role admin'
+);
+
+assert(
+  adminPortalSrc.includes("'financial'") &&
+  adminPortalSrc.includes('FinancialDashboardPanel') &&
+  finPanelSrc.includes('1. Total Vendido') &&
+  finPanelSrc.includes('12. Cupons Utilizados') &&
+  finPanelSrc.includes('financial_adjustments') &&
+  phase3PanelsSrc.includes('Pré-visualização Administrativa') &&
+  phase3ServiceSrc.includes('commerce/advertisements'),
+  '43.03 Painel Financeiro exclusivo do admin, subpainéis de campanhas/turmas/pedidos e serviço dual-mode Fase 3 estão integrados'
+);
+
+// 43.04 Validação estrita de upload (magic bytes, MIME, extensão e limite 5MB)
+const g43WebpHeader = new Uint8Array([0x52, 0x49, 0x46, 0x46, 0x20, 0, 0, 0, 0x57, 0x45, 0x42, 0x50]);
+const g43OkBanner = validateBannerFileUpload({
+  advertisementId: 'ad-43-1',
+  fileName: 'hero.webp',
+  mimeType: 'image/webp',
+  sizeBytes: 120_000,
+  bytes: g43WebpHeader,
+  nextVersion: 2,
+});
+const g43BadMagicBanner = validateBannerFileUpload({
+  advertisementId: 'ad-43-1',
+  fileName: 'hero.webp',
+  mimeType: 'image/webp',
+  sizeBytes: 120_000,
+  bytes: new Uint8Array([0x3c, 0x73, 0x76, 0x67, 0, 0, 0, 0, 0, 0, 0, 0]),
+  nextVersion: 1,
+});
+const g43TooBigBanner = validateBannerFileUpload({
+  advertisementId: 'ad-43-1',
+  fileName: 'hero.webp',
+  mimeType: 'image/webp',
+  sizeBytes: 6 * 1024 * 1024,
+  bytes: g43WebpHeader,
+  nextVersion: 1,
+});
+assert(
+  g43OkBanner.valid === true &&
+  g43OkBanner.data.storagePath === 'commerce/advertisements/ad-43-1/banner_v2.webp' &&
+  g43BadMagicBanner.valid === false &&
+  g43TooBigBanner.valid === false,
+  '43.04 Validador de banner valida magic bytes, MIME, tamanho <= 5MB e versiona caminhos no Storage sem sobrescrever anteriores'
+);
+
+// 43.05 Anúncio respeita advertisementsEnabled e segmentação
+const g43AdCheck = validateAdvertisementCreateInput({
+  title: 'Campanha Violão 43',
+  description: 'Descrição teste',
+  ctaText: 'Conhecer',
+  ctaDestination: '/cursos',
+  position: 'home',
+  targetAudience: 'all',
+  status: 'active',
+});
+assert(
+  g43AdCheck.valid === true &&
+  isAdvertisementVisibleToStudent({
+    advertisement: {
+      advertisementId: 'ad-43-1',
+      ...g43AdCheck.data,
+      imageUrl: null,
+      storagePath: null,
+      imageMimeType: null,
+      imageSizeBytes: null,
+      imageVersion: 0,
+      previousStoragePaths: [],
+      createdBy: 'adm-1',
+      createdAt: '2026-11-15T00:00:00.000Z',
+      updatedAt: '2026-11-15T00:00:00.000Z',
+    },
+    config: DEFAULT_COMMERCE_CONFIG,
+    studentUid: 'stu-1',
+  }) === false,
+  '43.05 Campanha ativa permanece invisível para alunos quando commerceEnabled/advertisementsEnabled=false'
+);
+
+// 43.06 Oferta de turma, capacidade, expiração de reserva e ordem de lista de espera
+const g43OfferVal = validateClassOfferCreateInput({
+  classId: 'cls-violao-1',
+  productId: 'prod-1',
+  priceId: 'price-1',
+  capacity: 10,
+  status: 'open',
+  waitlistEnabled: true,
+});
+const g43OfferObj = {
+  offerId: 'offer-43',
+  classId: 'cls-violao-1',
+  productId: 'prod-1',
+  priceId: 'price-1',
+  capacity: 10,
+  reservedSeats: 3,
+  confirmedSeats: 7,
+  registrationStartsAt: null,
+  registrationStartsAtMs: null,
+  registrationEndsAt: null,
+  registrationEndsAtMs: null,
+  status: 'open' as const,
+  waitlistEnabled: true,
+  createdBy: 'adm-1',
+  createdAt: '2026-11-15T00:00:00.000Z',
+  updatedAt: '2026-11-15T00:00:00.000Z',
+};
+const g43NextWait = pickNextWaitlistCandidate([
+  {
+    waitlistId: 'w2',
+    offerId: 'offer-43',
+    classId: 'cls-violao-1',
+    studentUid: 'u2',
+    joinedAt: '2026-11-15T01:00:00.000Z',
+    joinedAtMs: 2000,
+    priorityOrder: 2,
+    status: 'waiting',
+    history: [],
+    createdAt: '2026-11-15T01:00:00.000Z',
+    updatedAt: '2026-11-15T01:00:00.000Z',
+  },
+  {
+    waitlistId: 'w1',
+    offerId: 'offer-43',
+    classId: 'cls-violao-1',
+    studentUid: 'u1',
+    joinedAt: '2026-11-15T00:30:00.000Z',
+    joinedAtMs: 1000,
+    priorityOrder: 1,
+    status: 'waiting',
+    history: [],
+    createdAt: '2026-11-15T00:30:00.000Z',
+    updatedAt: '2026-11-15T00:30:00.000Z',
+  },
+]);
+assert(
+  g43OfferVal.valid === true &&
+  computeAvailableOfferSeats(g43OfferObj) === 0 &&
+  canOfferAcceptReservation(g43OfferObj).allowed === false &&
+  isReservationExpired({ status: 'pending_payment', expiresAtMs: 1000 }, 2000) === true &&
+  isWaitlistSummonExpired({ status: 'summoned', responseDeadlineAtMs: 1000 }, 2000) === true &&
+  g43NextWait?.waitlistId === 'w1',
+  '43.06 Cálculo de vagas disponíveis, bloqueio sem vaga, expiração por TTL e ordenação FIFO da lista de espera operam corretamente'
+);
+
+// 43.07 Gateway desacoplado Fail-Closed, bloqueio de dados de cartão e verificação HMAC-SHA256
+const g43CardSafe = assertNoSensitiveCardData({ productId: 'prod-1', paymentMethod: 'pix' });
+const g43CardUnsafe = assertNoSensitiveCardData({ nested: { cvv: '999' } });
+let g43GatewayThrew = false;
+try {
+  await DisabledFailClosedGatewayProvider.createCharge({
+    orderId: 'ord-1',
+    studentUid: 'stu-1',
+    amountCents: 10000,
+    currency: 'BRL',
+    description: 'Teste',
+    idempotencyKey: 'k1',
+  });
+} catch {
+  g43GatewayThrew = true;
+}
+const g43RawWebhook = '{"providerEventId":"evt-43","amountCents":10000}';
+const g43Sig = computeWebhookHmacSignature(g43RawWebhook, 'secret-43');
+assert(
+  DisabledFailClosedGatewayProvider.isLiveConfigured === false &&
+  g43GatewayThrew === true &&
+  g43CardSafe.ok === true &&
+  g43CardUnsafe.ok === false &&
+  verifyWebhookHmacSignature(g43RawWebhook, g43Sig, 'secret-43') === true &&
+  verifyWebhookHmacSignature(g43RawWebhook, 'sha256=invalid', 'secret-43') === false,
+  '43.07 Adaptador de gateway falha fechado sem provedor, rejeita dados sensíveis de cartão e valida HMAC-SHA256 com tempo constante'
+);
+
+// 43.08 Consistência de webhook, transição de assinatura e relatório financeiro real sem números inventados
+const g43SampleOrder = {
+  orderId: 'ord-43',
+  studentUid: 'stu-43',
+  items: [
+    {
+      productId: 'prod-1',
+      productName: 'Violão',
+      productType: 'individual_course' as const,
+      courseIds: ['violao' as const],
+      priceId: 'price-1',
+      priceVersion: 1,
+      billingInterval: 'one_time' as const,
+      quantity: 1,
+      unitAmountCents: 20000,
+      totalAmountCents: 20000,
+    },
+  ],
+  subtotal: 200,
+  subtotalCents: 20000,
+  discount: 40,
+  discountCents: 4000,
+  total: 160,
+  totalCents: 16000,
+  currency: 'BRL' as const,
+  status: 'paid' as const,
+  priceSnapshot: g42Snapshot,
+  promotionSnapshot: null,
+  refundedAmountCents: 0,
+  createdAt: '2026-11-15T10:00:00.000Z',
+  updatedAt: '2026-11-15T10:00:00.000Z',
+  providerReference: 'ref_ord-43',
+  providerName: 'unconfigured_fail_closed',
+  idempotencyKey: 'k-ord-43',
+};
+
+const g43ConsBadAmount = validateWebhookPaymentConsistency({
+  order: g43SampleOrder,
+  event: {
+    provider: 'test',
+    providerEventId: 'evt-bad',
+    eventType: 'payment.paid',
+    orderId: 'ord-43',
+    providerReference: 'ref_ord-43',
+    amountCents: 100,
+    currency: 'BRL',
+    occurredAt: '2026-11-15T10:05:00.000Z',
+  },
+});
+const g43SubTransition = applySubscriptionLifecycleTransition({
+  subscription: {
+    subscriptionId: 'sub-43',
+    studentUid: 'stu-43',
+    productId: 'prod-sub',
+    priceId: 'price-sub',
+    courseIds: ['solo'],
+    billingInterval: 'monthly',
+    amountCents: 9900,
+    currency: 'BRL',
+    status: 'active',
+    startedAt: '2026-11-01T00:00:00.000Z',
+    currentPeriodStartAt: '2026-11-01T00:00:00.000Z',
+    currentPeriodEndAt: '2026-12-01T00:00:00.000Z',
+    billingHistory: [],
+    entitlementId: 'ent-sub-43',
+    createdAt: '2026-11-01T00:00:00.000Z',
+    updatedAt: '2026-11-01T00:00:00.000Z',
+  },
+  nextStatus: 'paused',
+  reason: 'Pausa administrativa',
+});
+const g43ZeroFin = computeFinancialSummaryReport({
+  orders: [],
+  payments: [],
+  subscriptions: [],
+  adjustments: [],
+  currency: 'BRL',
+});
+const g43RealFin = computeFinancialSummaryReport({
+  orders: [g43SampleOrder],
+  payments: [],
+  subscriptions: [],
+  adjustments: [
+    {
+      adjustmentId: 'adj-43',
+      type: 'reconciliation_note',
+      amountCents: -1000,
+      currency: 'BRL',
+      justification: 'Ajuste contábil de taxa de homologação.',
+      actorUid: 'adm-1',
+      createdAt: '2026-11-15T11:00:00.000Z',
+    },
+  ],
+  currency: 'BRL',
+});
+
+assert(
+  g43ConsBadAmount.valid === false &&
+  g43SubTransition.valid === true &&
+  g43SubTransition.entitlementStatus === 'cancelled' &&
+  g43ZeroFin.hasRealTransactions === false &&
+  g43ZeroFin.netRevenueCents === 0 &&
+  g43RealFin.grossRevenueCents === 20000 &&
+  g43RealFin.totalDiscountCents === 4000 &&
+  g43RealFin.netRevenueCents === 15000,
+  '43.08 Webhook rejeita valores divergentes, assinatura revoga apenas entitlement comercial e motor financeiro calcula valores reais sem inventar dados'
+);
+
 console.log('\n===========================================================');
 console.log(`TOTAL DE TESTES: ${totalTests}`);
 console.log(`PASSOU: ${passedTests}`);
@@ -6721,7 +7350,7 @@ console.log('===========================================================');
 if (failedTests > 0) {
   process.exit(1);
 } else {
-  console.log('✓ Todos os testes de integração do motor musical, detector, currículo, Central de Prática, Busca Global, Diagramas Cifra Club, Autenticação Obrigatória, Separação de Ambientes Aluno/Admin, Backend Hardening, SMART TUNER V1.2, AUTENTICAÇÃO ADMINISTRATIVA DEFINITIVA, CORREÇÃO GERAL DEFINITIVA, MODAL/IMAGENS DOS CURSOS, AUDITORIA DE ÁUDIO, MASTER TUNER V2.1, CORREÇÃO PRIORITÁRIA DO AFINADOR, HOTFIX GANHO ADAPTATIVO e CONVITE DE TURMA foram APROVADOS com sucesso!\n');
+  console.log('✓ Todos os testes de integração do motor musical, detector, currículo, Central de Prática, Busca Global, Diagramas Cifra Club, Autenticação Obrigatória, Separação de Ambientes Aluno/Admin, Backend Hardening, SMART TUNER V1.2, AUTENTICAÇÃO ADMINISTRATIVA DEFINITIVA, CORREÇÃO GERAL DEFINITIVA, MODAL/IMAGENS DOS CURSOS, AUDITORIA DE ÁUDIO, MASTER TUNER V2.1, CORREÇÃO PRIORITÁRIA DO AFINADOR, HOTFIX GANHO ADAPTATIVO, CONVITE DE TURMA, MIGRAÇÃO DE TURMAS LEGADAS, FASE 1 GESTÃO ACADÊMICA, FASE 2 COMMERCE CORE e FASE 3 CAMPANHAS, TURMAS PAGAS, WEBHOOKS & FINANCEIRO foram APROVADOS com sucesso!\n');
   process.exit(0);
 }
 

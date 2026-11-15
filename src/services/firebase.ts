@@ -25,6 +25,7 @@ import {
   Firestore,
   serverTimestamp
 } from 'firebase/firestore';
+import { getStorage, FirebaseStorage } from 'firebase/storage';
 import firebaseConfig from '../../firebase-applet-config.json';
 import type { UserProgress, StudentProfile, AuthProviderType, UserRole, AccountStatus } from '../types/index.ts';
 
@@ -58,6 +59,7 @@ function createConfiguredFirestore(firebaseApp: FirebaseApp, databaseId: string)
 }
 
 export const db: Firestore = createConfiguredFirestore(app, FIRESTORE_DATABASE_ID);
+export const storage: FirebaseStorage = getStorage(app);
 
 // Provedor Google com escopos mínimos e seletor de contas explícito
 export const googleProvider = new GoogleAuthProvider();

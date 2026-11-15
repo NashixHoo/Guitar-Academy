@@ -126,18 +126,27 @@ service cloud.firestore {
         hasNoPrivilegeFields(data);
     }
 
+    function hasNoStringExpiresAt(data) {
+      return !('expiresAt' in data) ||
+        data.expiresAt == null ||
+        (data.expiresAt is string && data.expiresAt.size() == 0);
+    }
+
     function isInviteNotExpired(data) {
-      return !('expiresAtMs' in data) ||
-        data.expiresAtMs == null ||
-        (data.expiresAtMs is int && request.time.toMillis() <= data.expiresAtMs);
+      return (hasNoStringExpiresAt(data) && (!('expiresAtMs' in data) || data.expiresAtMs == null)) ||
+        ('expiresAtMs' in data && data.expiresAtMs is int && request.time.toMillis() <= data.expiresAtMs);
+    }
+
+    function hasValidatedEnrolledCount(data) {
+      return 'enrolledCount' in data &&
+        data.enrolledCount is int &&
+        data.enrolledCount >= 0;
     }
 
     function hasValidEnrolledCountIncrement(beforeData, afterData) {
-      return afterData.enrolledCount is int &&
-        (
-          (!('enrolledCount' in beforeData) && afterData.enrolledCount == 1) ||
-          ('enrolledCount' in beforeData && beforeData.enrolledCount is int && beforeData.enrolledCount >= 0 && afterData.enrolledCount == beforeData.enrolledCount + 1)
-        ) &&
+      return hasValidatedEnrolledCount(beforeData) &&
+        afterData.enrolledCount is int &&
+        afterData.enrolledCount == beforeData.enrolledCount + 1 &&
         (!('maxStudents' in beforeData) ||
          !(beforeData.maxStudents is int || beforeData.maxStudents is float) ||
          beforeData.maxStudents <= 0 ||
@@ -259,7 +268,17 @@ service cloud.firestore {
           'auth_login_success', 'auth_login_failed', 'auth_signup', 'auth_logout',
           'auth_password_reset', 'role_checked', 'role_escalation_blocked',
           'admin_preview_toggled', 'student_status_updated', 'security_audit_viewed',
-          'auth_token_rejected', 'role_access_denied', 'admin_role_lookup'
+          'auth_token_rejected', 'role_access_denied', 'admin_role_lookup',
+          'course_access_granted', 'course_access_updated', 'course_access_revoked',
+          'course_access_reactivated', 'student_placement_updated',
+          'commerce_product_created', 'commerce_product_updated', 'commerce_price_version_created',
+          'commerce_promotion_created', 'commerce_promotion_updated', 'commerce_coupon_updated',
+          'commerce_config_updated', 'commerce_unauthorized_attempt',
+          'commerce_advertisement_created', 'commerce_advertisement_updated', 'commerce_advertisement_image_uploaded',
+          'commerce_class_offer_created', 'commerce_class_offer_updated', 'commerce_reservation_updated',
+          'commerce_waitlist_summoned', 'commerce_order_created', 'commerce_payment_confirmed',
+          'commerce_payment_invalid', 'commerce_payment_refunded', 'commerce_subscription_updated',
+          'commerce_financial_adjustment'
         ] &&
         data.severity is string &&
         data.severity in ['info', 'warning', 'critical'] &&
@@ -277,6 +296,359 @@ service cloud.firestore {
         data.timestamp is string &&
         data.timestamp.size() > 0 &&
         data.timestamp.size() <= 40 &&
+        hasNoPrivilegeFields(data);
+    }
+
+    // Validação estrita de concessões administrativas (/course_access_grants/{grantId})
+    function isValidAccessGrant(data, grantId) {
+      return data.keys().hasAll([
+          'id', 'studentUid', 'scopeType', 'grantType', 'source', 'status',
+          'idempotencyKey', 'grantedBy', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'studentUid', 'scopeType', 'grantType', 'source', 'status',
+          'courseId', 'instrumentId', 'moduleId', 'lessonId',
+          'rangeStartLessonId', 'rangeEndLessonId', 'lessonIds',
+          'startsAt', 'startsAtMs', 'expiresAt', 'expiresAtMs', 'reason',
+          'idempotencyKey', 'grantedBy', 'grantedByEmail',
+          'revokedBy', 'revokedAt', 'statusReason', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidId(data.id) &&
+        data.id == grantId &&
+        isValidId(data.studentUid) &&
+        data.scopeType is string &&
+        data.scopeType in ['course', 'instrument', 'module', 'lesson', 'lesson_range'] &&
+        data.grantType is string &&
+        data.grantType in ['permanent', 'temporary', 'trial', 'special'] &&
+        data.source is string &&
+        data.source in ['admin_permanent', 'admin_temporary', 'admin_trial', 'admin_special'] &&
+        data.status is string &&
+        data.status in ['active', 'suspended', 'revoked', 'expired'] &&
+        (!('courseId' in data) || data.courseId == null || (data.courseId is string && data.courseId in ['violao', 'canonical', 'solo', 'baixo', 'teclado', 'bateria'])) &&
+        (!('instrumentId' in data) || data.instrumentId == null || (data.instrumentId is string && data.instrumentId in ['violao', 'guitarra', 'baixo', 'teclado', 'bateria'])) &&
+        (!('moduleId' in data) || data.moduleId == null || (data.moduleId is string && data.moduleId.size() <= 128)) &&
+        (!('lessonId' in data) || data.lessonId == null || (data.lessonId is string && data.lessonId.size() <= 128)) &&
+        (!('rangeStartLessonId' in data) || data.rangeStartLessonId == null || (data.rangeStartLessonId is string && data.rangeStartLessonId.size() <= 128)) &&
+        (!('rangeEndLessonId' in data) || data.rangeEndLessonId == null || (data.rangeEndLessonId is string && data.rangeEndLessonId.size() <= 128)) &&
+        (!('lessonIds' in data) || data.lessonIds == null || (data.lessonIds is list && data.lessonIds.size() <= 200)) &&
+        (!('startsAt' in data) || data.startsAt == null || (data.startsAt is string && data.startsAt.size() <= 40)) &&
+        (!('startsAtMs' in data) || data.startsAtMs == null || data.startsAtMs is int) &&
+        (!('expiresAt' in data) || data.expiresAt == null || (data.expiresAt is string && data.expiresAt.size() <= 40)) &&
+        (!('expiresAtMs' in data) || data.expiresAtMs == null || data.expiresAtMs is int) &&
+        (!('reason' in data) || data.reason == null || (data.reason is string && data.reason.size() <= 500)) &&
+        data.idempotencyKey is string &&
+        data.idempotencyKey.size() > 0 &&
+        data.idempotencyKey.size() <= 300 &&
+        isValidId(data.grantedBy) &&
+        (!('grantedByEmail' in data) || data.grantedByEmail == null || (data.grantedByEmail is string && data.grantedByEmail.size() <= 254)) &&
+        (!('revokedBy' in data) || data.revokedBy == null || isValidId(data.revokedBy)) &&
+        (!('revokedAt' in data) || data.revokedAt == null || (data.revokedAt is string && data.revokedAt.size() <= 40)) &&
+        (!('statusReason' in data) || data.statusReason == null || (data.statusReason is string && data.statusReason.size() <= 500)) &&
+        data.createdAt is string &&
+        data.createdAt.size() > 0 &&
+        data.createdAt.size() <= 40 &&
+        data.updatedAt is string &&
+        data.updatedAt.size() > 0 &&
+        data.updatedAt.size() <= 40 &&
+        hasNoPrivilegeFields(data);
+    }
+
+    // Validação estrita de direcionamento inicial (/student_academic_placements/{placementId})
+    function isValidAcademicPlacement(data, placementId) {
+      return data.keys().hasAll([
+          'id', 'studentUid', 'courseId', 'lessonId', 'mode', 'status',
+          'assignedBy', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'studentUid', 'courseId', 'moduleId', 'moduleNumber', 'lessonId',
+          'mode', 'status', 'reason', 'assignedBy', 'assignedByEmail',
+          'createdAt', 'updatedAt'
+        ]) &&
+        isValidId(data.id) &&
+        data.id == placementId &&
+        isValidId(data.studentUid) &&
+        data.courseId is string &&
+        data.courseId in ['violao', 'canonical', 'solo', 'baixo', 'teclado', 'bateria'] &&
+        (!('moduleId' in data) || data.moduleId == null || (data.moduleId is string && data.moduleId.size() <= 128)) &&
+        (!('moduleNumber' in data) || data.moduleNumber == null || (data.moduleNumber is int && data.moduleNumber >= 1 && data.moduleNumber <= 50)) &&
+        data.lessonId is string &&
+        data.lessonId.size() > 0 &&
+        data.lessonId.size() <= 128 &&
+        data.mode is string &&
+        data.mode in ['custom_start', 'default_path'] &&
+        data.status is string &&
+        data.status in ['active', 'cleared'] &&
+        (!('reason' in data) || data.reason == null || (data.reason is string && data.reason.size() <= 500)) &&
+        isValidId(data.assignedBy) &&
+        (!('assignedByEmail' in data) || data.assignedByEmail == null || (data.assignedByEmail is string && data.assignedByEmail.size() <= 254)) &&
+        data.createdAt is string &&
+        data.createdAt.size() > 0 &&
+        data.createdAt.size() <= 40 &&
+        data.updatedAt is string &&
+        data.updatedAt.size() > 0 &&
+        data.updatedAt.size() <= 40 &&
+        hasNoPrivilegeFields(data);
+    }
+
+    // =========================================================================
+    // FASE 2: VALIDADORES DE INFRAESTRUTURA COMERCIAL (FAIL-CLOSED)
+    // =========================================================================
+    function commerceActiveAndCatalogVisible() {
+      return exists(/databases/$(database)/documents/platform_config/commerce) &&
+        get(/databases/$(database)/documents/platform_config/commerce).data.commerceEnabled == true &&
+        get(/databases/$(database)/documents/platform_config/commerce).data.catalogVisible == true;
+    }
+
+    function isValidCommerceProduct(data, productId) {
+      return data.keys().hasAll([
+          'productId', 'name', 'description', 'productType', 'courseIds',
+          'status', 'visibility', 'createdAt', 'updatedAt', 'createdBy'
+        ]) &&
+        data.keys().hasOnly([
+          'productId', 'name', 'description', 'productType', 'courseIds',
+          'status', 'visibility', 'linkedClassId', 'notes',
+          'createdAt', 'updatedAt', 'createdBy', 'createdByEmail'
+        ]) &&
+        isValidId(data.productId) &&
+        data.productId == productId &&
+        data.name is string &&
+        data.name.size() >= 3 &&
+        data.name.size() <= 120 &&
+        data.description is string &&
+        data.description.size() <= 800 &&
+        data.productType is string &&
+        data.productType in ['individual_course', 'instrument_bundle', 'subscription_plan', 'lifetime_access', 'experimental_course', 'paid_class_offer'] &&
+        data.courseIds is list &&
+        data.courseIds.size() >= 1 &&
+        data.courseIds.size() <= 6 &&
+        data.status is string &&
+        data.status in ['draft', 'active', 'archived'] &&
+        data.visibility is string &&
+        data.visibility in ['hidden', 'public'] &&
+        (!('linkedClassId' in data) || data.linkedClassId == null || isValidId(data.linkedClassId)) &&
+        (!('notes' in data) || data.notes == null || (data.notes is string && data.notes.size() <= 500)) &&
+        isValidId(data.createdBy) &&
+        (!('createdByEmail' in data) || data.createdByEmail == null || (data.createdByEmail is string && data.createdByEmail.size() <= 254)) &&
+        data.createdAt is string && data.createdAt.size() > 0 && data.createdAt.size() <= 40 &&
+        data.updatedAt is string && data.updatedAt.size() > 0 && data.updatedAt.size() <= 40 &&
+        hasNoPrivilegeFields(data);
+    }
+
+    function isValidCommercePrice(data, priceId) {
+      return data.keys().hasAll([
+          'priceId', 'productId', 'currency', 'amount', 'amountCents',
+          'billingInterval', 'isPromotional', 'version', 'status', 'createdAt', 'createdBy'
+        ]) &&
+        data.keys().hasOnly([
+          'priceId', 'productId', 'currency', 'amount', 'amountCents',
+          'billingInterval', 'isPromotional', 'promotionalLabel', 'version',
+          'previousPriceId', 'status', 'validFrom', 'validFromMs',
+          'validUntil', 'validUntilMs', 'notes', 'createdAt', 'createdBy',
+          'createdByEmail', 'supersededAt', 'supersededBy'
+        ]) &&
+        isValidId(data.priceId) &&
+        data.priceId == priceId &&
+        isValidId(data.productId) &&
+        data.currency is string &&
+        data.currency in ['BRL', 'USD', 'EUR'] &&
+        (data.amount is int || data.amount is float) &&
+        data.amount > 0 &&
+        data.amountCents is int &&
+        data.amountCents >= 100 &&
+        data.billingInterval is string &&
+        data.billingInterval in ['one_time', 'monthly', 'semiannual', 'annual', 'lifetime'] &&
+        data.isPromotional is bool &&
+        (!('promotionalLabel' in data) || data.promotionalLabel == null || (data.promotionalLabel is string && data.promotionalLabel.size() <= 80)) &&
+        data.version is int &&
+        data.version >= 1 &&
+        (!('previousPriceId' in data) || data.previousPriceId == null || isValidId(data.previousPriceId)) &&
+        data.status is string &&
+        data.status in ['active', 'superseded', 'archived'] &&
+        (!('validFrom' in data) || data.validFrom == null || (data.validFrom is string && data.validFrom.size() <= 40)) &&
+        (!('validFromMs' in data) || data.validFromMs == null || data.validFromMs is int) &&
+        (!('validUntil' in data) || data.validUntil == null || (data.validUntil is string && data.validUntil.size() <= 40)) &&
+        (!('validUntilMs' in data) || data.validUntilMs == null || data.validUntilMs is int) &&
+        (!('notes' in data) || data.notes == null || (data.notes is string && data.notes.size() <= 500)) &&
+        isValidId(data.createdBy) &&
+        (!('createdByEmail' in data) || data.createdByEmail == null || (data.createdByEmail is string && data.createdByEmail.size() <= 254)) &&
+        (!('supersededAt' in data) || data.supersededAt == null || (data.supersededAt is string && data.supersededAt.size() <= 40)) &&
+        (!('supersededBy' in data) || data.supersededBy == null || isValidId(data.supersededBy)) &&
+        data.createdAt is string && data.createdAt.size() > 0 && data.createdAt.size() <= 40 &&
+        hasNoPrivilegeFields(data);
+    }
+
+    function isValidCommercePromotion(data, promotionId) {
+      return data.keys().hasAll([
+          'promotionId', 'name', 'discountType', 'discountValue', 'scopeType',
+          'targetProductIds', 'targetCourseIds', 'redeemedCount',
+          'eligibleAudience', 'eligibleStudentUids', 'status', 'createdAt', 'updatedAt', 'createdBy'
+        ]) &&
+        data.keys().hasOnly([
+          'promotionId', 'name', 'description', 'code', 'discountType', 'discountValue',
+          'scopeType', 'targetProductIds', 'targetCourseIds', 'startsAt', 'startsAtMs',
+          'endsAt', 'endsAtMs', 'maxRedemptions', 'maxPerStudent', 'redeemedCount',
+          'eligibleAudience', 'eligibleStudentUids', 'status',
+          'createdAt', 'updatedAt', 'createdBy', 'createdByEmail'
+        ]) &&
+        isValidId(data.promotionId) &&
+        data.promotionId == promotionId &&
+        data.name is string && data.name.size() >= 3 && data.name.size() <= 120 &&
+        (!('description' in data) || data.description == null || (data.description is string && data.description.size() <= 500)) &&
+        (!('code' in data) || data.code == null || (data.code is string && data.code.size() >= 3 && data.code.size() <= 40)) &&
+        data.discountType is string && data.discountType in ['percentage', 'fixed_amount'] &&
+        (data.discountValue is int || data.discountValue is float) && data.discountValue > 0 &&
+        data.scopeType is string && data.scopeType in ['all_products', 'product', 'course', 'bundle'] &&
+        data.targetProductIds is list && data.targetProductIds.size() <= 50 &&
+        data.targetCourseIds is list && data.targetCourseIds.size() <= 6 &&
+        (!('startsAt' in data) || data.startsAt == null || (data.startsAt is string && data.startsAt.size() <= 40)) &&
+        (!('startsAtMs' in data) || data.startsAtMs == null || data.startsAtMs is int) &&
+        (!('endsAt' in data) || data.endsAt == null || (data.endsAt is string && data.endsAt.size() <= 40)) &&
+        (!('endsAtMs' in data) || data.endsAtMs == null || data.endsAtMs is int) &&
+        (!('maxRedemptions' in data) || data.maxRedemptions == null || (data.maxRedemptions is int && data.maxRedemptions >= 1)) &&
+        (!('maxPerStudent' in data) || data.maxPerStudent == null || (data.maxPerStudent is int && data.maxPerStudent >= 1)) &&
+        data.redeemedCount is int && data.redeemedCount >= 0 &&
+        data.eligibleAudience is string && data.eligibleAudience in ['all', 'new_students', 'enrolled_students', 'specific_uids'] &&
+        data.eligibleStudentUids is list && data.eligibleStudentUids.size() <= 200 &&
+        data.status is string && data.status in ['draft', 'active', 'paused', 'ended'] &&
+        isValidId(data.createdBy) &&
+        (!('createdByEmail' in data) || data.createdByEmail == null || (data.createdByEmail is string && data.createdByEmail.size() <= 254)) &&
+        data.createdAt is string && data.createdAt.size() > 0 && data.createdAt.size() <= 40 &&
+        data.updatedAt is string && data.updatedAt.size() > 0 && data.updatedAt.size() <= 40 &&
+        hasNoPrivilegeFields(data);
+    }
+
+    function isValidCommerceConfig(data, configId) {
+      return configId == 'commerce' &&
+        data.keys().hasAll([
+          'configId', 'commerceEnabled', 'catalogVisible', 'checkoutEnabled',
+          'promotionsEnabled', 'advertisementsEnabled', 'paidClassesEnabled',
+          'subscriptionsEnabled', 'defaultCurrency', 'failClosedVerified'
+        ]) &&
+        data.keys().hasOnly([
+          'configId', 'commerceEnabled', 'catalogVisible', 'checkoutEnabled',
+          'promotionsEnabled', 'advertisementsEnabled', 'paidClassesEnabled',
+          'subscriptionsEnabled', 'defaultCurrency', 'updatedAt', 'updatedBy',
+          'updatedByEmail', 'lastActivationReason', 'failClosedVerified'
+        ]) &&
+        data.configId == 'commerce' &&
+        data.commerceEnabled is bool &&
+        data.catalogVisible is bool &&
+        data.checkoutEnabled is bool &&
+        data.promotionsEnabled is bool &&
+        data.advertisementsEnabled is bool &&
+        data.paidClassesEnabled is bool &&
+        data.subscriptionsEnabled is bool &&
+        data.failClosedVerified == true &&
+        data.defaultCurrency is string &&
+        data.defaultCurrency in ['BRL', 'USD', 'EUR'] &&
+        (!('updatedAt' in data) || data.updatedAt == null || (data.updatedAt is string && data.updatedAt.size() <= 40)) &&
+        (!('updatedBy' in data) || data.updatedBy == null || isValidId(data.updatedBy)) &&
+        (!('updatedByEmail' in data) || data.updatedByEmail == null || (data.updatedByEmail is string && data.updatedByEmail.size() <= 254)) &&
+        (!('lastActivationReason' in data) || data.lastActivationReason == null || (data.lastActivationReason is string && data.lastActivationReason.size() <= 500)) &&
+        hasNoPrivilegeFields(data);
+    }
+
+    // =========================================================================
+    // FASE 3: VALIDADORES DE PUBLICIDADE, TURMAS PAGAS, PEDIDOS, PAGAMENTOS,
+    // ASSINATURAS E FINANCEIRO (FAIL-CLOSED)
+    // =========================================================================
+    function commerceActiveAndAdsEnabled() {
+      return exists(/databases/$(database)/documents/platform_config/commerce) &&
+        get(/databases/$(database)/documents/platform_config/commerce).data.commerceEnabled == true &&
+        get(/databases/$(database)/documents/platform_config/commerce).data.advertisementsEnabled == true;
+    }
+
+    function commerceActiveAndPaidClassesEnabled() {
+      return exists(/databases/$(database)/documents/platform_config/commerce) &&
+        get(/databases/$(database)/documents/platform_config/commerce).data.commerceEnabled == true &&
+        get(/databases/$(database)/documents/platform_config/commerce).data.paidClassesEnabled == true;
+    }
+
+    function isValidAdvertisement(data, advertisementId) {
+      return data.keys().hasAll([
+          'advertisementId', 'title', 'description', 'ctaText', 'ctaDestination',
+          'targetAudience', 'eligibleStudentUids', 'position', 'imageVersion',
+          'previousStoragePaths', 'status', 'createdBy', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'advertisementId', 'title', 'subtitle', 'description', 'ctaText', 'ctaDestination',
+          'productId', 'targetAudience', 'eligibleStudentUids', 'position',
+          'imageUrl', 'storagePath', 'imageMimeType', 'imageSizeBytes', 'imageVersion',
+          'previousStoragePaths', 'startsAt', 'startsAtMs', 'endsAt', 'endsAtMs',
+          'status', 'isHomologation', 'createdBy', 'createdByEmail', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidId(data.advertisementId) &&
+        data.advertisementId == advertisementId &&
+        data.title is string && data.title.size() >= 3 && data.title.size() <= 120 &&
+        (!('subtitle' in data) || data.subtitle == null || (data.subtitle is string && data.subtitle.size() <= 200)) &&
+        data.description is string && data.description.size() <= 800 &&
+        data.ctaText is string && data.ctaText.size() >= 2 && data.ctaText.size() <= 60 &&
+        data.ctaDestination is string && data.ctaDestination.size() >= 1 && data.ctaDestination.size() <= 240 &&
+        (!('productId' in data) || data.productId == null || isValidId(data.productId)) &&
+        data.targetAudience is string && data.targetAudience in ['all', 'new_students', 'enrolled_students', 'specific_uids'] &&
+        data.eligibleStudentUids is list && data.eligibleStudentUids.size() <= 200 &&
+        data.position is string && data.position in ['home', 'courses', 'instruments', 'promotions', 'enrollments'] &&
+        (!('imageUrl' in data) || data.imageUrl == null || (data.imageUrl is string && data.imageUrl.size() <= 1024)) &&
+        (!('storagePath' in data) || data.storagePath == null || (data.storagePath is string && data.storagePath.size() <= 300)) &&
+        (!('imageMimeType' in data) || data.imageMimeType == null || (data.imageMimeType is string && data.imageMimeType in ['image/webp', 'image/png', 'image/jpeg'])) &&
+        (!('imageSizeBytes' in data) || data.imageSizeBytes == null || (data.imageSizeBytes is int && data.imageSizeBytes >= 0 && data.imageSizeBytes <= 5242880)) &&
+        data.imageVersion is int && data.imageVersion >= 0 &&
+        data.previousStoragePaths is list && data.previousStoragePaths.size() <= 100 &&
+        data.status is string && data.status in ['draft', 'active', 'paused', 'archived'] &&
+        isValidId(data.createdBy) &&
+        (!('createdByEmail' in data) || data.createdByEmail == null || (data.createdByEmail is string && data.createdByEmail.size() <= 254)) &&
+        data.createdAt is string && data.createdAt.size() > 0 && data.createdAt.size() <= 40 &&
+        data.updatedAt is string && data.updatedAt.size() > 0 && data.updatedAt.size() <= 40 &&
+        hasNoPrivilegeFields(data);
+    }
+
+    function isValidClassOffer(data, offerId) {
+      return data.keys().hasAll([
+          'offerId', 'classId', 'productId', 'priceId', 'capacity',
+          'reservedSeats', 'confirmedSeats', 'status', 'waitlistEnabled',
+          'createdBy', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'offerId', 'classId', 'className', 'productId', 'priceId', 'capacity',
+          'reservedSeats', 'confirmedSeats', 'registrationStartsAt', 'registrationStartsAtMs',
+          'registrationEndsAt', 'registrationEndsAtMs', 'status', 'waitlistEnabled',
+          'createdBy', 'createdByEmail', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidId(data.offerId) &&
+        data.offerId == offerId &&
+        isValidId(data.classId) &&
+        isValidId(data.productId) &&
+        isValidId(data.priceId) &&
+        data.capacity is int && data.capacity >= 1 && data.capacity <= 500 &&
+        data.reservedSeats is int && data.reservedSeats >= 0 &&
+        data.confirmedSeats is int && data.confirmedSeats >= 0 &&
+        (data.reservedSeats + data.confirmedSeats) <= data.capacity &&
+        data.status is string && data.status in ['draft', 'scheduled', 'open', 'closed', 'cancelled'] &&
+        data.waitlistEnabled is bool &&
+        isValidId(data.createdBy) &&
+        data.createdAt is string && data.createdAt.size() > 0 && data.createdAt.size() <= 40 &&
+        data.updatedAt is string && data.updatedAt.size() > 0 && data.updatedAt.size() <= 40 &&
+        hasNoPrivilegeFields(data);
+    }
+
+    function isValidFinancialAdjustment(data, adjustmentId) {
+      return data.keys().hasAll([
+          'adjustmentId', 'type', 'amountCents', 'currency', 'justification', 'actorUid', 'createdAt'
+        ]) &&
+        data.keys().hasOnly([
+          'adjustmentId', 'type', 'orderId', 'amountCents', 'currency', 'justification',
+          'actorUid', 'actorEmail', 'createdAt'
+        ]) &&
+        isValidId(data.adjustmentId) &&
+        data.adjustmentId == adjustmentId &&
+        data.type is string && data.type in ['reconciliation_note', 'manual_credit_note', 'refund_adjustment', 'chargeback_record'] &&
+        (!('orderId' in data) || data.orderId == null || isValidId(data.orderId)) &&
+        data.amountCents is int &&
+        data.currency is string && data.currency in ['BRL', 'USD', 'EUR'] &&
+        data.justification is string && data.justification.size() >= 10 && data.justification.size() <= 500 &&
+        isValidId(data.actorUid) &&
+        (!('actorEmail' in data) || data.actorEmail == null || (data.actorEmail is string && data.actorEmail.size() <= 254)) &&
+        data.createdAt is string && data.createdAt.size() > 0 && data.createdAt.size() <= 40 &&
         hasNoPrivilegeFields(data);
     }
 
@@ -645,6 +1017,242 @@ service cloud.firestore {
           (request.resource.data.actorRole == 'admin' && isAdmin())
         ) &&
         (isAdmin() || request.resource.data.source == 'client');
+      allow update, delete: if false;
+    }
+
+    // 13. Concessões Individuais de Acesso Gratuito (/course_access_grants/{grantId}):
+    // Alunos podem ler/listar APENAS suas próprias concessões; criação/alteração/exclusão restrita a Admin.
+    // Professores não possuem permissão de concessão administrativa individual.
+    match /course_access_grants/{grantId} {
+      allow get: if isValidId(grantId) && (isAdmin() || isOwner(resource.data.studentUid));
+      allow list: if isAdmin() || (isAuthenticated() && resource.data.studentUid == request.auth.uid);
+      allow create: if isAdmin() &&
+        isValidId(grantId) &&
+        isValidAccessGrant(request.resource.data, grantId) &&
+        request.resource.data.grantedBy == request.auth.uid;
+      allow update: if isAdmin() &&
+        isValidId(grantId) &&
+        isValidAccessGrant(request.resource.data, grantId) &&
+        request.resource.data.id == resource.data.id &&
+        request.resource.data.studentUid == resource.data.studentUid &&
+        request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if isAdmin() && isValidId(grantId);
+    }
+
+    // 14. Direcionamento Inicial no Currículo (/student_academic_placements/{placementId}):
+    // Alunos leem apenas o próprio direcionamento; criação/edição/limpeza restrita a Admin.
+    match /student_academic_placements/{placementId} {
+      allow get: if isValidId(placementId) && (isAdmin() || isOwner(resource.data.studentUid));
+      allow list: if isAdmin() || (isAuthenticated() && resource.data.studentUid == request.auth.uid);
+      allow create: if isAdmin() &&
+        isValidId(placementId) &&
+        isValidAcademicPlacement(request.resource.data, placementId) &&
+        request.resource.data.assignedBy == request.auth.uid;
+      allow update: if isAdmin() &&
+        isValidId(placementId) &&
+        isValidAcademicPlacement(request.resource.data, placementId) &&
+        request.resource.data.id == resource.data.id &&
+        request.resource.data.studentUid == resource.data.studentUid &&
+        request.resource.data.courseId == resource.data.courseId &&
+        request.resource.data.createdAt == resource.data.createdAt &&
+        request.resource.data.assignedBy == request.auth.uid;
+      allow delete: if isAdmin() && isValidId(placementId);
+    }
+
+    // 15. Catálogo Comercial (/products/{productId}):
+    // Produtos novos iniciam ocultos (visibility == 'hidden') e nunca são visíveis a alunos
+    // enquanto commerceEnabled ou catalogVisible estiverem false.
+    match /products/{productId} {
+      allow get: if isValidId(productId) && (
+        isAdmin() ||
+        (commerceActiveAndCatalogVisible() &&
+         resource.data.status == 'active' &&
+         resource.data.visibility == 'public')
+      );
+      allow list: if isAdmin() || (
+        commerceActiveAndCatalogVisible() &&
+        resource.data.status == 'active' &&
+        resource.data.visibility == 'public'
+      );
+      allow create: if isAdmin() &&
+        isValidId(productId) &&
+        isValidCommerceProduct(request.resource.data, productId) &&
+        request.resource.data.visibility == 'hidden' &&
+        request.resource.data.createdBy == request.auth.uid;
+      allow update: if isAdmin() &&
+        isValidId(productId) &&
+        isValidCommerceProduct(request.resource.data, productId) &&
+        request.resource.data.productId == resource.data.productId &&
+        request.resource.data.createdAt == resource.data.createdAt &&
+        request.resource.data.createdBy == resource.data.createdBy;
+      allow delete: if isAdmin() && isValidId(productId);
+    }
+
+    // 16. Preços e Planos Versionados (/product_prices/{priceId}):
+    // Preços históricos são IMUTÁVEIS (amount, amountCents, currency, billingInterval e version
+    // nunca podem ser alterados ou excluídos; alterações criam nova versão e marcam superseded).
+    match /product_prices/{priceId} {
+      allow get, list: if isAdmin() || (
+        commerceActiveAndCatalogVisible() &&
+        resource.data.status == 'active'
+      );
+      allow create: if isAdmin() &&
+        isValidId(priceId) &&
+        isValidCommercePrice(request.resource.data, priceId) &&
+        request.resource.data.createdBy == request.auth.uid;
+      allow update: if isAdmin() &&
+        isValidId(priceId) &&
+        isValidCommercePrice(request.resource.data, priceId) &&
+        request.resource.data.priceId == resource.data.priceId &&
+        request.resource.data.productId == resource.data.productId &&
+        request.resource.data.currency == resource.data.currency &&
+        request.resource.data.amount == resource.data.amount &&
+        request.resource.data.amountCents == resource.data.amountCents &&
+        request.resource.data.billingInterval == resource.data.billingInterval &&
+        request.resource.data.isPromotional == resource.data.isPromotional &&
+        request.resource.data.version == resource.data.version &&
+        request.resource.data.createdAt == resource.data.createdAt &&
+        request.resource.data.createdBy == resource.data.createdBy &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'supersededAt', 'supersededBy', 'notes']);
+      allow delete: if false;
+    }
+
+    // 17. Promoções e Cupons (/promotions/{promotionId}):
+    // Gestão e leitura restritas exclusivamente ao Admin; validação de cupons ocorre via servidor.
+    match /promotions/{promotionId} {
+      allow get, list: if isAdmin();
+      allow create: if isAdmin() &&
+        isValidId(promotionId) &&
+        isValidCommercePromotion(request.resource.data, promotionId) &&
+        request.resource.data.createdBy == request.auth.uid;
+      allow update: if isAdmin() &&
+        isValidId(promotionId) &&
+        isValidCommercePromotion(request.resource.data, promotionId) &&
+        request.resource.data.promotionId == resource.data.promotionId &&
+        request.resource.data.createdAt == resource.data.createdAt &&
+        request.resource.data.createdBy == resource.data.createdBy;
+      allow delete: if isAdmin() && isValidId(promotionId);
+    }
+
+    // 18. Configuração Global Comercial (/platform_config/{configId}):
+    // Alunos e professores não leem nem alteram a configuração comercial.
+    match /platform_config/{configId} {
+      allow get, list: if isAdmin();
+      allow create, update: if isAdmin() &&
+        configId == 'commerce' &&
+        isValidCommerceConfig(request.resource.data, configId);
+      allow delete: if false;
+    }
+
+    // =========================================================================
+    // FASE 3: PUBLICIDADE, TURMAS PAGAS, RESERVAS, LISTA DE ESPERA, PEDIDOS,
+    // PAGAMENTOS, WEBHOOKS, ASSINATURAS E FINANCEIRO (FAIL-CLOSED)
+    // =========================================================================
+
+    // 19. Anúncios e Campanhas (/advertisements/{advertisementId}):
+    // Alunos só leem se commerceEnabled == true e advertisementsEnabled == true e status == 'active'.
+    match /advertisements/{advertisementId} {
+      allow get, list: if isAdmin() || (
+        commerceActiveAndAdsEnabled() &&
+        resource.data.status == 'active'
+      );
+      allow create: if isAdmin() &&
+        isValidId(advertisementId) &&
+        isValidAdvertisement(request.resource.data, advertisementId) &&
+        request.resource.data.createdBy == request.auth.uid;
+      allow update: if isAdmin() &&
+        isValidId(advertisementId) &&
+        isValidAdvertisement(request.resource.data, advertisementId) &&
+        request.resource.data.advertisementId == resource.data.advertisementId &&
+        request.resource.data.createdAt == resource.data.createdAt &&
+        request.resource.data.createdBy == resource.data.createdBy;
+      allow delete: if isAdmin() && isValidId(advertisementId);
+    }
+
+    // 20. Ofertas Comerciais de Turmas (/class_offers/{offerId}):
+    // Alunos só leem ofertas abertas quando commerceEnabled == true e paidClassesEnabled == true.
+    match /class_offers/{offerId} {
+      allow get, list: if isAdmin() || (
+        commerceActiveAndPaidClassesEnabled() &&
+        resource.data.status in ['open', 'scheduled']
+      );
+      allow create: if isAdmin() &&
+        isValidId(offerId) &&
+        isValidClassOffer(request.resource.data, offerId) &&
+        request.resource.data.createdBy == request.auth.uid;
+      allow update: if isAdmin() &&
+        isValidId(offerId) &&
+        isValidClassOffer(request.resource.data, offerId) &&
+        request.resource.data.offerId == resource.data.offerId &&
+        request.resource.data.classId == resource.data.classId &&
+        request.resource.data.createdAt == resource.data.createdAt &&
+        request.resource.data.createdBy == resource.data.createdBy;
+      allow delete: if isAdmin() && isValidId(offerId);
+    }
+
+    // 21. Reservas de Vaga (/class_reservations/{reservationId}):
+    // Dono lê apenas a própria reserva; criação/alteração de vagas ocorre exclusivamente em transações no backend (Admin SDK) ou Admin.
+    match /class_reservations/{reservationId} {
+      allow get: if isValidId(reservationId) && (isAdmin() || isOwner(resource.data.studentUid));
+      allow list: if isAdmin() || (isAuthenticated() && resource.data.studentUid == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+
+    // 22. Lista de Espera (/class_waitlist/{waitlistId}):
+    // Dono lê apenas suas inscrições; ordenação e convocação ocorrem exclusivamente no backend (Admin SDK) ou Admin.
+    match /class_waitlist/{waitlistId} {
+      allow get: if isValidId(waitlistId) && (isAdmin() || isOwner(resource.data.studentUid));
+      allow list: if isAdmin() || (isAuthenticated() && resource.data.studentUid == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+
+    // 23. Pedidos Comerciais (/orders/{orderId}):
+    // Aluno lê apenas o próprio pedido; criação e alteração financeira são exclusivas do backend autoritativo.
+    match /orders/{orderId} {
+      allow get: if isValidId(orderId) && (isAdmin() || isOwner(resource.data.studentUid));
+      allow list: if isAdmin() || (isAuthenticated() && resource.data.studentUid == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+
+    // 24. Pagamentos (/payments/{paymentId}):
+    // Aluno lê apenas o próprio registro (sem dados de cartão); alteração exclusiva de backend/webhook autenticado.
+    match /payments/{paymentId} {
+      allow get: if isValidId(paymentId) && (isAdmin() || isOwner(resource.data.studentUid));
+      allow list: if isAdmin() || (isAuthenticated() && resource.data.studentUid == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+
+    // 25. Eventos Webhook de Pagamento (/payment_events/{eventId}):
+    // Acesso estritamente administrativo (leitura) e escrita exclusiva do servidor (Admin SDK).
+    match /payment_events/{eventId} {
+      allow get, list: if isAdmin();
+      allow write: if false;
+    }
+
+    // 26. Assinaturas (/subscriptions/{subscriptionId}):
+    // Aluno lê apenas sua assinatura; ciclo e renovação controlados pelo backend/Admin.
+    match /subscriptions/{subscriptionId} {
+      allow get: if isValidId(subscriptionId) && (isAdmin() || isOwner(resource.data.studentUid));
+      allow list: if isAdmin() || (isAuthenticated() && resource.data.studentUid == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+
+    // 27. Direitos Comerciais de Acesso (/commerce_entitlements/{entitlementId}):
+    // Separado de course_access_grants (Fase 1); leitura do dono ou Admin; escrita exclusiva do backend.
+    match /commerce_entitlements/{entitlementId} {
+      allow get: if isValidId(entitlementId) && (isAdmin() || isOwner(resource.data.studentUid));
+      allow list: if isAdmin() || (isAuthenticated() && resource.data.studentUid == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+
+    // 28. Ajustes Financeiros Auditados (/financial_adjustments/{adjustmentId}):
+    // Acesso exclusivo de administradores; registros imutáveis (sem update ou delete). Professores e alunos bloqueados.
+    match /financial_adjustments/{adjustmentId} {
+      allow get, list: if isAdmin();
+      allow create: if isAdmin() &&
+        isValidId(adjustmentId) &&
+        isValidFinancialAdjustment(request.resource.data, adjustmentId) &&
+        request.resource.data.actorUid == request.auth.uid;
       allow update, delete: if false;
     }
 

@@ -225,7 +225,33 @@
             "security_audit_viewed",
             "auth_token_rejected",
             "role_access_denied",
-            "admin_role_lookup"
+            "admin_role_lookup",
+            "course_access_granted",
+            "course_access_updated",
+            "course_access_revoked",
+            "course_access_reactivated",
+            "student_placement_updated",
+            "commerce_product_created",
+            "commerce_product_updated",
+            "commerce_price_version_created",
+            "commerce_promotion_created",
+            "commerce_promotion_updated",
+            "commerce_coupon_updated",
+            "commerce_config_updated",
+            "commerce_unauthorized_attempt",
+            "commerce_advertisement_created",
+            "commerce_advertisement_updated",
+            "commerce_advertisement_image_uploaded",
+            "commerce_class_offer_created",
+            "commerce_class_offer_updated",
+            "commerce_reservation_updated",
+            "commerce_waitlist_summoned",
+            "commerce_order_created",
+            "commerce_payment_confirmed",
+            "commerce_payment_invalid",
+            "commerce_payment_refunded",
+            "commerce_subscription_updated",
+            "commerce_financial_adjustment"
           ],
           "description": "Categoria do evento de segurança ou autenticação"
         },
@@ -278,6 +304,427 @@
         }
       },
       "required": ["id", "eventType", "severity", "actorUid", "actorRole", "action", "source", "timestamp"]
+    },
+    "CourseAccessGrant": {
+      "title": "CourseAccessGrant",
+      "description": "Concessão administrativa individual de acesso gratuito (curso, instrumento, módulo, aula ou intervalo)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "studentUid": { "type": "string", "maxLength": 128 },
+        "scopeType": { "type": "string", "enum": ["course", "instrument", "module", "lesson", "lesson_range"] },
+        "grantType": { "type": "string", "enum": ["permanent", "temporary", "trial", "special"] },
+        "source": { "type": "string", "enum": ["admin_permanent", "admin_temporary", "admin_trial", "admin_special"] },
+        "status": { "type": "string", "enum": ["active", "suspended", "revoked", "expired"] },
+        "courseId": { "type": "string", "maxLength": 64 },
+        "instrumentId": { "type": "string", "maxLength": 64 },
+        "moduleId": { "type": "string", "maxLength": 128 },
+        "lessonId": { "type": "string", "maxLength": 128 },
+        "rangeStartLessonId": { "type": "string", "maxLength": 128 },
+        "rangeEndLessonId": { "type": "string", "maxLength": 128 },
+        "lessonIds": { "type": "array", "items": { "type": "string" } },
+        "startsAt": { "type": "string", "maxLength": 40 },
+        "startsAtMs": { "type": "integer" },
+        "expiresAt": { "type": "string", "maxLength": 40 },
+        "expiresAtMs": { "type": "integer" },
+        "reason": { "type": "string", "maxLength": 500 },
+        "idempotencyKey": { "type": "string", "maxLength": 300 },
+        "grantedBy": { "type": "string", "maxLength": 128 },
+        "grantedByEmail": { "type": "string", "maxLength": 254 },
+        "revokedBy": { "type": "string", "maxLength": 128 },
+        "revokedAt": { "type": "string", "maxLength": 40 },
+        "statusReason": { "type": "string", "maxLength": 500 },
+        "createdAt": { "type": "string", "maxLength": 40 },
+        "updatedAt": { "type": "string", "maxLength": 40 }
+      },
+      "required": ["id", "studentUid", "scopeType", "grantType", "source", "status", "idempotencyKey", "grantedBy", "createdAt", "updatedAt"]
+    },
+    "StudentAcademicPlacement": {
+      "title": "StudentAcademicPlacement",
+      "description": "Direcionamento administrativo do ponto inicial do aluno no currículo sem perda de progresso anterior",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "studentUid": { "type": "string", "maxLength": 128 },
+        "courseId": { "type": "string", "maxLength": 64 },
+        "moduleId": { "type": "string", "maxLength": 128 },
+        "moduleNumber": { "type": "integer" },
+        "lessonId": { "type": "string", "maxLength": 128 },
+        "mode": { "type": "string", "enum": ["custom_start", "default_path"] },
+        "status": { "type": "string", "enum": ["active", "cleared"] },
+        "reason": { "type": "string", "maxLength": 500 },
+        "assignedBy": { "type": "string", "maxLength": 128 },
+        "assignedByEmail": { "type": "string", "maxLength": 254 },
+        "createdAt": { "type": "string", "maxLength": 40 },
+        "updatedAt": { "type": "string", "maxLength": 40 }
+      },
+      "required": ["id", "studentUid", "courseId", "lessonId", "mode", "status", "assignedBy", "createdAt", "updatedAt"]
+    },
+    "CommerceProduct": {
+      "title": "CommerceProduct",
+      "description": "Produto comercial do catálogo estruturado da Guitar Academy (inicia oculto por padrão)",
+      "type": "object",
+      "properties": {
+        "productId": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 120 },
+        "description": { "type": "string", "maxLength": 800 },
+        "productType": {
+          "type": "string",
+          "enum": ["individual_course", "instrument_bundle", "subscription_plan", "lifetime_access", "experimental_course", "paid_class_offer"]
+        },
+        "courseIds": { "type": "array", "items": { "type": "string" } },
+        "status": { "type": "string", "enum": ["draft", "active", "archived"] },
+        "visibility": { "type": "string", "enum": ["hidden", "public"] },
+        "linkedClassId": { "type": "string", "maxLength": 128 },
+        "notes": { "type": "string", "maxLength": 500 },
+        "createdAt": { "type": "string", "maxLength": 40 },
+        "updatedAt": { "type": "string", "maxLength": 40 },
+        "createdBy": { "type": "string", "maxLength": 128 },
+        "createdByEmail": { "type": "string", "maxLength": 254 }
+      },
+      "required": ["productId", "name", "description", "productType", "courseIds", "status", "visibility", "createdAt", "updatedAt", "createdBy"]
+    },
+    "CommerceProductPrice": {
+      "title": "CommerceProductPrice",
+      "description": "Versão imutável de preço ou plano vinculado a um produto comercial",
+      "type": "object",
+      "properties": {
+        "priceId": { "type": "string", "maxLength": 128 },
+        "productId": { "type": "string", "maxLength": 128 },
+        "currency": { "type": "string", "enum": ["BRL", "USD", "EUR"] },
+        "amount": { "type": "number" },
+        "amountCents": { "type": "integer" },
+        "billingInterval": { "type": "string", "enum": ["one_time", "monthly", "semiannual", "annual", "lifetime"] },
+        "isPromotional": { "type": "boolean" },
+        "promotionalLabel": { "type": "string", "maxLength": 80 },
+        "version": { "type": "integer" },
+        "previousPriceId": { "type": "string", "maxLength": 128 },
+        "status": { "type": "string", "enum": ["active", "superseded", "archived"] },
+        "validFrom": { "type": "string", "maxLength": 40 },
+        "validFromMs": { "type": "integer" },
+        "validUntil": { "type": "string", "maxLength": 40 },
+        "validUntilMs": { "type": "integer" },
+        "notes": { "type": "string", "maxLength": 500 },
+        "createdAt": { "type": "string", "maxLength": 40 },
+        "createdBy": { "type": "string", "maxLength": 128 },
+        "createdByEmail": { "type": "string", "maxLength": 254 },
+        "supersededAt": { "type": "string", "maxLength": 40 },
+        "supersededBy": { "type": "string", "maxLength": 128 }
+      },
+      "required": ["priceId", "productId", "currency", "amount", "amountCents", "billingInterval", "isPromotional", "version", "status", "createdAt", "createdBy"]
+    },
+    "CommercePromotion": {
+      "title": "CommercePromotion",
+      "description": "Promoção ou cupom comercial validado no servidor com controle de validade e limite",
+      "type": "object",
+      "properties": {
+        "promotionId": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 120 },
+        "description": { "type": "string", "maxLength": 500 },
+        "code": { "type": "string", "maxLength": 40 },
+        "discountType": { "type": "string", "enum": ["percentage", "fixed_amount"] },
+        "discountValue": { "type": "number" },
+        "scopeType": { "type": "string", "enum": ["all_products", "product", "course", "bundle"] },
+        "targetProductIds": { "type": "array", "items": { "type": "string" } },
+        "targetCourseIds": { "type": "array", "items": { "type": "string" } },
+        "startsAt": { "type": "string", "maxLength": 40 },
+        "startsAtMs": { "type": "integer" },
+        "endsAt": { "type": "string", "maxLength": 40 },
+        "endsAtMs": { "type": "integer" },
+        "maxRedemptions": { "type": "integer" },
+        "maxPerStudent": { "type": "integer" },
+        "redeemedCount": { "type": "integer" },
+        "eligibleAudience": { "type": "string", "enum": ["all", "new_students", "enrolled_students", "specific_uids"] },
+        "eligibleStudentUids": { "type": "array", "items": { "type": "string" } },
+        "status": { "type": "string", "enum": ["draft", "active", "paused", "ended"] },
+        "createdAt": { "type": "string", "maxLength": 40 },
+        "updatedAt": { "type": "string", "maxLength": 40 },
+        "createdBy": { "type": "string", "maxLength": 128 },
+        "createdByEmail": { "type": "string", "maxLength": 254 }
+      },
+      "required": ["promotionId", "name", "discountType", "discountValue", "scopeType", "targetProductIds", "targetCourseIds", "redeemedCount", "eligibleAudience", "eligibleStudentUids", "status", "createdAt", "updatedAt", "createdBy"]
+    },
+    "CommerceGlobalConfig": {
+      "title": "CommerceGlobalConfig",
+      "description": "Interruptor global fail-closed do modo pago (permanece false por padrão até ativação administrativa explícita)",
+      "type": "object",
+      "properties": {
+        "configId": { "type": "string", "enum": ["commerce"] },
+        "commerceEnabled": { "type": "boolean" },
+        "catalogVisible": { "type": "boolean" },
+        "checkoutEnabled": { "type": "boolean" },
+        "promotionsEnabled": { "type": "boolean" },
+        "advertisementsEnabled": { "type": "boolean" },
+        "paidClassesEnabled": { "type": "boolean" },
+        "subscriptionsEnabled": { "type": "boolean" },
+        "defaultCurrency": { "type": "string", "enum": ["BRL", "USD", "EUR"] },
+        "updatedAt": { "type": "string", "maxLength": 40 },
+        "updatedBy": { "type": "string", "maxLength": 128 },
+        "updatedByEmail": { "type": "string", "maxLength": 254 },
+        "lastActivationReason": { "type": "string", "maxLength": 500 },
+        "failClosedVerified": { "type": "boolean" }
+      },
+      "required": ["configId", "commerceEnabled", "catalogVisible", "checkoutEnabled", "promotionsEnabled", "advertisementsEnabled", "paidClassesEnabled", "subscriptionsEnabled", "defaultCurrency", "failClosedVerified"]
+    },
+    "CommerceAdvertisement": {
+      "title": "CommerceAdvertisement",
+      "description": "Anúncio ou campanha promocional gerenciada exclusivamente por administradores com banner no Firebase Storage",
+      "type": "object",
+      "properties": {
+        "advertisementId": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 120 },
+        "subtitle": { "type": "string", "maxLength": 200 },
+        "description": { "type": "string", "maxLength": 800 },
+        "ctaText": { "type": "string", "maxLength": 60 },
+        "ctaDestination": { "type": "string", "maxLength": 240 },
+        "productId": { "type": "string", "maxLength": 128 },
+        "targetAudience": { "type": "string", "enum": ["all", "new_students", "enrolled_students", "specific_uids"] },
+        "eligibleStudentUids": { "type": "array", "items": { "type": "string" } },
+        "position": { "type": "string", "enum": ["home", "courses", "instruments", "promotions", "enrollments"] },
+        "imageUrl": { "type": "string", "maxLength": 1024 },
+        "storagePath": { "type": "string", "maxLength": 300 },
+        "imageMimeType": { "type": "string", "enum": ["image/webp", "image/png", "image/jpeg"] },
+        "imageSizeBytes": { "type": "integer" },
+        "imageVersion": { "type": "integer" },
+        "previousStoragePaths": { "type": "array", "items": { "type": "string" } },
+        "startsAt": { "type": "string", "maxLength": 40 },
+        "startsAtMs": { "type": "integer" },
+        "endsAt": { "type": "string", "maxLength": 40 },
+        "endsAtMs": { "type": "integer" },
+        "status": { "type": "string", "enum": ["draft", "active", "paused", "archived"] },
+        "isHomologation": { "type": "boolean" },
+        "createdBy": { "type": "string", "maxLength": 128 },
+        "createdByEmail": { "type": "string", "maxLength": 254 },
+        "createdAt": { "type": "string", "maxLength": 40 },
+        "updatedAt": { "type": "string", "maxLength": 40 }
+      },
+      "required": ["advertisementId", "title", "description", "ctaText", "ctaDestination", "targetAudience", "eligibleStudentUids", "position", "imageVersion", "previousStoragePaths", "status", "createdBy", "createdAt", "updatedAt"]
+    },
+    "CommerceClassOffer": {
+      "title": "CommerceClassOffer",
+      "description": "Oferta comercial vinculada a uma turma existente sem duplicar ou recriar turmas acadêmicas",
+      "type": "object",
+      "properties": {
+        "offerId": { "type": "string", "maxLength": 128 },
+        "classId": { "type": "string", "maxLength": 128 },
+        "className": { "type": "string", "maxLength": 120 },
+        "productId": { "type": "string", "maxLength": 128 },
+        "priceId": { "type": "string", "maxLength": 128 },
+        "capacity": { "type": "integer" },
+        "reservedSeats": { "type": "integer" },
+        "confirmedSeats": { "type": "integer" },
+        "registrationStartsAt": { "type": "string", "maxLength": 40 },
+        "registrationStartsAtMs": { "type": "integer" },
+        "registrationEndsAt": { "type": "string", "maxLength": 40 },
+        "registrationEndsAtMs": { "type": "integer" },
+        "status": { "type": "string", "enum": ["draft", "scheduled", "open", "closed", "cancelled"] },
+        "waitlistEnabled": { "type": "boolean" },
+        "createdBy": { "type": "string", "maxLength": 128 },
+        "createdByEmail": { "type": "string", "maxLength": 254 },
+        "createdAt": { "type": "string", "maxLength": 40 },
+        "updatedAt": { "type": "string", "maxLength": 40 }
+      },
+      "required": ["offerId", "classId", "productId", "priceId", "capacity", "reservedSeats", "confirmedSeats", "status", "waitlistEnabled", "createdBy", "createdAt", "updatedAt"]
+    },
+    "ClassReservation": {
+      "title": "ClassReservation",
+      "description": "Reserva temporária de vaga em turma paga antes da confirmação de pagamento",
+      "type": "object",
+      "properties": {
+        "reservationId": { "type": "string", "maxLength": 128 },
+        "offerId": { "type": "string", "maxLength": 128 },
+        "classId": { "type": "string", "maxLength": 128 },
+        "studentUid": { "type": "string", "maxLength": 128 },
+        "studentEmail": { "type": "string", "maxLength": 254 },
+        "orderId": { "type": "string", "maxLength": 128 },
+        "priceId": { "type": "string", "maxLength": 128 },
+        "status": { "type": "string", "enum": ["pending_payment", "confirmed", "expired", "cancelled", "refunded"] },
+        "expiresAt": { "type": "string", "maxLength": 40 },
+        "expiresAtMs": { "type": "integer" },
+        "confirmedAt": { "type": "string", "maxLength": 40 },
+        "cancelledAt": { "type": "string", "maxLength": 40 },
+        "refundedAt": { "type": "string", "maxLength": 40 },
+        "waitlistEntryId": { "type": "string", "maxLength": 128 },
+        "idempotencyKey": { "type": "string", "maxLength": 300 },
+        "createdAt": { "type": "string", "maxLength": 40 },
+        "updatedAt": { "type": "string", "maxLength": 40 }
+      },
+      "required": ["reservationId", "offerId", "classId", "studentUid", "priceId", "status", "expiresAt", "expiresAtMs", "idempotencyKey", "createdAt", "updatedAt"]
+    },
+    "ClassWaitlistEntry": {
+      "title": "ClassWaitlistEntry",
+      "description": "Inscrição ordenada em lista de espera de turma paga sem garantia automática de vaga",
+      "type": "object",
+      "properties": {
+        "waitlistId": { "type": "string", "maxLength": 128 },
+        "offerId": { "type": "string", "maxLength": 128 },
+        "classId": { "type": "string", "maxLength": 128 },
+        "studentUid": { "type": "string", "maxLength": 128 },
+        "studentEmail": { "type": "string", "maxLength": 254 },
+        "joinedAt": { "type": "string", "maxLength": 40 },
+        "joinedAtMs": { "type": "integer" },
+        "priorityOrder": { "type": "integer" },
+        "status": { "type": "string", "enum": ["waiting", "summoned", "converted", "expired", "cancelled"] },
+        "summonedAt": { "type": "string", "maxLength": 40 },
+        "summonedAtMs": { "type": "integer" },
+        "responseDeadlineAt": { "type": "string", "maxLength": 40 },
+        "responseDeadlineAtMs": { "type": "integer" },
+        "convertedReservationId": { "type": "string", "maxLength": 128 },
+        "history": { "type": "array" },
+        "createdAt": { "type": "string", "maxLength": 40 },
+        "updatedAt": { "type": "string", "maxLength": 40 }
+      },
+      "required": ["waitlistId", "offerId", "classId", "studentUid", "joinedAt", "joinedAtMs", "priorityOrder", "status", "history", "createdAt", "updatedAt"]
+    },
+    "CommerceOrder": {
+      "title": "CommerceOrder",
+      "description": "Pedido comercial com cálculo autoritativo no backend e snapshots imutáveis de preço e promoção",
+      "type": "object",
+      "properties": {
+        "orderId": { "type": "string", "maxLength": 128 },
+        "studentUid": { "type": "string", "maxLength": 128 },
+        "studentEmail": { "type": "string", "maxLength": 254 },
+        "items": { "type": "array" },
+        "subtotal": { "type": "number" },
+        "subtotalCents": { "type": "integer" },
+        "discount": { "type": "number" },
+        "discountCents": { "type": "integer" },
+        "total": { "type": "number" },
+        "totalCents": { "type": "integer" },
+        "currency": { "type": "string", "enum": ["BRL", "USD", "EUR"] },
+        "status": { "type": "string", "enum": ["pending", "paid", "failed", "cancelled", "refunded", "partially_refunded"] },
+        "priceSnapshot": { "type": "object" },
+        "promotionSnapshot": { "type": "object" },
+        "createdAt": { "type": "string", "maxLength": 40 },
+        "updatedAt": { "type": "string", "maxLength": 40 },
+        "providerReference": { "type": "string", "maxLength": 200 },
+        "providerName": { "type": "string", "maxLength": 64 },
+        "idempotencyKey": { "type": "string", "maxLength": 300 },
+        "paidAt": { "type": "string", "maxLength": 40 },
+        "refundedAt": { "type": "string", "maxLength": 40 },
+        "refundedAmountCents": { "type": "integer" },
+        "reservationId": { "type": "string", "maxLength": 128 },
+        "subscriptionId": { "type": "string", "maxLength": 128 },
+        "isHomologation": { "type": "boolean" }
+      },
+      "required": ["orderId", "studentUid", "items", "subtotal", "subtotalCents", "discount", "discountCents", "total", "totalCents", "currency", "status", "priceSnapshot", "createdAt", "updatedAt", "idempotencyKey", "refundedAmountCents"]
+    },
+    "CommercePayment": {
+      "title": "CommercePayment",
+      "description": "Registro de pagamento desacoplado de provedor sem armazenar dados sensíveis de cartão",
+      "type": "object",
+      "properties": {
+        "paymentId": { "type": "string", "maxLength": 128 },
+        "orderId": { "type": "string", "maxLength": 128 },
+        "studentUid": { "type": "string", "maxLength": 128 },
+        "provider": { "type": "string", "maxLength": 64 },
+        "providerReference": { "type": "string", "maxLength": 200 },
+        "method": { "type": "string", "maxLength": 64 },
+        "amount": { "type": "number" },
+        "amountCents": { "type": "integer" },
+        "currency": { "type": "string", "enum": ["BRL", "USD", "EUR"] },
+        "status": { "type": "string", "enum": ["pending", "authorized", "paid", "failed", "cancelled", "refunded", "partially_refunded"] },
+        "idempotencyKey": { "type": "string", "maxLength": 300 },
+        "paidAt": { "type": "string", "maxLength": 40 },
+        "refundedAmountCents": { "type": "integer" },
+        "failureReason": { "type": "string", "maxLength": 400 },
+        "isHomologation": { "type": "boolean" },
+        "createdAt": { "type": "string", "maxLength": 40 },
+        "updatedAt": { "type": "string", "maxLength": 40 }
+      },
+      "required": ["paymentId", "orderId", "studentUid", "provider", "providerReference", "method", "amount", "amountCents", "currency", "status", "idempotencyKey", "refundedAmountCents", "createdAt", "updatedAt"]
+    },
+    "CommercePaymentEvent": {
+      "title": "CommercePaymentEvent",
+      "description": "Log idempotente de eventos webhook autenticados por HMAC-SHA256",
+      "type": "object",
+      "properties": {
+        "eventId": { "type": "string", "maxLength": 128 },
+        "provider": { "type": "string", "maxLength": 64 },
+        "providerEventId": { "type": "string", "maxLength": 200 },
+        "eventType": { "type": "string", "maxLength": 80 },
+        "orderId": { "type": "string", "maxLength": 128 },
+        "paymentId": { "type": "string", "maxLength": 128 },
+        "providerReference": { "type": "string", "maxLength": 200 },
+        "amountCents": { "type": "integer" },
+        "currency": { "type": "string", "enum": ["BRL", "USD", "EUR"] },
+        "signatureVerified": { "type": "boolean" },
+        "processingStatus": { "type": "string", "enum": ["processed", "ignored_duplicate", "rejected"] },
+        "rejectionReason": { "type": "string", "maxLength": 400 },
+        "payloadDigest": { "type": "string", "maxLength": 128 },
+        "processedAt": { "type": "string", "maxLength": 40 },
+        "createdAt": { "type": "string", "maxLength": 40 }
+      },
+      "required": ["eventId", "provider", "providerEventId", "eventType", "signatureVerified", "processingStatus", "payloadDigest", "processedAt", "createdAt"]
+    },
+    "CommerceSubscription": {
+      "title": "CommerceSubscription",
+      "description": "Assinatura recorrente vinculada ao ciclo de cobrança sem alterar histórico pedagógico",
+      "type": "object",
+      "properties": {
+        "subscriptionId": { "type": "string", "maxLength": 128 },
+        "studentUid": { "type": "string", "maxLength": 128 },
+        "studentEmail": { "type": "string", "maxLength": 254 },
+        "productId": { "type": "string", "maxLength": 128 },
+        "priceId": { "type": "string", "maxLength": 128 },
+        "courseIds": { "type": "array", "items": { "type": "string" } },
+        "billingInterval": { "type": "string", "enum": ["one_time", "monthly", "semiannual", "annual", "lifetime"] },
+        "amountCents": { "type": "integer" },
+        "currency": { "type": "string", "enum": ["BRL", "USD", "EUR"] },
+        "status": { "type": "string", "enum": ["trialing", "active", "past_due", "paused", "cancelled", "expired"] },
+        "startedAt": { "type": "string", "maxLength": 40 },
+        "currentPeriodStartAt": { "type": "string", "maxLength": 40 },
+        "currentPeriodEndAt": { "type": "string", "maxLength": 40 },
+        "nextRenewalAt": { "type": "string", "maxLength": 40 },
+        "expiresAt": { "type": "string", "maxLength": 40 },
+        "expiresAtMs": { "type": "integer" },
+        "pausedAt": { "type": "string", "maxLength": 40 },
+        "cancelledAt": { "type": "string", "maxLength": 40 },
+        "cancelReason": { "type": "string", "maxLength": 400 },
+        "billingHistory": { "type": "array" },
+        "entitlementId": { "type": "string", "maxLength": 128 },
+        "isHomologation": { "type": "boolean" },
+        "createdAt": { "type": "string", "maxLength": 40 },
+        "updatedAt": { "type": "string", "maxLength": 40 }
+      },
+      "required": ["subscriptionId", "studentUid", "productId", "priceId", "courseIds", "billingInterval", "amountCents", "currency", "status", "startedAt", "currentPeriodStartAt", "currentPeriodEndAt", "billingHistory", "entitlementId", "createdAt", "updatedAt"]
+    },
+    "CommerceEntitlementRecord": {
+      "title": "CommerceEntitlementRecord",
+      "description": "Direito comercial de acesso distinto de concessões administrativas gratuitas da Fase 1",
+      "type": "object",
+      "properties": {
+        "entitlementId": { "type": "string", "maxLength": 128 },
+        "studentUid": { "type": "string", "maxLength": 128 },
+        "type": { "type": "string", "enum": ["purchase", "subscription"] },
+        "sourceId": { "type": "string", "maxLength": 128 },
+        "orderId": { "type": "string", "maxLength": 128 },
+        "productId": { "type": "string", "maxLength": 128 },
+        "courseIds": { "type": "array", "items": { "type": "string" } },
+        "status": { "type": "string", "enum": ["active", "expired", "revoked", "cancelled"] },
+        "expiresAt": { "type": "string", "maxLength": 40 },
+        "expiresAtMs": { "type": "integer" },
+        "createdAt": { "type": "string", "maxLength": 40 },
+        "updatedAt": { "type": "string", "maxLength": 40 }
+      },
+      "required": ["entitlementId", "studentUid", "type", "sourceId", "productId", "courseIds", "status", "createdAt", "updatedAt"]
+    },
+    "FinancialAdjustmentRecord": {
+      "title": "FinancialAdjustmentRecord",
+      "description": "Ajuste financeiro administrativo imutável com justificativa obrigatória e auditoria",
+      "type": "object",
+      "properties": {
+        "adjustmentId": { "type": "string", "maxLength": 128 },
+        "type": { "type": "string", "enum": ["reconciliation_note", "manual_credit_note", "refund_adjustment", "chargeback_record"] },
+        "orderId": { "type": "string", "maxLength": 128 },
+        "amountCents": { "type": "integer" },
+        "currency": { "type": "string", "enum": ["BRL", "USD", "EUR"] },
+        "justification": { "type": "string", "maxLength": 500 },
+        "actorUid": { "type": "string", "maxLength": 128 },
+        "actorEmail": { "type": "string", "maxLength": 254 },
+        "createdAt": { "type": "string", "maxLength": 40 }
+      },
+      "required": ["adjustmentId", "type", "amountCents", "currency", "justification", "actorUid", "createdAt"]
     }
   },
   "firestore": {
@@ -336,6 +783,70 @@
     "/admin_logs/{logId}": {
       "schema": "AdminLogEntry",
       "description": "Registros imutáveis de auditoria de segurança e eventos de autenticação"
+    },
+    "/course_access_grants/{grantId}": {
+      "schema": "CourseAccessGrant",
+      "description": "Concessões individuais administrativas de acesso gratuito por curso, instrumento, módulo ou aula"
+    },
+    "/student_academic_placements/{placementId}": {
+      "schema": "StudentAcademicPlacement",
+      "description": "Direcionamento inicial administrativo de curso, módulo e aula preservando histórico do aluno"
+    },
+    "/products/{productId}": {
+      "schema": "CommerceProduct",
+      "description": "Catálogo comercial de produtos estruturados (iniciam ocultos por padrão)"
+    },
+    "/product_prices/{priceId}": {
+      "schema": "CommerceProductPrice",
+      "description": "Versões históricas imutáveis de preços e planos comerciais"
+    },
+    "/promotions/{promotionId}": {
+      "schema": "CommercePromotion",
+      "description": "Promoções e cupons comerciais gerenciados exclusivamente pelo administrador"
+    },
+    "/platform_config/{configId}": {
+      "schema": "CommerceGlobalConfig",
+      "description": "Configuração global comercial fail-closed (documento 'commerce' inicia todo false)"
+    },
+    "/advertisements/{advertisementId}": {
+      "schema": "CommerceAdvertisement",
+      "description": "Campanhas publicitárias internas bloqueadas quando advertisementsEnabled == false"
+    },
+    "/class_offers/{offerId}": {
+      "schema": "CommerceClassOffer",
+      "description": "Ofertas comerciais vinculadas a turmas pedagógicas existentes"
+    },
+    "/class_reservations/{reservationId}": {
+      "schema": "ClassReservation",
+      "description": "Reservas temporárias de vaga com expiração e proteção de concorrência"
+    },
+    "/class_waitlist/{waitlistId}": {
+      "schema": "ClassWaitlistEntry",
+      "description": "Lista de espera ordenada por prioridade sem reserva automática de vaga"
+    },
+    "/orders/{orderId}": {
+      "schema": "CommerceOrder",
+      "description": "Pedidos comerciais com snapshots imutáveis de preço e promoção"
+    },
+    "/payments/{paymentId}": {
+      "schema": "CommercePayment",
+      "description": "Pagamentos desacoplados de provedor sem armazenamento de dados de cartão"
+    },
+    "/payment_events/{eventId}": {
+      "schema": "CommercePaymentEvent",
+      "description": "Eventos webhook validados com idempotência transacional (acesso somente Admin/Server)"
+    },
+    "/subscriptions/{subscriptionId}": {
+      "schema": "CommerceSubscription",
+      "description": "Assinaturas recorrentes comerciais com histórico de cobrança"
+    },
+    "/commerce_entitlements/{entitlementId}": {
+      "schema": "CommerceEntitlementRecord",
+      "description": "Direitos comerciais distintos de concessões administrativas gratuitas da Fase 1"
+    },
+    "/financial_adjustments/{adjustmentId}": {
+      "schema": "FinancialAdjustmentRecord",
+      "description": "Registros imutáveis de ajustes financeiros com justificativa administrativa obrigatória"
     }
   }
 }

@@ -27,7 +27,8 @@ import {
   Grid,
   ArrowRight,
   KeyRound,
-  Users
+  Users,
+  Compass
 } from 'lucide-react';
 import { StudentEnrolledClassInfo } from '../../types/teacher';
 import { LESSON_TO_SKILL_MAP, createInitialPedagogicalProfile } from '../../pedagogy/adaptiveEngine';
@@ -40,6 +41,13 @@ import {
   getPrimaryCourseId,
   getCatalogCoursesStatus
 } from '../../academia/progress/unlockGate';
+import type { StudentEffectiveAccessSnapshot } from '../../types/accessControl';
+import {
+  canStudentAccessCourse,
+  canStudentAccessModule,
+  resolveStudentAccessSnapshot,
+} from '../../services/accessAuthorizationEngine';
+import { getCatalogLesson } from '../../services/academicCatalog';
 import { useChordModal } from '../../contexts/ChordModalContext';
 import { CourseVisualBanner } from './CourseVisualBanner';
 import { getCourseModuleVisual } from '../../data/courseLessonVisuals';
@@ -51,6 +59,7 @@ interface CurriculumViewProps {
   onSelectLesson: (lessonId: string) => void;
   onOpenJoinClass?: () => void;
   studentEnrollments?: StudentEnrolledClassInfo[];
+  accessSnapshot?: StudentEffectiveAccessSnapshot;
 }
 
 export const CurriculumView: React.FC<CurriculumViewProps> = ({
@@ -58,17 +67,41 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({
   onSelectLesson,
   onOpenJoinClass,
   studentEnrollments = [],
+  accessSnapshot,
 }) => {
   const { toggleChord, isChordOpen } = useChordModal();
   const primaryCourseId = getPrimaryCourseId(progress);
   const catalogStatus = getCatalogCoursesStatus(progress);
 
-  // Track selector: 'violao' (Domínio Total do Violão — 60 Aulas) vs 'solo' (Guitarra Solo - 20 Aulas) vs 'conservatory' (Conservatório Geral - 18 Aulas)
-  // Active track selection: violao | canonical | solo | baixo | teclado | bateria
-  const [activeTrack, setActiveTrack] = useState<OfficialCourseId>(primaryCourseId);
-  const [activeViolaoModule, setActiveViolaoModule] = useState<number>(1);
-  const [activeSoloStage, setActiveSoloStage] = useState<number>(1);
-  const [activeLevelIndex, setActiveLevelIndex] = useState<number>(0);
+  const effectiveSnapshot =
+    accessSnapshot ||
+    resolveStudentAccessSnapshot({
+      studentUid: 'local',
+      progress,
+      enrollments: studentEnrollments,
+    });
+
+  const initialDirectedCourse =
+    effectiveSnapshot.primaryPlacement?.isAccessible
+      ? effectiveSnapshot.primaryPlacement.courseId
+      : primaryCourseId;
+
+  // Track selector: violao | canonical | solo | baixo | teclado | bateria
+  const [activeTrack, setActiveTrack] = useState<OfficialCourseId>(initialDirectedCourse);
+  const [activeViolaoModule, setActiveViolaoModule] = useState<number>(() => {
+    const p = effectiveSnapshot.activePlacementsByCourse.violao;
+    return p?.isAccessible ? p.moduleNumber : 1;
+  });
+  const [activeSoloStage, setActiveSoloStage] = useState<number>(() => {
+    const p = effectiveSnapshot.activePlacementsByCourse.solo;
+    return p?.isAccessible ? p.moduleNumber : 1;
+  });
+  const [activeLevelIndex, setActiveLevelIndex] = useState<number>(() => {
+    const p = effectiveSnapshot.activePlacementsByCourse[initialDirectedCourse];
+    return p?.isAccessible && ['canonical', 'baixo', 'teclado', 'bateria'].includes(initialDirectedCourse)
+      ? Math.max(0, p.moduleNumber - 1)
+      : 0;
+  });
 
   const activeLevel = CURRICULUM_LEVELS[activeLevelIndex] || CURRICULUM_LEVELS[0];
   const activeStage = SOLO_COURSE_STAGES.find((s) => s.stageNumber === activeSoloStage) || SOLO_COURSE_STAGES[0];
@@ -76,7 +109,9 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({
 
   const currentCourseStatus = catalogStatus[activeTrack];
   const primaryStatus = catalogStatus[primaryCourseId];
-  const isTrackUnlocked = isCourseUnlocked(activeTrack, progress);
+  const activeTrackAccess = canStudentAccessCourse(effectiveSnapshot, activeTrack);
+  const activeCourseEff = effectiveSnapshot.courses[activeTrack];
+  const isTrackUnlocked = activeTrackAccess.allowed;
 
   // Violão metrics
   const violaoLessonsCompleted = VIOLAO_LESSONS.filter((l) => progress.completedLessons.includes(l.id)).length;
@@ -145,11 +180,15 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({
   };
 
   const handleSelectLesson = (lessonId: string, courseId: OfficialCourseId) => {
-    if (!isCourseUnlocked(courseId, progress)) {
+    const lessonAccess = effectiveSnapshot.courses[courseId]?.lessons[lessonId];
+    if (!lessonAccess?.allowed) {
       return;
     }
     onSelectLesson(lessonId);
   };
+
+  const isAdminOriginSource = (src?: string | null) =>
+    Boolean(src && ['admin_permanent', 'admin_temporary', 'admin_trial', 'admin_special'].includes(src));
 
   // Helper para renderizar os níveis de Baixo, Teclado, Bateria ou Canônica
   const renderConservatoryLevelCourse = (
@@ -189,6 +228,8 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({
             const isSelected = activeLevelIndex === lvl.level;
             const completedInLvl = lvl.lessons.filter((l) => progress.completedLessons.includes(l.id)).length;
             const isAllCompleted = completedInLvl === lvl.lessons.length && lvl.lessons.length > 0;
+            const modId = courseId === 'canonical' ? `canonical-level-${lvl.level}` : `${courseId}-mod-${lvl.level}`;
+            const modAccessible = canStudentAccessModule(effectiveSnapshot, courseId, modId);
 
             return (
               <button
@@ -197,14 +238,17 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({
                 className={`p-3 rounded-2xl border text-left transition flex flex-col justify-between ${
                   isSelected
                     ? 'bg-[#7B1E2B] text-white border-[#7B1E2B] shadow-xs scale-[1.02]'
+                    : !modAccessible
+                    ? 'bg-[#F8F7F4]/70 dark:bg-[#1A1A20]/70 border-[#D9D9D9] dark:border-[#33333E] opacity-75'
                     : 'bg-white dark:bg-[#25252A] border-[#D9D9D9] dark:border-[#33333E] hover:bg-[#F5E8EA] dark:hover:bg-[#2E2E36]'
                 }`}
               >
                 <div>
-                  <span className={`text-[10px] font-extrabold uppercase tracking-wider block ${
+                  <span className={`text-[10px] font-extrabold uppercase tracking-wider flex items-center justify-between ${
                     isSelected ? 'text-[#F5E8EA]' : 'text-[#7B1E2B] dark:text-[#FF6B81]'
                   }`}>
-                    Nível {lvl.level}
+                    <span>Nível {lvl.level}</span>
+                    {!modAccessible && <Lock className="w-3 h-3 text-amber-600" />}
                   </span>
                   <span className={`text-xs font-bold line-clamp-1 mt-0.5 ${isSelected ? 'text-white' : 'text-[#25252A] dark:text-[#F8F7F4]'}`}>
                     {lvl.badge}
@@ -256,22 +300,31 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({
             {currentCourseLevel.lessons.map((lesson) => {
               const isCompleted = progress.completedLessons.includes(lesson.id);
               const isCurrent = progress.currentLessonId === lesson.id;
+              const lessonEff = effectiveSnapshot.courses[courseId]?.lessons[lesson.id];
+              const lessonAllowed = lessonEff ? lessonEff.allowed : true;
+              const isAdminGranted = isAdminOriginSource(lessonEff?.primarySource);
 
               return (
                 <div
                   key={lesson.id}
-                  onClick={() => handleSelectLesson(lesson.id, courseId)}
-                  className={`p-4 rounded-2xl border transition-all cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
-                    isCurrent
-                      ? 'bg-[#F5E8EA] dark:bg-[#3A1E24] border-[#7B1E2B] dark:border-[#FF6B81] shadow-xs'
+                  onClick={() => lessonAllowed && handleSelectLesson(lesson.id, courseId)}
+                  className={`p-4 rounded-2xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                    !lessonAllowed
+                      ? 'bg-[#F8F7F4]/60 dark:bg-[#1A1A20]/60 border-[#D9D9D9] dark:border-[#33333E] opacity-70 cursor-not-allowed'
+                      : isCurrent
+                      ? 'bg-[#F5E8EA] dark:bg-[#3A1E24] border-[#7B1E2B] dark:border-[#FF6B81] shadow-xs cursor-pointer'
                       : isCompleted
-                      ? 'bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/60 hover:border-emerald-400'
-                      : 'bg-[#F8F7F4] dark:bg-[#1F1F24] border-[#D9D9D9] dark:border-[#33333E] hover:bg-[#F5E8EA] dark:hover:bg-[#2A2328]'
+                      ? 'bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/60 hover:border-emerald-400 cursor-pointer'
+                      : 'bg-[#F8F7F4] dark:bg-[#1F1F24] border-[#D9D9D9] dark:border-[#33333E] hover:bg-[#F5E8EA] dark:hover:bg-[#2A2328] cursor-pointer'
                   }`}
                 >
                   <div className="flex items-start sm:items-center gap-3">
                     <div className="mt-0.5 sm:mt-0 shrink-0">
-                      {isCompleted ? (
+                      {!lessonAllowed ? (
+                        <div className="w-5 h-5 rounded-full bg-amber-100 dark:bg-amber-950/60 flex items-center justify-center text-amber-700 dark:text-amber-300">
+                          <Lock className="w-3 h-3" />
+                        </div>
+                      ) : isCompleted ? (
                         <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
                       ) : (
                         <div className="w-5 h-5 rounded-full border-2 border-[#D9D9D9] dark:border-[#4D4D58] flex items-center justify-center font-bold text-[10px] text-[#666672] dark:text-[#B8B3C0] bg-white dark:bg-[#25252A]">
@@ -285,6 +338,12 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({
                         <span className="text-[10px] text-[#666672] dark:text-[#B8B3C0] uppercase font-bold block">
                           {lesson.moduleTitle}
                         </span>
+                        {isAdminGranted && lessonAllowed && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-800">
+                            <Unlock className="w-3 h-3" />
+                            <span>Liberada pelo Admin</span>
+                          </span>
+                        )}
                         {lesson.practicalExercise && (
                           <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[#7B1E2B] dark:text-[#FF6B81] bg-[#F5E8EA] dark:bg-[#3A1E24] px-2 py-0.2 rounded-md border border-[#E8D3D6] dark:border-[#4D2830]">
                             Ex. Prático ({lesson.practicalExercise.targetBpm} BPM)
@@ -304,10 +363,17 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({
                       <span>{lesson.estimatedMinutes} min</span>
                     </div>
 
-                    <button className="flex items-center gap-1 text-xs font-bold text-[#7B1E2B] dark:text-[#FF6B81] hover:text-[#B52A3A] px-3.5 py-1.5 rounded-xl bg-white dark:bg-[#25252A] border border-[#D9D9D9] dark:border-[#33333E] transition shadow-xs">
-                      <span>{isCompleted ? 'Revisar' : 'Estudar'}</span>
-                      <ChevronRight className="w-4 h-4" />
-                    </button>
+                    {lessonAllowed ? (
+                      <button className="flex items-center gap-1 text-xs font-bold text-[#7B1E2B] dark:text-[#FF6B81] hover:text-[#B52A3A] px-3.5 py-1.5 rounded-xl bg-white dark:bg-[#25252A] border border-[#D9D9D9] dark:border-[#33333E] transition shadow-xs">
+                        <span>{isCompleted ? 'Revisar' : 'Estudar'}</span>
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-700 dark:text-amber-300 px-3 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60">
+                        <Lock className="w-3 h-3" />
+                        <span>Bloqueada</span>
+                      </span>
+                    )}
                   </div>
                 </div>
               );
@@ -374,11 +440,14 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({
           </div>
         </div>
 
+        {/* Seletor de Trilhas: Domínio Total do Violão — 60 Aulas */}
         {/* Barra Seletora dos 6 Cursos (com miniatura visual de cada instrumento) */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 bg-[#F8F7F4] dark:bg-[#1A1A20] p-2 rounded-2xl border border-[#D9D9D9] dark:border-[#33333E]">
           {courseList.map((cId) => {
             const meta = COURSE_METADATA_MAP[cId];
             const status = catalogStatus[cId];
+            const effCourseAccess = canStudentAccessCourse(effectiveSnapshot, cId);
+            const effCourse = effectiveSnapshot.courses[cId];
             const isSelected = activeTrack === cId;
             const isPrimary = cId === primaryCourseId;
             const trackVisual = COURSE_TRACK_VISUALS[cId];
@@ -415,9 +484,13 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({
                       <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-black/55 text-[#F5C542] backdrop-blur-xs">
                         Base
                       </span>
-                    ) : !status.isUnlocked ? (
+                    ) : !effCourseAccess.allowed ? (
                       <span className="w-5 h-5 rounded-full bg-black/55 flex items-center justify-center">
                         <Lock className="w-3 h-3 text-amber-300" />
+                      </span>
+                    ) : effCourseAccess.partialAccess ? (
+                      <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-amber-950/90 text-amber-200 border border-amber-500/40 backdrop-blur-xs">
+                        Parcial
                       </span>
                     ) : (
                       <span className="w-5 h-5 rounded-full bg-black/55 flex items-center justify-center">
@@ -442,9 +515,19 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({
                       {meta.totalLessons} aulas
                     </span>
                     <span className={`font-mono-code font-bold ${
-                      isSelected ? 'text-white' : status.isUnlocked ? 'text-[#7B1E2B] dark:text-[#FF6B81]' : 'text-amber-700 dark:text-amber-400'
+                      isSelected
+                        ? 'text-white'
+                        : effCourseAccess.fullCourseUnlocked
+                        ? 'text-[#7B1E2B] dark:text-[#FF6B81]'
+                        : effCourseAccess.partialAccess
+                        ? 'text-emerald-700 dark:text-emerald-400'
+                        : 'text-amber-700 dark:text-amber-400'
                     }`}>
-                      {status.isUnlocked ? `${status.progressPercentage}%` : '50% nec.'}
+                      {effCourseAccess.fullCourseUnlocked
+                        ? `${status.progressPercentage}%`
+                        : effCourseAccess.partialAccess
+                        ? `${effCourse.unlockedLessonIds.length}/${meta.totalLessons}`
+                        : '50% nec.'}
                     </span>
                   </div>
                 </div>
@@ -521,7 +604,8 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({
                 {currentCourseStatus.name}
               </h2>
               <p className="text-sm text-[#666672] dark:text-[#B8B3C0] mt-2 leading-relaxed">
-                Este curso completo de conservatório será liberado automaticamente assim que você alcançar <strong className="text-[#25252A] dark:text-white">pelo menos 50% de conclusão válida</strong> no seu curso principal (<strong className="text-[#7B1E2B] dark:text-[#FF6B81]">{primaryStatus.name}</strong>).
+                {activeTrackAccess.reason ||
+                  `Este curso completo de conservatório será liberado automaticamente assim que você alcançar pelo menos 50% de conclusão válida no seu curso principal (${primaryStatus.name}).`}
               </p>
             </div>
 
@@ -572,6 +656,75 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({
         </div>
       ) : (
         <>
+          {/* Banner de Origem Administrativa / Acesso Parcial / Direcionamento Inicial */}
+          {(activeTrackAccess.partialAccess ||
+            activeCourseEff.origins.some((o) => isAdminOriginSource(o.source)) ||
+            effectiveSnapshot.activePlacementsByCourse[activeTrack]?.isAccessible) && (
+            <div className="bg-white dark:bg-[#25252A] border border-emerald-300 dark:border-emerald-800/70 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+              <div className="space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  {activeTrackAccess.partialAccess ? (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
+                      <Unlock className="w-3.5 h-3.5" />
+                      <span>
+                        Acesso Parcial Liberado ({activeCourseEff.unlockedLessonIds.length} de{' '}
+                        {currentCourseStatus.totalLessons} aulas)
+                      </span>
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">
+                      <Unlock className="w-3.5 h-3.5" />
+                      <span>Curso Liberado</span>
+                    </span>
+                  )}
+
+                  {activeCourseEff.origins
+                    .filter((o) => isAdminOriginSource(o.source))
+                    .map((o, idx) => (
+                      <span
+                        key={`${o.source}-${o.grantId || idx}`}
+                        className="text-[11px] font-semibold text-[#7B1E2B] dark:text-[#FF6B81] bg-[#FAF1F2] dark:bg-[#381A25] px-2.5 py-0.5 rounded-full border border-[#E8D3D6] dark:border-[#522536]"
+                      >
+                        {o.label}
+                        {o.expiresAt ? ` • Válido até ${new Date(o.expiresAt).toLocaleDateString('pt-BR')}` : ''}
+                      </span>
+                    ))}
+                </div>
+
+                {effectiveSnapshot.activePlacementsByCourse[activeTrack]?.isAccessible && (
+                  <p className="text-xs text-[#4D4D54] dark:text-[#B8B3C0] flex items-center gap-1.5 pt-0.5">
+                    <Compass className="w-3.5 h-3.5 text-[#7B1E2B] dark:text-[#FF6B81] shrink-0" />
+                    <span>
+                      Início recomendado pela coordenação: Módulo{' '}
+                      {effectiveSnapshot.activePlacementsByCourse[activeTrack]!.moduleNumber} —{' '}
+                      <strong>
+                        {getCatalogLesson(
+                          effectiveSnapshot.activePlacementsByCourse[activeTrack]!.lessonId,
+                          activeTrack
+                        )?.title || effectiveSnapshot.activePlacementsByCourse[activeTrack]!.lessonId}
+                      </strong>
+                    </span>
+                  </p>
+                )}
+              </div>
+
+              {effectiveSnapshot.activePlacementsByCourse[activeTrack]?.isAccessible && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    handleSelectLesson(
+                      effectiveSnapshot.activePlacementsByCourse[activeTrack]!.lessonId,
+                      activeTrack
+                    )
+                  }
+                  className="px-4 py-2 rounded-xl bg-[#7B1E2B] hover:bg-[#B52A3A] text-white text-xs font-bold inline-flex items-center gap-1.5 shrink-0 cursor-pointer"
+                >
+                  <Compass className="w-3.5 h-3.5" />
+                  <span>Ir para Aula Direcionada</span>
+                </button>
+              )}
+            </div>
+          )}
           {/* ======================================================== */}
           {/* TRILHA: DOMÍNIO TOTAL DO VIOLÃO (60 AULAS EM 10 MÓDULOS) */}
           {/* ======================================================== */}
@@ -602,6 +755,7 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({
                   const isSelected = activeViolaoModule === mod.moduleNumber;
                   const completedInMod = mod.lessons.filter((l) => progress.completedLessons.includes(l.id)).length;
                   const isAllCompleted = completedInMod === mod.lessons.length;
+                  const modAccessible = canStudentAccessModule(effectiveSnapshot, 'violao', mod.id);
 
                   return (
                     <button
@@ -610,14 +764,17 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({
                       className={`p-3 rounded-2xl border text-left transition flex flex-col justify-between ${
                         isSelected
                           ? 'bg-[#7B1E2B] text-white border-[#7B1E2B] shadow-xs scale-[1.02]'
+                          : !modAccessible
+                          ? 'bg-[#F8F7F4]/70 dark:bg-[#1A1A20]/70 border-[#D9D9D9] dark:border-[#33333E] opacity-75'
                           : 'bg-white dark:bg-[#25252A] border-[#D9D9D9] dark:border-[#33333E] hover:bg-[#F5E8EA] dark:hover:bg-[#2E2E36]'
                       }`}
                     >
                       <div>
-                        <span className={`text-[10px] font-extrabold uppercase tracking-wider block ${
+                        <span className={`text-[10px] font-extrabold uppercase tracking-wider flex items-center justify-between ${
                           isSelected ? 'text-[#F5E8EA]' : 'text-[#7B1E2B] dark:text-[#FF6B81]'
                         }`}>
-                          Módulo {mod.moduleNumber}
+                          <span>Módulo {mod.moduleNumber}</span>
+                          {!modAccessible && <Lock className="w-3 h-3 text-amber-600" />}
                         </span>
                         <span className={`text-xs font-bold line-clamp-1 mt-0.5 ${isSelected ? 'text-white' : 'text-[#25252A] dark:text-[#F8F7F4]'}`}>
                           {mod.badge}
@@ -674,22 +831,31 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({
                     const isCompleted = progress.completedLessons.includes(lesson.id);
                     const isCurrent = progress.currentLessonId === lesson.id;
                     const status = getViolaoLessonStatus(lesson);
+                    const lessonEff = effectiveSnapshot.courses.violao?.lessons[lesson.id];
+                    const lessonAllowed = lessonEff ? lessonEff.allowed : true;
+                    const isAdminGranted = isAdminOriginSource(lessonEff?.primarySource);
 
                     return (
                       <div
                         key={lesson.id}
-                        onClick={() => handleSelectLesson(lesson.id, 'violao')}
-                        className={`p-4 rounded-2xl border transition-all cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
-                          isCurrent
-                            ? 'bg-[#F5E8EA] dark:bg-[#3A1E24] border-[#7B1E2B] dark:border-[#FF6B81] shadow-xs'
+                        onClick={() => lessonAllowed && handleSelectLesson(lesson.id, 'violao')}
+                        className={`p-4 rounded-2xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                          !lessonAllowed
+                            ? 'bg-[#F8F7F4]/60 dark:bg-[#1A1A20]/60 border-[#D9D9D9] dark:border-[#33333E] opacity-70 cursor-not-allowed'
+                            : isCurrent
+                            ? 'bg-[#F5E8EA] dark:bg-[#3A1E24] border-[#7B1E2B] dark:border-[#FF6B81] shadow-xs cursor-pointer'
                             : isCompleted
-                            ? 'bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/60 hover:border-emerald-400'
-                            : 'bg-[#F8F7F4] dark:bg-[#1F1F24] border-[#D9D9D9] dark:border-[#33333E] hover:bg-[#F5E8EA] dark:hover:bg-[#2A2328]'
+                            ? 'bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/60 hover:border-emerald-400 cursor-pointer'
+                            : 'bg-[#F8F7F4] dark:bg-[#1F1F24] border-[#D9D9D9] dark:border-[#33333E] hover:bg-[#F5E8EA] dark:hover:bg-[#2A2328] cursor-pointer'
                         }`}
                       >
                         <div className="flex items-start sm:items-center gap-3">
                           <div className="mt-0.5 sm:mt-0 shrink-0">
-                            {isCompleted ? (
+                            {!lessonAllowed ? (
+                              <div className="w-6 h-6 rounded-full bg-amber-100 dark:bg-amber-950/60 flex items-center justify-center text-amber-700 dark:text-amber-300">
+                                <Lock className="w-3.5 h-3.5" />
+                              </div>
+                            ) : isCompleted ? (
                               <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
                             ) : (
                               <div className="w-6 h-6 rounded-full border-2 border-[#D9D9D9] dark:border-[#4D4D58] flex items-center justify-center font-bold text-[11px] text-[#666672] dark:text-[#B8B3C0] bg-white dark:bg-[#25252A]">
@@ -703,6 +869,13 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({
                               <span className="text-[10px] text-[#666672] dark:text-[#B8B3C0] uppercase font-bold block">
                                 Aula {lesson.lessonNumber} • {lesson.moduleTitle}
                               </span>
+
+                              {isAdminGranted && lessonAllowed && (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-800">
+                                  <Unlock className="w-3 h-3" />
+                                  <span>Liberada pelo Admin</span>
+                                </span>
+                              )}
 
                               <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md border ${status.badgeClass}`}>
                                 <Activity className="w-3 h-3" />
@@ -759,10 +932,17 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({
                             <span>{lesson.estimatedMinutes} min</span>
                           </div>
 
-                          <button className="flex items-center gap-1 text-xs font-bold text-[#7B1E2B] dark:text-[#FF6B81] hover:text-[#B52A3A] px-3.5 py-1.5 rounded-xl bg-white dark:bg-[#25252A] border border-[#D9D9D9] dark:border-[#33333E] transition shadow-xs">
-                            <span>{isCompleted ? 'Revisar' : 'Estudar'}</span>
-                            <ChevronRight className="w-4 h-4" />
-                          </button>
+                          {lessonAllowed ? (
+                            <button className="flex items-center gap-1 text-xs font-bold text-[#7B1E2B] dark:text-[#FF6B81] hover:text-[#B52A3A] px-3.5 py-1.5 rounded-xl bg-white dark:bg-[#25252A] border border-[#D9D9D9] dark:border-[#33333E] transition shadow-xs">
+                              <span>{isCompleted ? 'Revisar' : 'Estudar'}</span>
+                              <ChevronRight className="w-4 h-4" />
+                            </button>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-700 dark:text-amber-300 px-3 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60">
+                              <Lock className="w-3 h-3" />
+                              <span>Bloqueada</span>
+                            </span>
+                          )}
                         </div>
                       </div>
                     );
@@ -802,6 +982,7 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({
                   const isSelected = activeSoloStage === stg.stageNumber;
                   const completedInStg = stg.lessons.filter((l) => progress.completedLessons.includes(l.id)).length;
                   const isAllCompleted = completedInStg === stg.lessons.length;
+                  const modAccessible = canStudentAccessModule(effectiveSnapshot, 'solo', stg.id);
 
                   return (
                     <button
@@ -810,14 +991,17 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({
                       className={`p-3 rounded-2xl border text-left transition flex flex-col justify-between ${
                         isSelected
                           ? 'bg-[#7B1E2B] text-white border-[#7B1E2B] shadow-xs scale-[1.02]'
+                          : !modAccessible
+                          ? 'bg-[#F8F7F4]/70 dark:bg-[#1A1A20]/70 border-[#D9D9D9] dark:border-[#33333E] opacity-75'
                           : 'bg-white dark:bg-[#25252A] border-[#D9D9D9] dark:border-[#33333E] hover:bg-[#F5E8EA] dark:hover:bg-[#2E2E36]'
                       }`}
                     >
                       <div>
-                        <span className={`text-[10px] font-extrabold uppercase tracking-wider block ${
+                        <span className={`text-[10px] font-extrabold uppercase tracking-wider flex items-center justify-between ${
                           isSelected ? 'text-[#F5E8EA]' : 'text-[#7B1E2B] dark:text-[#FF6B81]'
                         }`}>
-                          Etapa {stg.stageNumber}
+                          <span>Etapa {stg.stageNumber}</span>
+                          {!modAccessible && <Lock className="w-3 h-3 text-amber-600" />}
                         </span>
                         <span className={`text-xs font-bold line-clamp-1 mt-0.5 ${isSelected ? 'text-white' : 'text-[#25252A] dark:text-[#F8F7F4]'}`}>
                           {stg.badge}
@@ -874,22 +1058,31 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({
                     const isCompleted = progress.completedLessons.includes(lesson.id);
                     const isCurrent = progress.currentLessonId === lesson.id;
                     const status = getSoloLessonStatus(lesson);
+                    const lessonEff = effectiveSnapshot.courses.solo?.lessons[lesson.id];
+                    const lessonAllowed = lessonEff ? lessonEff.allowed : true;
+                    const isAdminGranted = isAdminOriginSource(lessonEff?.primarySource);
 
                     return (
                       <div
                         key={lesson.id}
-                        onClick={() => handleSelectLesson(lesson.id, 'solo')}
-                        className={`p-4 rounded-2xl border transition-all cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
-                          isCurrent
-                            ? 'bg-[#F5E8EA] dark:bg-[#3A1E24] border-[#7B1E2B] dark:border-[#FF6B81] shadow-xs'
+                        onClick={() => lessonAllowed && handleSelectLesson(lesson.id, 'solo')}
+                        className={`p-4 rounded-2xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                          !lessonAllowed
+                            ? 'bg-[#F8F7F4]/60 dark:bg-[#1A1A20]/60 border-[#D9D9D9] dark:border-[#33333E] opacity-70 cursor-not-allowed'
+                            : isCurrent
+                            ? 'bg-[#F5E8EA] dark:bg-[#3A1E24] border-[#7B1E2B] dark:border-[#FF6B81] shadow-xs cursor-pointer'
                             : isCompleted
-                            ? 'bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/60 hover:border-emerald-400'
-                            : 'bg-[#F8F7F4] dark:bg-[#1F1F24] border-[#D9D9D9] dark:border-[#33333E] hover:bg-[#F5E8EA] dark:hover:bg-[#2A2328]'
+                            ? 'bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/60 hover:border-emerald-400 cursor-pointer'
+                            : 'bg-[#F8F7F4] dark:bg-[#1F1F24] border-[#D9D9D9] dark:border-[#33333E] hover:bg-[#F5E8EA] dark:hover:bg-[#2A2328] cursor-pointer'
                         }`}
                       >
                         <div className="flex items-start sm:items-center gap-3">
                           <div className="mt-0.5 sm:mt-0 shrink-0">
-                            {isCompleted ? (
+                            {!lessonAllowed ? (
+                              <div className="w-6 h-6 rounded-full bg-amber-100 dark:bg-amber-950/60 flex items-center justify-center text-amber-700 dark:text-amber-300">
+                                <Lock className="w-3.5 h-3.5" />
+                              </div>
+                            ) : isCompleted ? (
                               <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
                             ) : (
                               <div className="w-6 h-6 rounded-full border-2 border-[#D9D9D9] dark:border-[#4D4D58] flex items-center justify-center font-bold text-[11px] text-[#666672] dark:text-[#B8B3C0] bg-white dark:bg-[#25252A]">
@@ -903,6 +1096,13 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({
                               <span className="text-[10px] text-[#666672] dark:text-[#B8B3C0] uppercase font-bold block">
                                 Aula {lesson.lessonNumber} • {lesson.moduleTitle}
                               </span>
+
+                              {isAdminGranted && lessonAllowed && (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-800">
+                                  <Unlock className="w-3 h-3" />
+                                  <span>Liberada pelo Admin</span>
+                                </span>
+                              )}
 
                               <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md border ${status.badgeClass}`}>
                                 <Activity className="w-3 h-3" />
@@ -929,10 +1129,17 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({
                             <span>{lesson.estimatedMinutes} min</span>
                           </div>
 
-                          <button className="flex items-center gap-1 text-xs font-bold text-[#7B1E2B] dark:text-[#FF6B81] hover:text-[#B52A3A] px-3.5 py-1.5 rounded-xl bg-white dark:bg-[#25252A] border border-[#D9D9D9] dark:border-[#33333E] transition shadow-xs">
-                            <span>{isCompleted ? 'Revisar' : 'Estudar'}</span>
-                            <ChevronRight className="w-4 h-4" />
-                          </button>
+                          {lessonAllowed ? (
+                            <button className="flex items-center gap-1 text-xs font-bold text-[#7B1E2B] dark:text-[#FF6B81] hover:text-[#B52A3A] px-3.5 py-1.5 rounded-xl bg-white dark:bg-[#25252A] border border-[#D9D9D9] dark:border-[#33333E] transition shadow-xs">
+                              <span>{isCompleted ? 'Revisar' : 'Estudar'}</span>
+                              <ChevronRight className="w-4 h-4" />
+                            </button>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-700 dark:text-amber-300 px-3 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60">
+                              <Lock className="w-3 h-3" />
+                              <span>Bloqueada</span>
+                            </span>
+                          )}
                         </div>
                       </div>
                     );
