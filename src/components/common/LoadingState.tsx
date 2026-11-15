@@ -22,7 +22,7 @@ export const LoadingState: React.FC<LoadingStateProps> = ({
         <div className="absolute inset-0 rounded-full border-3 border-[#F5E8EA] dark:border-[#381A25] border-t-[#7B1E2B] dark:border-t-[#E05368] animate-spin" />
         <div className="absolute inset-2 flex items-center justify-center">
           <img
-            src="./icon.svg"
+            src={`${import.meta.env.BASE_URL}icon.svg`}
             alt=""
             aria-hidden="true"
             className="w-5 h-5 object-contain"

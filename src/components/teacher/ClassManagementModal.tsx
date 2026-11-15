@@ -26,6 +26,8 @@ export const ClassManagementModal: React.FC<ClassManagementModalProps> = ({
   const [className, setClassName] = useState('');
   const [classDescription, setClassDescription] = useState('');
   const [customCode, setCustomCode] = useState('');
+  const [selectedCourseId, setSelectedCourseId] = useState<'violao' | 'canonical' | 'solo' | 'baixo' | 'teclado' | 'bateria' | 'geral'>('violao');
+  const [expiresAtDate, setExpiresAtDate] = useState('');
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -42,18 +44,26 @@ export const ClassManagementModal: React.FC<ClassManagementModalProps> = ({
     setIsSubmitting(true);
     setErrorMsg(null);
     try {
+      const expiresAtIso = expiresAtDate
+        ? new Date(`${expiresAtDate}T23:59:59`).toISOString()
+        : null;
       const created = await TeacherService.createClass(
         teacherId,
         teacherEmail,
         teacherName,
         className,
         classDescription,
-        customCode
+        customCode,
+        {
+          courseId: selectedCourseId,
+          expiresAt: expiresAtIso,
+        }
       );
       onClassCreated(created);
       setClassName('');
       setClassDescription('');
       setCustomCode('');
+      setExpiresAtDate('');
       setShowCreateForm(false);
     } catch {
       setErrorMsg('Falha ao criar turma. Tente novamente.');
@@ -102,30 +112,49 @@ export const ClassManagementModal: React.FC<ClassManagementModalProps> = ({
 
         {/* Lista de Turmas */}
         <div className="space-y-3 mb-6">
-          {classes.map((cls) => (
+          {classes.length === 0 ? (
+            <div className="p-4 rounded-xl bg-white dark:bg-[#251820] border border-[#E8E6E1] dark:border-[#422933] text-xs text-[#666672] dark:text-[#B8B3C0] text-center">
+              Nenhuma turma cadastrada no momento. Crie uma turma real abaixo para gerar um código de convite aos alunos.
+            </div>
+          ) : (
+            classes.map((cls) => (
             <div
               key={cls.id}
               className="p-4 rounded-xl bg-white dark:bg-[#251820] border border-[#E8E6E1] dark:border-[#422933] flex flex-wrap items-center justify-between gap-3 shadow-xs"
             >
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <h3 className="font-bold text-sm text-[#1F1F24] dark:text-[#F8F7F4] truncate">
                     {cls.name}
                   </h3>
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-mono-code font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800">
-                    Ativa
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono-code font-bold border ${
+                    cls.active !== false
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800'
+                      : 'bg-stone-100 text-stone-600 border-stone-200 dark:bg-stone-900 dark:text-stone-400 dark:border-stone-700'
+                  }`}>
+                    {cls.active !== false ? 'Ativa' : 'Encerrada'}
                   </span>
+                  {cls.instrument && (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#FAF4E6] text-[#8C5F18] border border-[#C5A059]/40">
+                      {cls.instrument}
+                    </span>
+                  )}
                 </div>
                 {cls.description && (
                   <p className="text-xs text-[#666672] dark:text-[#B8B3C0] mt-0.5 truncate">
                     {cls.description}
                   </p>
                 )}
-                <div className="flex items-center gap-2 mt-2">
+                <div className="flex flex-wrap items-center gap-2 mt-2">
                   <span className="text-[11px] text-[#666672] dark:text-[#B8B3C0]">Código de Convite:</span>
                   <span className="font-mono-code font-bold text-xs px-2 py-0.5 rounded-md bg-[#FAF1F2] text-[#7B1E2B] border border-[#E8D3D6] dark:bg-[#381A25] dark:text-[#FF6B81] dark:border-[#522536]">
                     {cls.code}
                   </span>
+                  {cls.expiresAt && (
+                    <span className="text-[10px] text-[#666672] dark:text-[#B8B3C0]">
+                      · Válido até {new Date(cls.expiresAt).toLocaleDateString('pt-BR')}
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -147,7 +176,8 @@ export const ClassManagementModal: React.FC<ClassManagementModalProps> = ({
                 )}
               </button>
             </div>
-          ))}
+          ))
+          )}
         </div>
 
         {/* Formulário de Criação de Turma */}
@@ -164,6 +194,33 @@ export const ClassManagementModal: React.FC<ClassManagementModalProps> = ({
                 placeholder="Ex: Turma Avançada de Violão Fingerstyle"
                 className="w-full px-3 py-2 rounded-xl bg-white dark:bg-[#1A1216] border border-[#D9D9D9] dark:border-[#422933] text-xs text-[#1F1F24] dark:text-[#F8F7F4] focus:outline-hidden focus:ring-2 focus:ring-[#7B1E2B]/30"
               />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-bold block mb-1">Instrumento / Curso</label>
+                <select
+                  value={selectedCourseId}
+                  onChange={(e) => setSelectedCourseId(e.target.value as any)}
+                  className="w-full px-3 py-2 rounded-xl bg-white dark:bg-[#1A1216] border border-[#D9D9D9] dark:border-[#422933] text-xs text-[#1F1F24] dark:text-[#F8F7F4] focus:outline-hidden focus:ring-2 focus:ring-[#7B1E2B]/30"
+                >
+                  <option value="violao">Violão</option>
+                  <option value="canonical">Guitarra Elétrica</option>
+                  <option value="solo">Guitarra Solo</option>
+                  <option value="baixo">Contrabaixo</option>
+                  <option value="teclado">Teclado & Piano</option>
+                  <option value="bateria">Bateria</option>
+                  <option value="geral">Formação Geral</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-bold block mb-1">Validade do Código (Opcional)</label>
+                <input
+                  type="date"
+                  value={expiresAtDate}
+                  onChange={(e) => setExpiresAtDate(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-white dark:bg-[#1A1216] border border-[#D9D9D9] dark:border-[#422933] text-xs text-[#1F1F24] dark:text-[#F8F7F4] focus:outline-hidden focus:ring-2 focus:ring-[#7B1E2B]/30"
+                />
+              </div>
             </div>
             <div>
               <label className="text-xs font-bold block mb-1">Descrição Pedagógica (Opcional)</label>

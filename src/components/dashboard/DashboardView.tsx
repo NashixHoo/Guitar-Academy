@@ -28,8 +28,12 @@ import {
   RotateCcw,
   AlertCircle,
   Lock,
-  Unlock
+  Unlock,
+  KeyRound,
+  Users,
+  GraduationCap
 } from 'lucide-react';
+import { StudentEnrolledClassInfo } from '../../types/teacher';
 import { 
   getPrimaryCourseId, 
   calculateCourseProgress, 
@@ -53,6 +57,8 @@ interface DashboardViewProps {
   onUpdateProgress?: (updated: UserProgress) => void;
   onNavigateTab: (tab: NavigationTab) => void;
   onSelectLesson: (lessonId: string) => void;
+  onOpenJoinClass?: () => void;
+  studentEnrollments?: StudentEnrolledClassInfo[];
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
@@ -60,6 +66,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onUpdateProgress,
   onNavigateTab,
   onSelectLesson,
+  onOpenJoinClass,
+  studentEnrollments = [],
 }) => {
   // Goal setting & feedback states
   const [isGoalSettingsModalOpen, setIsGoalSettingsModalOpen] = useState<boolean>(false);
@@ -234,6 +242,64 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
           </div>
         </div>
+      </div>
+
+      {/* ENTRADA EM TURMA COM CÓDIGO DE CONVITE & MATRÍCULAS ATIVAS */}
+      <div className="bg-white dark:bg-[#25252A] border border-[#C5A059]/35 dark:border-[#422933] rounded-3xl p-4 sm:p-5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-start gap-3.5 min-w-0 flex-1">
+          <div className="w-11 h-11 rounded-2xl bg-[#FAF4E6] dark:bg-[#332211] text-[#8C5F18] dark:text-[#F3D17A] border border-[#C5A059]/40 flex items-center justify-center shrink-0">
+            <Users className="w-5 h-5" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <span className="text-[10px] font-mono-code font-bold uppercase tracking-wider text-[#C5A059] block">
+              Turmas &amp; Acompanhamento Pedagógico
+            </span>
+            {studentEnrollments.length > 0 ? (
+              <>
+                <h3 className="text-sm sm:text-base font-black text-[#25252A] dark:text-[#F8F7F4] mt-0.5">
+                  {studentEnrollments.length === 1
+                    ? `Turma ativa: ${studentEnrollments[0].className}`
+                    : `${studentEnrollments.length} turmas matriculadas`}
+                </h3>
+                <div className="flex flex-wrap gap-1.5 mt-1.5">
+                  {studentEnrollments.map((enr) => (
+                    <span
+                      key={enr.enrollmentId}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#FAF1F2] dark:bg-[#381A25] text-[#7B1E2B] dark:text-[#FF6B81] border border-[#E8D3D6] dark:border-[#522536] text-[11px] font-bold"
+                    >
+                      <GraduationCap className="w-3.5 h-3.5 shrink-0" />
+                      <span className="truncate max-w-[220px]">
+                        {enr.className}
+                        {enr.instrument ? ` · ${enr.instrument}` : ''}
+                        {enr.teacherName ? ` (${enr.teacherName})` : ''}
+                      </span>
+                    </span>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <>
+                <h3 className="text-sm sm:text-base font-black text-[#25252A] dark:text-[#F8F7F4] mt-0.5">
+                  Possui um código de convite de turma?
+                </h3>
+                <p className="text-xs text-[#666672] dark:text-[#B8B3C0] mt-0.5 leading-relaxed">
+                  Vincule sua conta à turma do seu professor usando o código compartilhado por ele.
+                </p>
+              </>
+            )}
+          </div>
+        </div>
+
+        {onOpenJoinClass && (
+          <button
+            type="button"
+            onClick={onOpenJoinClass}
+            className="luxury-btn-primary text-white px-4 sm:px-5 py-3 rounded-2xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-xs shrink-0 w-full sm:w-auto cursor-pointer"
+          >
+            <KeyRound className="w-4 h-4 shrink-0" />
+            <span>Entrar em uma turma</span>
+          </button>
+        )}
       </div>
 
       {/* FASE 2: CONTINUE SUA FORMAÇÃO (HERO DE CONTINUIDADE PEDAGÓGICA) */}

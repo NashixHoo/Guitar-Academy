@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { StudentAnalyticsSummary } from '../../types/teacher';
 import { storageService } from '../../services/storageService';
+import { getAllLessons } from '../../services/teacherService';
 import { 
   Search, 
   User, 
@@ -24,6 +25,7 @@ interface TeacherStudentsTabProps {
 export const TeacherStudentsTab: React.FC<TeacherStudentsTabProps> = ({ students }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStudentUid, setSelectedStudentUid] = useState<string | null>(null);
+  const totalCatalogLessons = getAllLessons().length;
 
   const filteredStudents = students.filter((s) => {
     const q = searchQuery.toLowerCase().trim();
@@ -70,76 +72,86 @@ export const TeacherStudentsTab: React.FC<TeacherStudentsTabProps> = ({ students
               </tr>
             </thead>
             <tbody className="divide-y divide-[#E8E6E1] dark:divide-[#422933]">
-              {filteredStudents.map((s) => {
-                const totalMin = Math.round(s.totalStudyTimeSeconds / 60);
-                const verifiedMin = Math.round(s.verifiedInteractiveSeconds / 60);
-                const manualMin = Math.round(s.manualLoggedSeconds / 60);
+              {filteredStudents.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="py-10 text-center text-xs text-[#666672] dark:text-[#B8B3C0]">
+                    {students.length === 0
+                      ? 'Nenhum aluno matriculado nesta turma ainda. Somente matrículas reais e válidas são listadas aqui.'
+                      : 'Nenhum aluno corresponde à busca atual.'}
+                  </td>
+                </tr>
+              ) : (
+                filteredStudents.map((s) => {
+                  const totalMin = Math.round(s.totalStudyTimeSeconds / 60);
+                  const verifiedMin = Math.round(s.verifiedInteractiveSeconds / 60);
+                  const manualMin = Math.round(s.manualLoggedSeconds / 60);
 
-                return (
-                  <tr
-                    key={s.studentUid}
-                    onClick={() => setSelectedStudentUid(s.studentUid)}
-                    className="hover:bg-[#F8F7F4] dark:hover:bg-[#251820] transition-colors cursor-pointer group"
-                  >
-                    <td className="py-3">
-                      <div className="flex items-center gap-2.5">
-                        {s.studentPhotoUrl ? (
-                          <img
-                            src={s.studentPhotoUrl}
-                            alt={s.studentName}
-                            className="w-8 h-8 rounded-xl object-cover border border-[#C5A059]"
-                            referrerPolicy="no-referrer"
-                          />
-                        ) : (
-                          <div className="w-8 h-8 rounded-xl bg-[#7B1E2B] text-white font-bold text-xs flex items-center justify-center">
-                            {s.studentName[0].toUpperCase()}
+                  return (
+                    <tr
+                      key={s.studentUid}
+                      onClick={() => setSelectedStudentUid(s.studentUid)}
+                      className="hover:bg-[#F8F7F4] dark:hover:bg-[#251820] transition-colors cursor-pointer group"
+                    >
+                      <td className="py-3">
+                        <div className="flex items-center gap-2.5">
+                          {s.studentPhotoUrl ? (
+                            <img
+                              src={s.studentPhotoUrl}
+                              alt={s.studentName}
+                              className="w-8 h-8 rounded-xl object-cover border border-[#C5A059]"
+                              referrerPolicy="no-referrer"
+                            />
+                          ) : (
+                            <div className="w-8 h-8 rounded-xl bg-[#7B1E2B] text-white font-bold text-xs flex items-center justify-center">
+                              {(s.studentName || 'E')[0].toUpperCase()}
+                            </div>
+                          )}
+                          <div>
+                            <span className="font-bold text-[#1F1F24] dark:text-[#F8F7F4] block group-hover:text-[#7B1E2B] dark:group-hover:text-[#FF6B81] transition-colors">
+                              {s.studentName}
+                            </span>
+                            <span className="text-[10px] text-[#666672] dark:text-[#B8B3C0]">
+                              {s.studentEmail}
+                            </span>
                           </div>
-                        )}
-                        <div>
-                          <span className="font-bold text-[#1F1F24] dark:text-[#F8F7F4] block group-hover:text-[#7B1E2B] dark:group-hover:text-[#FF6B81] transition-colors">
-                            {s.studentName}
-                          </span>
-                          <span className="text-[10px] text-[#666672] dark:text-[#B8B3C0]">
-                            {s.studentEmail}
-                          </span>
                         </div>
-                      </div>
-                    </td>
-                    <td className="py-3 text-[#666672] dark:text-[#B8B3C0] font-medium">
-                      {s.className}
-                    </td>
-                    <td className="py-3 font-mono-code text-center font-bold text-[#1F1F24] dark:text-[#F8F7F4]">
-                      {s.completedLessonsCount} / 98
-                    </td>
-                    <td className="py-3 font-mono-code text-center font-bold text-[#7B1E2B] dark:text-[#FF6B81]">
-                      {totalMin} min
-                    </td>
-                    <td className="py-3 text-center">
-                      <span className="text-[10px] font-mono-code text-[#16A34A] font-bold">
-                        {verifiedMin}m interativo
-                      </span>
-                      {manualMin > 0 && (
-                        <span className="text-[10px] font-mono-code text-[#D97706] block">
-                          + {manualMin}m offline
+                      </td>
+                      <td className="py-3 text-[#666672] dark:text-[#B8B3C0] font-medium">
+                        {s.className}
+                      </td>
+                      <td className="py-3 font-mono-code text-center font-bold text-[#1F1F24] dark:text-[#F8F7F4]">
+                        {s.completedLessonsCount} / {totalCatalogLessons}
+                      </td>
+                      <td className="py-3 font-mono-code text-center font-bold text-[#7B1E2B] dark:text-[#FF6B81]">
+                        {totalMin} min
+                      </td>
+                      <td className="py-3 text-center">
+                        <span className="text-[10px] font-mono-code text-[#16A34A] font-bold">
+                          {verifiedMin}m interativo
                         </span>
-                      )}
-                    </td>
-                    <td className="py-3 font-mono-code text-center text-[#1F1F24] dark:text-[#F8F7F4]">
-                      {s.practicedBpmMax} BPM
-                    </td>
-                    <td className="py-3 text-center">
-                      <span className="font-mono-code font-bold text-xs px-2 py-0.5 rounded-md bg-white dark:bg-[#1A1216] border border-[#E8E6E1] dark:border-[#422933]">
-                        {s.evaluatedSkillsCount} de 21
-                      </span>
-                    </td>
-                    <td className="py-3 text-right">
-                      <button className="p-1 rounded-lg text-[#7B1E2B] dark:text-[#FF6B81] group-hover:bg-[#FAF1F2] dark:group-hover:bg-[#381A25] transition">
-                        <ChevronRight className="w-4 h-4" />
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
+                        {manualMin > 0 && (
+                          <span className="text-[10px] font-mono-code text-[#D97706] block">
+                            + {manualMin}m offline
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-3 font-mono-code text-center text-[#1F1F24] dark:text-[#F8F7F4]">
+                        {s.practicedBpmMax} BPM
+                      </td>
+                      <td className="py-3 text-center">
+                        <span className="font-mono-code font-bold text-xs px-2 py-0.5 rounded-md bg-white dark:bg-[#1A1216] border border-[#E8E6E1] dark:border-[#422933]">
+                          {s.evaluatedSkillsCount} de 21
+                        </span>
+                      </td>
+                      <td className="py-3 text-right">
+                        <button className="p-1 rounded-lg text-[#7B1E2B] dark:text-[#FF6B81] group-hover:bg-[#FAF1F2] dark:group-hover:bg-[#381A25] transition">
+                          <ChevronRight className="w-4 h-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>
@@ -192,7 +204,7 @@ export const TeacherStudentsTab: React.FC<TeacherStudentsTabProps> = ({ students
               </div>
               <div className="p-3 rounded-xl bg-white dark:bg-[#251820] border border-[#E8E6E1] dark:border-[#422933]">
                 <Activity className="w-4 h-4 text-[#16A34A] mx-auto mb-1" />
-                <span className="text-base font-black block">{selectedProgress.practicedBpm || 80}</span>
+                <span className="text-base font-black block">{selectedProgress.practicedBpm || 0}</span>
                 <span className="text-[10px] text-[#666672]">BPM Máximo</span>
               </div>
               <div className="p-3 rounded-xl bg-white dark:bg-[#251820] border border-[#E8E6E1] dark:border-[#422933]">

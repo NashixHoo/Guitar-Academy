@@ -76,9 +76,14 @@
         "id": { "type": "string", "description": "ID único da turma" },
         "name": { "type": "string", "description": "Nome da turma" },
         "code": { "type": "string", "description": "Código de convite seguro" },
+        "description": { "type": "string", "description": "Descrição da turma" },
+        "courseId": { "type": "string", "description": "Curso oficial associado" },
+        "instrument": { "type": "string", "description": "Instrumento ou formação da turma" },
         "teacherId": { "type": "string", "description": "UID do professor responsável" },
         "teacherEmail": { "type": "string", "description": "E-mail do professor" },
         "teacherName": { "type": "string", "description": "Nome do professor" },
+        "maxStudents": { "type": "number", "description": "Limite máximo de vagas" },
+        "expiresAt": { "type": "string", "description": "Data de expiração opcional (ISO 8601)" },
         "active": { "type": "boolean", "description": "Indica se a turma está ativa" },
         "createdAt": { "type": "string", "description": "Data de criação" }
       },
@@ -176,7 +181,14 @@
       "properties": {
         "classId": { "type": "string", "description": "ID da turma" },
         "code": { "type": "string", "description": "Código de convite" },
+        "name": { "type": "string", "description": "Nome da turma" },
+        "description": { "type": "string", "description": "Descrição da turma" },
+        "courseId": { "type": "string", "description": "Curso oficial associado" },
+        "instrument": { "type": "string", "description": "Instrumento ou formação da turma" },
         "teacherId": { "type": "string", "description": "UID do professor responsável" },
+        "teacherName": { "type": "string", "description": "Nome do professor" },
+        "maxStudents": { "type": "number", "description": "Limite máximo de vagas" },
+        "expiresAt": { "type": "string", "description": "Data de expiração opcional (ISO 8601)" },
         "active": { "type": "boolean", "description": "Convite ativo" }
       },
       "required": ["classId", "code", "teacherId", "active"]

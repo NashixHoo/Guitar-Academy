@@ -1,5 +1,6 @@
 import React from 'react';
 import { StudentAnalyticsSummary, ClassGroup, PedagogicalBottleneck } from '../../types/teacher';
+import { getAllLessons } from '../../services/teacherService';
 import { 
   Users, 
   UserCheck, 
@@ -39,13 +40,16 @@ export const TeacherOverviewTab: React.FC<TeacherOverviewTabProps> = ({
     (s) => new Date(s.lastActivityAt).getTime() < sevenDaysAgo && s.totalStudyTimeSeconds === 0
   );
 
+  const totalCatalogLessons = getAllLessons().length;
+
   // Total de aulas concluídas coletivamente
   const totalCompletedLessons = students.reduce((acc, s) => acc + s.completedLessonsCount, 0);
 
-  // Média de conclusão (denominador: 98 aulas do currículo total)
-  const averageCompletionRate = totalStudents > 0 
-    ? (totalCompletedLessons / (totalStudents * 98)) * 100 
-    : 0;
+  // Média de conclusão calculada sobre o catálogo real de aulas
+  const averageCompletionRate =
+    totalStudents > 0 && totalCatalogLessons > 0
+      ? (totalCompletedLessons / (totalStudents * totalCatalogLessons)) * 100
+      : 0;
 
   // Tempo total acumulado de prática
   const totalSeconds = students.reduce((acc, s) => acc + s.totalStudyTimeSeconds, 0);
@@ -126,7 +130,7 @@ export const TeacherOverviewTab: React.FC<TeacherOverviewTabProps> = ({
             {averageCompletionRate.toFixed(1)}%
           </span>
           <span className="text-[10px] text-[#666672] dark:text-[#B8B3C0] mt-1 block">
-            Base: 98 aulas por aluno
+            Base: {totalCatalogLessons} aulas por aluno
           </span>
         </div>
 
@@ -207,26 +211,63 @@ export const TeacherOverviewTab: React.FC<TeacherOverviewTabProps> = ({
             </button>
           </div>
 
-          <div className="space-y-3">
-            {[
-              { title: 'Domínio Total do Violão', lessons: '60 Aulas', percent: 65, color: '#7B1E2B' },
-              { title: 'Conservatório Geral', lessons: '18 Aulas', percent: 25, color: '#C5A059' },
-              { title: 'Guitarra Solo & Improvisação', lessons: '20 Aulas', percent: 10, color: '#16A34A' },
-            ].map((course, idx) => (
-              <div key={idx} className="space-y-1">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-bold text-[#1F1F24] dark:text-[#F8F7F4]">{course.title} ({course.lessons})</span>
-                  <span className="font-mono-code font-bold text-[#666672] dark:text-[#B8B3C0]">{course.percent}% dos alunos</span>
-                </div>
-                <div className="w-full h-2 rounded-full bg-[#E8E6E1] dark:bg-[#381A25] overflow-hidden">
-                  <div
-                    className="h-full rounded-full transition-all duration-500"
-                    style={{ width: `${course.percent}%`, backgroundColor: course.color }}
-                  />
-                </div>
+          {(() => {
+            if (totalStudents === 0) {
+              return (
+                <p className="text-xs text-[#666672] dark:text-[#B8B3C0] italic">
+                  Nenhum aluno matriculado nesta turma ainda. Compartilhe o código da turma para acompanhar o progresso real por instrumento.
+                </p>
+              );
+            }
+
+            const courseCatalog = [
+              { match: 'Violão', title: 'Domínio Total do Violão', lessons: '60 Aulas', color: '#7B1E2B' },
+              { match: 'Conservatório', title: 'Conservatório Geral', lessons: '18 Aulas', color: '#C5A059' },
+              { match: 'Guitarra Solo', title: 'Guitarra Solo & Improvisação', lessons: '20 Aulas', color: '#16A34A' },
+              { match: 'Contrabaixo', title: 'Contrabaixo Elétrico', lessons: '18 Aulas', color: '#2563EB' },
+              { match: 'Teclado & Piano', title: 'Teclado & Piano', lessons: '18 Aulas', color: '#9333EA' },
+              { match: 'Bateria', title: 'Bateria & Percussão', lessons: '18 Aulas', color: '#D97706' },
+            ];
+
+            const activeDist = courseCatalog
+              .map((item) => {
+                const count = students.filter((s) => s.activeCourses.includes(item.match)).length;
+                const percent = Math.round((count / totalStudents) * 100);
+                return { ...item, count, percent };
+              })
+              .filter((item) => item.count > 0);
+
+            if (activeDist.length === 0) {
+              return (
+                <p className="text-xs text-[#666672] dark:text-[#B8B3C0] italic">
+                  Os alunos matriculados ainda não concluíram aulas nos cursos para gerar distribuição por trilha.
+                </p>
+              );
+            }
+
+            return (
+              <div className="space-y-3">
+                {activeDist.map((course) => (
+                  <div key={course.match} className="space-y-1">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-bold text-[#1F1F24] dark:text-[#F8F7F4]">
+                        {course.title} ({course.lessons})
+                      </span>
+                      <span className="font-mono-code font-bold text-[#666672] dark:text-[#B8B3C0]">
+                        {course.percent}% ({course.count}/{totalStudents})
+                      </span>
+                    </div>
+                    <div className="w-full h-2 rounded-full bg-[#E8E6E1] dark:bg-[#381A25] overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all duration-500"
+                        style={{ width: `${course.percent}%`, backgroundColor: course.color }}
+                      />
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            );
+          })()}
         </div>
       </div>
     </div>

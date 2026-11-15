@@ -26,7 +26,7 @@ import {
   serverTimestamp
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
-import type { UserProgress, StudentProfile, AuthProviderType, UserRole } from '../types/index.ts';
+import type { UserProgress, StudentProfile, AuthProviderType, UserRole, AccountStatus } from '../types/index.ts';
 
 let app: FirebaseApp;
 if (getApps().length === 0) {
@@ -441,51 +441,94 @@ export async function fetchSystemRole(
 /**
  * Salva ou atualiza os metadados do estudante no Firestore (users/{uid}).
  * SEGURANÇA: Não permite que o cliente defina o campo `role` ou privilégios administrativos.
+ * Não atribui cursos fictícios em `enrolledCourses` para contas sem matrícula real.
  */
 export async function saveUserProfile(user: User): Promise<StudentProfile | null> {
   try {
     const userRef = doc(db, 'users', user.uid);
-    const existingSnap = await getDoc(userRef);
-    const existingData = existingSnap.exists() ? existingSnap.data() : null;
+    let existingSnap;
+    try {
+      existingSnap = await getDocFromServer(userRef);
+    } catch {
+      existingSnap = await getDoc(userRef);
+    }
+    const docExists = existingSnap.exists();
+    const existingData = docExists ? existingSnap.data() : null;
 
-    // Detecta provedor
-    const providerId = (user.providerData[0]?.providerId as AuthProviderType) || 'password';
+    // Detecta provedor respeitando limite de 64 chars das regras
+    const rawProvider = (user.providerData[0]?.providerId as AuthProviderType) || existingData?.provider || 'password';
+    const providerId = String(rawProvider || 'password').slice(0, 64) as AuthProviderType;
 
     // O papel confiável é consultado em system_roles/{uid}, NUNCA atribuído pelo cliente
     const authoritativeRole = await fetchSystemRole(user.uid);
 
-    const profileData = {
+    const rawDisplayName =
+      (user.displayName && user.displayName.trim()) ||
+      (typeof existingData?.displayName === 'string' && existingData.displayName.trim()) ||
+      (user.email ? user.email.split('@')[0] : '') ||
+      'Estudante Guitar Academy';
+    const safeDisplayName = rawDisplayName.slice(0, 120);
+
+    const safeEmail = (user.email || (typeof existingData?.email === 'string' ? existingData.email : '') || '')
+      .trim()
+      .slice(0, 254);
+
+    const rawPhoto = user.photoURL || existingData?.photoURL || null;
+    const safePhotoURL = typeof rawPhoto === 'string' && rawPhoto.length <= 1024 ? rawPhoto : null;
+
+    const nowIso = new Date().toISOString();
+    const validStatuses: readonly AccountStatus[] = ['active', 'inactive', 'suspended'];
+    const preservedStatus: AccountStatus =
+      typeof existingData?.accountStatus === 'string' &&
+      (validStatuses as readonly string[]).includes(existingData.accountStatus)
+        ? (existingData.accountStatus as AccountStatus)
+        : 'active';
+
+    const profileData: Omit<StudentProfile, 'role'> = {
       uid: user.uid,
-      displayName: user.displayName || existingData?.displayName || 'Estudante Guitar Academy',
-      email: user.email || '',
-      photoURL: user.photoURL || existingData?.photoURL || null,
+      displayName: safeDisplayName,
+      email: safeEmail,
+      photoURL: safePhotoURL,
       provider: providerId,
-      createdAt: existingData?.createdAt || user.metadata.creationTime || new Date().toISOString(),
-      lastLoginAt: user.metadata.lastSignInTime || new Date().toISOString(),
-      lastSeenAt: new Date().toISOString(),
-      accountStatus: existingData?.accountStatus || 'active',
-      enrolledCourses: existingData?.enrolledCourses || ['violao'],
-      preferences: existingData?.preferences || {
-        theme: 'light',
-        preferredInstrument: 'violao',
-      },
+      createdAt:
+        docExists && existingData?.createdAt !== undefined
+          ? existingData.createdAt
+          : user.metadata.creationTime || nowIso,
+      lastLoginAt: user.metadata.lastSignInTime || nowIso,
+      lastSeenAt: nowIso,
+      accountStatus: docExists ? preservedStatus : 'active',
+      enrolledCourses: Array.isArray(existingData?.enrolledCourses) ? existingData.enrolledCourses : [],
+      preferences:
+        existingData?.preferences && typeof existingData.preferences === 'object'
+          ? existingData.preferences
+          : {
+              theme: 'light',
+              preferredInstrument: 'violao',
+            },
     };
 
-    await setDoc(
-      userRef,
-      {
-        ...profileData,
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true }
-    );
+    const firestorePayload: Record<string, any> = {
+      ...profileData,
+      updatedAt: serverTimestamp(),
+    };
+
+    // Nas regras de segurança, se o documento já existir sem `createdAt` ou sem `accountStatus`, preserva imutabilidade
+    if (docExists && !('createdAt' in (existingData || {}))) {
+      profileData.createdAt = user.metadata.creationTime || nowIso;
+      firestorePayload.createdAt = profileData.createdAt;
+    }
+
+    await setDoc(userRef, firestorePayload, { merge: true });
 
     return {
       ...profileData,
       role: authoritativeRole,
     };
-  } catch (err) {
-    console.warn('Não foi possível sincronizar o perfil no Firestore (modo offline):', err);
+  } catch (err: any) {
+    console.warn(
+      `[Firebase] Não foi possível sincronizar users/${user.uid} no Firestore (${err?.code || 'erro'}):`,
+      err?.message || err
+    );
     return null;
   }
 }
@@ -496,10 +539,13 @@ export async function saveUserProfile(user: User): Promise<StudentProfile | null
 export async function fetchUserProfile(uid: string): Promise<StudentProfile | null> {
   try {
     const userRef = doc(db, 'users', uid);
-    const [snapshot, role] = await Promise.all([
-      getDoc(userRef),
-      fetchSystemRole(uid),
-    ]);
+    let snapshot;
+    try {
+      snapshot = await getDocFromServer(userRef);
+    } catch {
+      snapshot = await getDoc(userRef);
+    }
+    const role = await fetchSystemRole(uid);
 
     if (snapshot.exists()) {
       const data = snapshot.data();
@@ -525,8 +571,8 @@ export async function updateUserLastSeen(uid: string): Promise<void> {
       lastSeenAt: new Date().toISOString(),
       updatedAt: serverTimestamp(),
     });
-  } catch (err) {
-    // Silencioso em caso de offline
+  } catch {
+    // Silencioso em caso de offline ou ausência de conexão
   }
 }
 

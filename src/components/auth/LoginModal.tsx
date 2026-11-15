@@ -48,7 +48,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
         {/* Cabeçalho da Marca */}
         <div className="flex flex-col items-center text-center mb-6">
           <div className="w-14 h-14 rounded-2xl bg-white dark:bg-[#22141A] border border-[#C5A059]/50 flex items-center justify-center shadow-md p-2 mb-3.5 tortoiseshell-card">
-            <img src="./icon.svg" alt="Guitar Academy" className="w-full h-full object-contain" />
+            <img src={`${import.meta.env.BASE_URL}icon.svg`} alt="Guitar Academy" className="w-full h-full object-contain" />
           </div>
           <span className="font-mono-code text-[11px] font-bold text-[#C5A059] tracking-widest uppercase mb-1">
             CONTA PESSOAL DE ESTUDOS

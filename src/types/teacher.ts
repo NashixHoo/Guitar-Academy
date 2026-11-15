@@ -3,27 +3,65 @@ export type UserRole = 'student' | 'teacher' | 'admin';
 export interface ClassGroup {
   id: string;
   name: string;
-  code: string; // Código de convite seguro (ex: GA-TURMA-101)
+  code: string; // Código de convite seguro (ex: GA-2026A)
   description?: string;
+  courseId?: 'violao' | 'canonical' | 'solo' | 'baixo' | 'teclado' | 'bateria' | 'geral';
+  instrument?: string;
   teacherId: string;
   teacherEmail: string;
   teacherName: string;
   createdAt: string;
   updatedAt: string;
+  expiresAt?: string | null;
   active: boolean;
   maxStudents?: number;
+}
+
+export interface InviteValidationResult {
+  valid: boolean;
+  reason?:
+    | 'empty'
+    | 'invalid_format'
+    | 'not_found'
+    | 'closed'
+    | 'expired'
+    | 'full'
+    | 'already_enrolled'
+    | 'unauthenticated'
+    | 'error';
+  message: string;
+  classGroup?: ClassGroup;
+  alreadyEnrolled?: boolean;
+  currentStudentCount?: number;
+  source?: 'backend' | 'firestore' | 'local';
+}
+
+export interface StudentEnrolledClassInfo {
+  enrollmentId: string;
+  classId: string;
+  className: string;
+  classCode?: string;
+  instrument?: string;
+  courseId?: string;
+  description?: string;
+  teacherId: string;
+  teacherName?: string;
+  joinedAt: string;
+  status: string;
+  active?: boolean;
 }
 
 export interface ClassEnrollment {
   id: string;
   classId: string;
+  courseId?: string;
   studentId: string;
   studentName: string;
   studentEmail: string;
   studentPhotoUrl?: string;
   teacherId: string;
   joinedAt: string;
-  status: 'active' | 'inactive';
+  status: 'active' | 'inactive' | 'pending' | 'approved' | 'suspended' | 'cancelled';
   lastActivityAt?: string;
   notes?: string;
 }

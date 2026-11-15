@@ -6,6 +6,8 @@ import { Settings, Music, Clock, Sliders, Smartphone, Check, Target, ShieldCheck
 import { DailyGoalSettings } from '../dashboard/DailyGoalSettings';
 import { themeService, ThemeMode } from '../../services/themeService';
 import { useAuth } from '../../contexts/AuthContext';
+import { COURSE_TRACK_VISUALS } from '../../data/visualGallery';
+import { getPrimaryCourseId } from '../../academia/progress/unlockGate';
 
 interface SettingsViewProps {
   progress: UserProgress;
@@ -17,8 +19,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ progress, onUpdatePr
   const { user, signInWithGoogle, logOut, syncNow, syncStatus, lastSyncedAt, isTeacher, isAdmin } = useAuth();
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [showGoalModal, setShowGoalModal] = useState<boolean>(false);
+  const [avatarError, setAvatarError] = useState<boolean>(false);
   const [backupMessage, setBackupMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const instrumentVisual = COURSE_TRACK_VISUALS[getPrimaryCourseId(progress)];
 
   const updateSetting = <K extends keyof UserProgress>(key: K, value: UserProgress[K]) => {
     const updated = { ...progress, [key]: value };
@@ -127,12 +131,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ progress, onUpdatePr
           {user ? (
             <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-xl bg-[#F8F7F4] dark:bg-[#251820] border border-[#E8E6E1] dark:border-[#422933]">
               <div className="flex items-center gap-3">
-                {user.photoURL ? (
+                {user.photoURL && !avatarError ? (
                   <img
                     src={user.photoURL}
                     alt={user.displayName || 'Estudante'}
                     className="w-10 h-10 rounded-xl object-cover border border-[#C5A059]"
                     referrerPolicy="no-referrer"
+                    onError={() => setAvatarError(true)}
                   />
                 ) : (
                   <div className="w-10 h-10 rounded-xl bg-[#7B1E2B] text-white font-bold text-sm flex items-center justify-center">
@@ -241,6 +246,28 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ progress, onUpdatePr
                 </svg>
                 <span>Entrar com o Google</span>
               </button>
+            </div>
+          )}
+
+          {instrumentVisual && (
+            <div className="flex items-center gap-3 p-3 rounded-xl bg-[#F8F7F4] dark:bg-[#251820] border border-[#E8E6E1] dark:border-[#422933]">
+              <img
+                src={instrumentVisual.src}
+                alt={instrumentVisual.alt}
+                className="w-14 h-14 rounded-xl object-cover border border-[#C5A059]/40 shrink-0"
+                loading="lazy"
+              />
+              <div className="min-w-0 flex-1">
+                <span className="text-[10px] font-mono-code font-bold uppercase tracking-wider text-[#C5A059] block">
+                  Trilha Instrumental Ativa
+                </span>
+                <span className="text-xs font-bold text-[#1F1F24] dark:text-[#F8F7F4] block truncate">
+                  {instrumentVisual.title}
+                </span>
+                <p className="text-[11px] text-[#666672] dark:text-[#B8B3C0] line-clamp-1">
+                  {instrumentVisual.caption}
+                </p>
+              </div>
             </div>
           )}
         </div>

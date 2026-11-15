@@ -25,8 +25,11 @@ import {
   Unlock,
   Disc,
   Grid,
-  ArrowRight
+  ArrowRight,
+  KeyRound,
+  Users
 } from 'lucide-react';
+import { StudentEnrolledClassInfo } from '../../types/teacher';
 import { LESSON_TO_SKILL_MAP, createInitialPedagogicalProfile } from '../../pedagogy/adaptiveEngine';
 import { 
   OfficialCourseId, 
@@ -46,9 +49,16 @@ import { IllustrativeCard } from '../common/IllustrativeCard';
 interface CurriculumViewProps {
   progress: UserProgress;
   onSelectLesson: (lessonId: string) => void;
+  onOpenJoinClass?: () => void;
+  studentEnrollments?: StudentEnrolledClassInfo[];
 }
 
-export const CurriculumView: React.FC<CurriculumViewProps> = ({ progress, onSelectLesson }) => {
+export const CurriculumView: React.FC<CurriculumViewProps> = ({
+  progress,
+  onSelectLesson,
+  onOpenJoinClass,
+  studentEnrollments = [],
+}) => {
   const { toggleChord, isChordOpen } = useChordModal();
   const primaryCourseId = getPrimaryCourseId(progress);
   const catalogStatus = getCatalogCoursesStatus(progress);
@@ -441,6 +451,50 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({ progress, onSele
               </button>
             );
           })}
+        </div>
+        {/* Barra de Matrícula em Turmas (Área de Cursos e Matrículas) */}
+        <div className="pt-3 border-t border-[#E8E6E1] dark:border-[#33333E] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-start sm:items-center gap-2.5 min-w-0 flex-1">
+            <div className="w-9 h-9 rounded-xl bg-[#FAF4E6] dark:bg-[#332211] text-[#8C5F18] dark:text-[#F3D17A] border border-[#C5A059]/40 flex items-center justify-center shrink-0">
+              <Users className="w-4 h-4" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <span className="text-[11px] font-bold text-[#25252A] dark:text-[#F8F7F4] block">
+                {studentEnrollments.length > 0
+                  ? `Matrículas ativas (${studentEnrollments.length})`
+                  : 'Matrícula em Turma com Professor'}
+              </span>
+              {studentEnrollments.length > 0 ? (
+                <div className="flex flex-wrap gap-1.5 mt-1">
+                  {studentEnrollments.map((enr) => (
+                    <span
+                      key={enr.enrollmentId}
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#FAF1F2] dark:bg-[#381A25] text-[#7B1E2B] dark:text-[#FF6B81] border border-[#E8D3D6] dark:border-[#522536] text-[10px] font-bold"
+                    >
+                      {enr.className}
+                      {enr.instrument ? ` · ${enr.instrument}` : ''}
+                      {enr.teacherName ? ` · Prof. ${enr.teacherName}` : ''}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <span className="text-[11px] text-[#666672] dark:text-[#B8B3C0] block">
+                  Recebeu um código de convite da sua escola ou professor? Vincule sua matrícula aqui.
+                </span>
+              )}
+            </div>
+          </div>
+
+          {onOpenJoinClass && (
+            <button
+              type="button"
+              onClick={onOpenJoinClass}
+              className="px-4 py-2.5 rounded-xl bg-[#7B1E2B] hover:bg-[#5E1620] text-white font-bold text-xs flex items-center justify-center gap-2 shadow-xs shrink-0 w-full sm:w-auto transition cursor-pointer"
+            >
+              <KeyRound className="w-3.5 h-3.5 shrink-0" />
+              <span>Entrar em uma turma</span>
+            </button>
+          )}
         </div>
       </div>
 

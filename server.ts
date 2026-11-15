@@ -102,16 +102,66 @@ export interface AdminLogPayload {
   details?: string;
 }
 
+export interface AdminAuthUserSnapshot {
+  uid: string;
+  email: string;
+  displayName: string;
+  photoURL: string | null;
+  provider: string;
+  disabled: boolean;
+  createdAt: string | null;
+  lastSignInTime: string | null;
+}
+
+export interface AdminDirectoryPayloadSnapshot {
+  authUsers: AdminAuthUserSnapshot[];
+  userDocs: Array<{ id: string; data: Record<string, any> }>;
+  studentDocs?: Array<{ id: string; data: Record<string, any> }>;
+  roleDocs: Array<{ id: string; data: Record<string, any> }>;
+  classes: Array<Record<string, any>>;
+  enrollments: Array<Record<string, any>>;
+  progressByUid?: Record<
+    string,
+    { completedLessonsCount: number; totalStudyMinutes: number; primaryCourseId?: string }
+  >;
+}
+
 export interface ServerAuthDependencies {
   verifyIdToken?: (token: string) => Promise<{ uid: string; email?: string; [key: string]: any }>;
   getSystemRole?: (uid: string) => Promise<{ exists: boolean; role: string }>;
   writeAdminLog?: (entry: AdminLogPayload) => Promise<void>;
   listAdminLogs?: () => Promise<Array<Record<string, unknown>>>;
+  listAdminDirectoryData?: () => Promise<AdminDirectoryPayloadSnapshot>;
   updateUserAccountStatus?: (
     uid: string,
     accountStatus: 'active' | 'suspended',
     actor: { uid: string; email?: string | null }
   ) => Promise<{ firestorePersisted: boolean; authDisabledUpdated: boolean }>;
+  validateClassInvite?: (params: {
+    code: string;
+    callerUid: string;
+  }) => Promise<{
+    valid: boolean;
+    reason?: string;
+    message: string;
+    classGroup?: Record<string, any>;
+    alreadyEnrolled?: boolean;
+    currentStudentCount?: number;
+  }>;
+  joinClassWithInvite?: (params: {
+    code: string;
+    callerUid: string;
+    studentName: string;
+    studentEmail: string;
+    studentPhotoUrl: string | null;
+  }) => Promise<{
+    success: boolean;
+    statusCode?: number;
+    reason?: string;
+    message: string;
+    classGroup?: Record<string, any>;
+    enrollment?: Record<string, any>;
+  }>;
 }
 
 const VALID_ROLES = new Set(['student', 'teacher', 'admin']);
@@ -865,6 +915,123 @@ Responda ESTRITAMENTE em JSON com plano de intervenção coletiva:
     });
   });
 
+  // Diretório administrativo completo via Firebase Admin SDK (Auth listUsers + coleções Firestore reais)
+  app.get('/api/admin/users', requireAuth, requireAdmin, async (_req, res) => {
+    try {
+      if (deps.listAdminDirectoryData) {
+        const snapshot = await deps.listAdminDirectoryData();
+        return res.json({
+          status: 'ok',
+          mode: 'backend_admin_sdk',
+          ...snapshot,
+        });
+      }
+
+      if (!canWriteAuditLogToFirestore()) {
+        return res.status(503).json({
+          error: 'Credenciais administrativas do Firebase Admin SDK não estão disponíveis neste servidor.',
+          code: 'admin/credentials-unavailable',
+        });
+      }
+
+      const authUsers: AdminAuthUserSnapshot[] = [];
+      let nextPageToken: string | undefined;
+      do {
+        const page = await getAuth().listUsers(1000, nextPageToken);
+        for (const u of page.users) {
+          authUsers.push({
+            uid: u.uid,
+            email: u.email || '',
+            displayName: u.displayName || '',
+            photoURL: u.photoURL || null,
+            provider: u.providerData?.[0]?.providerId || 'password',
+            disabled: Boolean(u.disabled),
+            createdAt: u.metadata?.creationTime || null,
+            lastSignInTime: u.metadata?.lastSignInTime || null,
+          });
+        }
+        nextPageToken = page.pageToken;
+      } while (nextPageToken);
+
+      const adminDb = getAdminDb();
+      const [usersSnap, studentsSnap, rolesSnap, classesSnap, enrollmentsSnap] = await Promise.all([
+        adminDb.collection('users').get(),
+        adminDb.collection('students').get(),
+        adminDb.collection('system_roles').get(),
+        adminDb.collection('classes').get(),
+        adminDb.collection('enrollments').get(),
+      ]);
+
+      const userDocs = usersSnap.docs.map((d) => ({ id: d.id, data: d.data() as Record<string, any> }));
+      const studentDocs = studentsSnap.docs.map((d) => ({ id: d.id, data: d.data() as Record<string, any> }));
+      const roleDocs = rolesSnap.docs.map((d) => ({ id: d.id, data: d.data() as Record<string, any> }));
+      const classes = classesSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Record<string, any>));
+      const enrollments = enrollmentsSnap.docs.map((d) => d.data() as Record<string, any>);
+
+      if (classes.length > 0) {
+        const classStudentsSnaps = await Promise.allSettled(
+          classes.map((cls) => adminDb.collection('classes').doc(String(cls.id)).collection('students').get())
+        );
+        classStudentsSnaps.forEach((snapRes) => {
+          if (snapRes.status === 'fulfilled') {
+            snapRes.value.docs.forEach((d) => {
+              enrollments.push(d.data() as Record<string, any>);
+            });
+          }
+        });
+      }
+
+      const uidSet = new Set<string>();
+      authUsers.forEach((u) => uidSet.add(u.uid));
+      userDocs.forEach((d) => uidSet.add(typeof d.data?.uid === 'string' && d.data.uid ? d.data.uid : d.id));
+      studentDocs.forEach((d) => uidSet.add(typeof d.data?.uid === 'string' && d.data.uid ? d.data.uid : d.id));
+
+      const allUids = Array.from(uidSet).filter((uid) => UID_REGEX.test(uid));
+      const progressByUid: Record<
+        string,
+        { completedLessonsCount: number; totalStudyMinutes: number; primaryCourseId?: string }
+      > = {};
+
+      for (let i = 0; i < allUids.length; i += 15) {
+        const batch = allUids.slice(i, i + 15);
+        const snaps = await Promise.allSettled(
+          batch.map((uid) => adminDb.collection('users').doc(uid).collection('data').doc('progress').get())
+        );
+        snaps.forEach((snapRes, idx) => {
+          if (snapRes.status === 'fulfilled' && snapRes.value.exists) {
+            const p = (snapRes.value.data() as { progress?: Record<string, any> })?.progress;
+            if (p && typeof p === 'object') {
+              const completedCount = Array.isArray(p.completedLessons) ? p.completedLessons.length : 0;
+              const totalSec = typeof p.totalStudyTimeSeconds === 'number' ? p.totalStudyTimeSeconds : 0;
+              progressByUid[batch[idx]] = {
+                completedLessonsCount: completedCount,
+                totalStudyMinutes: Math.floor(Math.max(0, totalSec) / 60),
+                primaryCourseId: typeof p.primaryCourseId === 'string' ? p.primaryCourseId : undefined,
+              };
+            }
+          }
+        });
+      }
+
+      return res.json({
+        status: 'ok',
+        mode: 'backend_admin_sdk',
+        authUsers,
+        userDocs,
+        studentDocs,
+        roleDocs,
+        classes,
+        enrollments,
+        progressByUid,
+      });
+    } catch (err: any) {
+      console.error('[Admin] Falha ao carregar diretório administrativo no servidor:', err?.message || err);
+      return res.status(500).json({
+        error: 'Não foi possível consultar o diretório real de contas e matrículas no servidor.',
+      });
+    }
+  });
+
   // Atualização administrativa persistente da situação da conta (Zero-Trust: requer ID Token + admin em system_roles)
   app.post('/api/admin/users/:uid/status', requireAuth, requireAdmin, async (req, res) => {
     const caller = (req as any).user;
@@ -968,6 +1135,358 @@ Responda ESTRITAMENTE em JSON com plano de intervenção coletiva:
       console.error('[Admin] Falha ao atualizar status da conta:', err?.message || err);
       return res.status(500).json({
         error: 'Não foi possível persistir a alteração de status da conta.',
+      });
+    }
+  });
+
+  // ==========================================
+  // ENTRADA SEGURA DE ALUNO EM TURMA VIA CÓDIGO DE CONVITE
+  // ==========================================
+  const VALID_COURSE_IDS = new Set(['violao', 'canonical', 'solo', 'baixo', 'teclado', 'bateria']);
+  const INACTIVE_ENROLLMENT_STATUSES_SRV = new Set(['cancelled', 'suspended', 'inactive']);
+
+  const formatInstrumentFromCourse = (courseId?: string, instrument?: string): string => {
+    if (typeof instrument === 'string' && instrument.trim()) return instrument.trim();
+    switch (courseId) {
+      case 'violao':
+        return 'Violão';
+      case 'canonical':
+        return 'Guitarra Elétrica';
+      case 'solo':
+        return 'Guitarra Solo';
+      case 'baixo':
+        return 'Contrabaixo';
+      case 'teclado':
+        return 'Teclado & Piano';
+      case 'bateria':
+        return 'Bateria';
+      default:
+        return 'Formação Geral';
+    }
+  };
+
+  async function validateInviteServerSide(cleanCode: string, callerUid: string) {
+    const adminDb = getAdminDb();
+    const inviteSnap = await adminDb.collection('class_invites').doc(cleanCode).get();
+
+    let classSnap: FirebaseFirestore.DocumentSnapshot<FirebaseFirestore.DocumentData> | null = null;
+    let inviteData: Record<string, any> | null = null;
+
+    if (inviteSnap.exists) {
+      inviteData = inviteSnap.data() || {};
+      if (inviteData.classId && UID_REGEX.test(String(inviteData.classId))) {
+        classSnap = await adminDb.collection('classes').doc(String(inviteData.classId)).get();
+      }
+    } else {
+      const qSnap = await adminDb
+        .collection('classes')
+        .where('code', '==', cleanCode)
+        .limit(1)
+        .get();
+      if (!qSnap.empty) {
+        classSnap = qSnap.docs[0];
+      }
+    }
+
+    if (!inviteSnap.exists && (!classSnap || !classSnap.exists)) {
+      return {
+        valid: false,
+        reason: 'not_found',
+        message: 'Código de convite não encontrado. Confira o código com seu professor.',
+      };
+    }
+
+    const classData = classSnap?.exists ? classSnap.data() || {} : {};
+    const mergedClassId = String(classSnap?.id || inviteData?.classId || '');
+    const isInviteActive = inviteData ? inviteData.active !== false : true;
+    const isClassActive = classSnap?.exists ? classData.active !== false : isInviteActive;
+
+    if (!isInviteActive || !isClassActive || (classSnap && !classSnap.exists)) {
+      return {
+        valid: false,
+        reason: 'closed',
+        message: 'Esta turma ou código de convite foi encerrado pelo professor.',
+      };
+    }
+
+    const rawExpiresAt = classData.expiresAt || inviteData?.expiresAt || null;
+    if (typeof rawExpiresAt === 'string' && rawExpiresAt.trim()) {
+      const expMs = Date.parse(rawExpiresAt.trim());
+      if (!Number.isNaN(expMs) && expMs < Date.now()) {
+        return {
+          valid: false,
+          reason: 'expired',
+          message: 'Este código de convite expirou. Solicite um novo código ao seu professor.',
+        };
+      }
+    }
+
+    const courseIdRaw =
+      typeof classData.courseId === 'string' && classData.courseId.trim()
+        ? classData.courseId.trim()
+        : typeof inviteData?.courseId === 'string' && inviteData.courseId.trim()
+        ? inviteData.courseId.trim()
+        : undefined;
+
+    const resolvedClassGroup = {
+      id: mergedClassId,
+      name: String(classData.name || inviteData?.name || 'Turma Guitar Academy'),
+      code: String(classData.code || inviteData?.code || cleanCode),
+      description: String(classData.description || inviteData?.description || ''),
+      ...(courseIdRaw ? { courseId: courseIdRaw } : {}),
+      instrument: formatInstrumentFromCourse(
+        courseIdRaw,
+        String(classData.instrument || inviteData?.instrument || '')
+      ),
+      teacherId: String(classData.teacherId || inviteData?.teacherId || ''),
+      teacherEmail: String(classData.teacherEmail || inviteData?.teacherEmail || ''),
+      teacherName: String(classData.teacherName || inviteData?.teacherName || 'Professor Guitar Academy'),
+      createdAt:
+        typeof classData.createdAt === 'string'
+          ? classData.createdAt
+          : typeof inviteData?.createdAt === 'string'
+          ? inviteData.createdAt
+          : new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      expiresAt: typeof rawExpiresAt === 'string' ? rawExpiresAt : null,
+      active: true,
+      maxStudents: Number(classData.maxStudents || inviteData?.maxStudents || 60),
+    };
+
+    // Verifica matrícula duplicada e lotação real da turma
+    const [classStudentsSnap, deterministicEnrollSnap] = await Promise.all([
+      adminDb.collection('classes').doc(mergedClassId).collection('students').get(),
+      adminDb.collection('enrollments').doc(`enroll-${mergedClassId}-${callerUid}`.slice(0, 128)).get(),
+    ]);
+
+    const activeStudentIds = new Set<string>();
+    let alreadyInSubcol = false;
+    classStudentsSnap.docs.forEach((d) => {
+      const data = d.data() || {};
+      const st = typeof data.status === 'string' ? data.status.trim().toLowerCase() : 'active';
+      if (!INACTIVE_ENROLLMENT_STATUSES_SRV.has(st)) {
+        const sId = typeof data.studentId === 'string' && data.studentId ? data.studentId : d.id;
+        activeStudentIds.add(sId);
+        if (sId === callerUid) alreadyInSubcol = true;
+      }
+    });
+
+    const deterministicData = deterministicEnrollSnap.exists ? deterministicEnrollSnap.data() || {} : null;
+    const deterministicStatus =
+      deterministicData && typeof deterministicData.status === 'string'
+        ? deterministicData.status.trim().toLowerCase()
+        : '';
+    const alreadyInEnrollments =
+      Boolean(deterministicData) && !INACTIVE_ENROLLMENT_STATUSES_SRV.has(deterministicStatus);
+
+    if (alreadyInSubcol || alreadyInEnrollments) {
+      return {
+        valid: false,
+        reason: 'already_enrolled',
+        alreadyEnrolled: true,
+        message: `Você já está matriculado na turma "${resolvedClassGroup.name}".`,
+        classGroup: resolvedClassGroup,
+        currentStudentCount: activeStudentIds.size,
+      };
+    }
+
+    if (
+      typeof resolvedClassGroup.maxStudents === 'number' &&
+      resolvedClassGroup.maxStudents > 0 &&
+      activeStudentIds.size >= resolvedClassGroup.maxStudents
+    ) {
+      return {
+        valid: false,
+        reason: 'full',
+        message: 'Esta turma já atingiu o limite máximo de alunos matriculados.',
+        classGroup: resolvedClassGroup,
+        currentStudentCount: activeStudentIds.size,
+      };
+    }
+
+    return {
+      valid: true,
+      message: 'Turma localizada e disponível para matrícula.',
+      classGroup: resolvedClassGroup,
+      currentStudentCount: activeStudentIds.size,
+    };
+  }
+
+  app.post('/api/classes/validate-invite', requireAuth, async (req, res) => {
+    const caller = (req as any).user;
+    const cleanCode = String(req.body?.code || '').trim().toUpperCase();
+
+    if (!cleanCode) {
+      return res.status(400).json({
+        valid: false,
+        reason: 'empty',
+        message: 'Informe o código de convite da turma.',
+      });
+    }
+    if (!UID_REGEX.test(cleanCode)) {
+      return res.status(400).json({
+        valid: false,
+        reason: 'invalid_format',
+        message: 'Formato de código de convite inválido. Use apenas letras, números, hífen ou ponto.',
+      });
+    }
+
+    try {
+      if (deps.validateClassInvite) {
+        const result = await deps.validateClassInvite({ code: cleanCode, callerUid: caller.uid });
+        return res.json(result);
+      }
+      if (!canWriteAuditLogToFirestore()) {
+        return res.status(503).json({
+          error: 'Credenciais administrativas do Firebase Admin SDK não estão disponíveis neste servidor.',
+          code: 'admin/credentials-unavailable',
+        });
+      }
+      const result = await validateInviteServerSide(cleanCode, caller.uid);
+      return res.json(result);
+    } catch (err: any) {
+      console.error('[Classes] Erro ao validar código de convite:', err?.message || err);
+      return res.status(500).json({
+        valid: false,
+        reason: 'error',
+        message: 'Falha ao validar código de convite no servidor.',
+      });
+    }
+  });
+
+  app.post('/api/classes/join', requireAuth, async (req, res) => {
+    const caller = (req as any).user;
+    const bodyTargetUid =
+      typeof req.body?.studentUid === 'string' && req.body.studentUid.trim()
+        ? req.body.studentUid.trim()
+        : typeof req.body?.uid === 'string' && req.body.uid.trim()
+        ? req.body.uid.trim()
+        : null;
+
+    if (bodyTargetUid && bodyTargetUid !== caller.uid) {
+      return res.status(403).json({
+        success: false,
+        message: 'Operação negada: o aluno só pode matricular seu próprio usuário autenticado.',
+      });
+    }
+
+    const cleanCode = String(req.body?.code || '').trim().toUpperCase();
+    if (!cleanCode) {
+      return res.status(400).json({
+        success: false,
+        reason: 'empty',
+        message: 'Informe o código de convite da turma.',
+      });
+    }
+    if (!UID_REGEX.test(cleanCode)) {
+      return res.status(400).json({
+        success: false,
+        reason: 'invalid_format',
+        message: 'Formato de código de convite inválido.',
+      });
+    }
+
+    const safeStudentName = String(
+      req.body?.studentName || caller.name || caller.email?.split('@')[0] || 'Estudante'
+    )
+      .trim()
+      .slice(0, 120);
+    const safeStudentEmail = String(caller.email || req.body?.studentEmail || '')
+      .trim()
+      .slice(0, 254);
+    const rawPhoto = typeof req.body?.studentPhotoUrl === 'string' ? req.body.studentPhotoUrl.trim() : '';
+    const safePhotoUrl = rawPhoto && rawPhoto.length <= 1024 ? rawPhoto : null;
+
+    try {
+      if (deps.joinClassWithInvite) {
+        const result = await deps.joinClassWithInvite({
+          code: cleanCode,
+          callerUid: caller.uid,
+          studentName: safeStudentName,
+          studentEmail: safeStudentEmail,
+          studentPhotoUrl: safePhotoUrl,
+        });
+        return res.status(result.statusCode || (result.success ? 200 : 400)).json(result);
+      }
+
+      if (!canWriteAuditLogToFirestore()) {
+        return res.status(503).json({
+          error: 'Credenciais administrativas do Firebase Admin SDK não estão disponíveis neste servidor.',
+          code: 'admin/credentials-unavailable',
+        });
+      }
+
+      const validation = await validateInviteServerSide(cleanCode, caller.uid);
+      if (!validation.valid || !validation.classGroup) {
+        const statusCode =
+          validation.reason === 'already_enrolled' || validation.reason === 'full' ? 409 : 400;
+        return res.status(statusCode).json({
+          success: false,
+          reason: validation.reason,
+          message: validation.message,
+          classGroup: validation.classGroup,
+        });
+      }
+
+      const matchedClass = validation.classGroup;
+      const adminDb = getAdminDb();
+      const nowIso = new Date().toISOString();
+      const enrollmentId = `enroll-${matchedClass.id}-${caller.uid}`.slice(0, 128);
+      const courseIdField =
+        matchedClass.courseId && VALID_COURSE_IDS.has(matchedClass.courseId)
+          ? { courseId: matchedClass.courseId }
+          : {};
+
+      const firestorePayload: Record<string, any> = {
+        id: enrollmentId,
+        classId: matchedClass.id,
+        ...courseIdField,
+        studentId: caller.uid,
+        studentName: safeStudentName,
+        studentEmail: safeStudentEmail,
+        studentPhotoUrl: safePhotoUrl,
+        teacherId: matchedClass.teacherId,
+        joinedAt: nowIso,
+        status: 'active',
+        lastActivityAt: nowIso,
+        updatedAt: FieldValue.serverTimestamp(),
+      };
+
+      const batch = adminDb.batch();
+      batch.set(
+        adminDb.collection('classes').doc(matchedClass.id).collection('students').doc(caller.uid),
+        firestorePayload
+      );
+      batch.set(adminDb.collection('enrollments').doc(enrollmentId), firestorePayload);
+
+      // Atualiza enrolledCourses no perfil do usuário se a turma estiver vinculada a um curso oficial (sem tocar em role)
+      if (courseIdField.courseId) {
+        const userRef = adminDb.collection('users').doc(caller.uid);
+        const userSnap = await userRef.get();
+        if (userSnap.exists) {
+          batch.update(userRef, {
+            enrolledCourses: FieldValue.arrayUnion(courseIdField.courseId),
+            updatedAt: FieldValue.serverTimestamp(),
+          });
+        }
+      }
+
+      await batch.commit();
+
+      return res.json({
+        success: true,
+        message: `Você ingressou com sucesso na turma "${matchedClass.name}" do Professor ${matchedClass.teacherName}!`,
+        classGroup: matchedClass,
+        enrollment: {
+          ...firestorePayload,
+          updatedAt: nowIso,
+        },
+      });
+    } catch (err: any) {
+      console.error('[Classes] Erro ao registrar matrícula na turma:', err?.message || err);
+      return res.status(500).json({
+        success: false,
+        message: 'Não foi possível concluir a matrícula na turma. Tente novamente.',
       });
     }
   });

@@ -96,7 +96,7 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           {/* Logo icon box using official icon.svg with tortoiseshell gold trim */}
           <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white dark:bg-[#22141A] border border-[#C5A059]/40 flex items-center justify-center shadow-xs overflow-hidden p-1.5 tortoiseshell-card shrink-0">
-            <img src="./icon.svg" alt="Guitar Academy Ícone" className="w-full h-full object-contain" />
+            <img src={`${import.meta.env.BASE_URL}icon.svg`} alt="Guitar Academy Ícone" className="w-full h-full object-contain" />
           </div>
           <div className="min-w-0">
             <span className="font-display font-black text-[#1F1F24] dark:text-[#F8F7F4] text-xs xs:text-sm sm:text-base tracking-[0.06em] sm:tracking-[0.10em] flex items-center gap-1.5 leading-none">

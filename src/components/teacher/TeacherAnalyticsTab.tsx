@@ -34,7 +34,18 @@ export const TeacherAnalyticsTab: React.FC<TeacherAnalyticsTabProps> = ({
 
   // 2. Dados: Distribuição por Curso
   const courseCounts = events.reduce((acc, e) => {
-    const c = e.courseId === 'violao' ? 'Violão' : e.courseId === 'solo' ? 'Guitarra Solo' : 'Conservatório';
+    const c =
+      e.courseId === 'violao'
+        ? 'Violão'
+        : e.courseId === 'solo'
+        ? 'Guitarra Solo'
+        : e.courseId === 'baixo'
+        ? 'Contrabaixo'
+        : e.courseId === 'teclado'
+        ? 'Teclado & Piano'
+        : e.courseId === 'bateria'
+        ? 'Bateria'
+        : 'Conservatório';
     acc[c] = (acc[c] || 0) + 1;
     return acc;
   }, {} as Record<string, number>);
@@ -108,24 +119,27 @@ export const TeacherAnalyticsTab: React.FC<TeacherAnalyticsTabProps> = ({
 
   const currentChart = CHARTS[selectedChartIndex] || CHARTS[0];
 
-  // Converte data para fatias de pizza SVG
+  // Converte data para fatias de pizza SVG (mantendo 0 honesto quando vazio)
   const dataEntries = Object.entries(currentChart.data).filter(([_, val]) => val > 0);
-  const chartSum = dataEntries.reduce((acc, [_, v]) => acc + v, 0) || 1;
+  const chartSum = dataEntries.reduce((acc, [_, v]) => acc + v, 0);
 
   let accumulatedPercent = 0;
-  const slices = dataEntries.map(([key, value], idx) => {
-    const percent = (value / chartSum) * 100;
-    const startPercent = accumulatedPercent;
-    accumulatedPercent += percent;
-    return {
-      key,
-      label: (currentChart.labels as Record<string, string>)[key] || key,
-      value,
-      percent: Number(percent.toFixed(1)),
-      startPercent,
-      color: currentChart.colors[idx % currentChart.colors.length],
-    };
-  });
+  const slices =
+    chartSum > 0
+      ? dataEntries.map(([key, value], idx) => {
+          const percent = (value / chartSum) * 100;
+          const startPercent = accumulatedPercent;
+          accumulatedPercent += percent;
+          return {
+            key,
+            label: (currentChart.labels as Record<string, string>)[key] || key,
+            value,
+            percent: Number(percent.toFixed(1)),
+            startPercent,
+            color: currentChart.colors[idx % currentChart.colors.length],
+          };
+        })
+      : [];
 
   return (
     <div className="space-y-6">
@@ -198,27 +212,33 @@ export const TeacherAnalyticsTab: React.FC<TeacherAnalyticsTabProps> = ({
           </div>
 
           <div className="space-y-2">
-            {slices.map((slice, idx) => (
-              <div
-                key={idx}
-                className="p-2.5 rounded-xl bg-[#F8F7F4] dark:bg-[#251820] border border-[#E8E6E1] dark:border-[#422933] flex items-center justify-between"
-              >
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: slice.color }} />
-                  <span className="font-bold text-xs text-[#1F1F24] dark:text-[#F8F7F4] truncate">
-                    {slice.label}
-                  </span>
+            {slices.length === 0 ? (
+              <p className="text-xs text-[#666672] dark:text-[#B8B3C0] italic py-4">
+                Nenhuma atividade registrada para os filtros selecionados neste período.
+              </p>
+            ) : (
+              slices.map((slice, idx) => (
+                <div
+                  key={idx}
+                  className="p-2.5 rounded-xl bg-[#F8F7F4] dark:bg-[#251820] border border-[#E8E6E1] dark:border-[#422933] flex items-center justify-between"
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: slice.color }} />
+                    <span className="font-bold text-xs text-[#1F1F24] dark:text-[#F8F7F4] truncate">
+                      {slice.label}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <span className="text-xs text-[#666672] dark:text-[#B8B3C0] font-mono-code">
+                      {slice.value} ações
+                    </span>
+                    <span className="font-mono-code font-bold text-xs px-2 py-0.5 rounded-md bg-white dark:bg-[#1A1216] text-[#7B1E2B] dark:text-[#FF6B81] border border-[#E8D3D6] dark:border-[#422933]">
+                      {slice.percent}%
+                    </span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-3 shrink-0">
-                  <span className="text-xs text-[#666672] dark:text-[#B8B3C0] font-mono-code">
-                    {slice.value} ações
-                  </span>
-                  <span className="font-mono-code font-bold text-xs px-2 py-0.5 rounded-md bg-white dark:bg-[#1A1216] text-[#7B1E2B] dark:text-[#FF6B81] border border-[#E8D3D6] dark:border-[#422933]">
-                    {slice.percent}%
-                  </span>
-                </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
       </div>

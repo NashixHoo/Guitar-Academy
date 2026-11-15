@@ -19,6 +19,9 @@ import {
   FileText
 } from 'lucide-react';
 import { NavigationTab } from '../../types';
+import { StudentEnrolledClassInfo } from '../../types/teacher';
+import { COURSE_TRACK_VISUALS } from '../../data/visualGallery';
+import { getPrimaryCourseId } from '../../academia/progress/unlockGate';
 
 interface UserProfileModalProps {
   isOpen: boolean;
@@ -28,6 +31,7 @@ interface UserProfileModalProps {
   onNavigateTab?: (tab: NavigationTab) => void;
   onOpenJoinClass?: () => void;
   onOpenPrivacyNotice?: () => void;
+  studentEnrollments?: StudentEnrolledClassInfo[];
 }
 
 export const UserProfileModal: React.FC<UserProfileModalProps> = ({
@@ -38,6 +42,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   onNavigateTab,
   onOpenJoinClass,
   onOpenPrivacyNotice,
+  studentEnrollments = [],
 }) => {
   const {
     user,
@@ -55,7 +60,10 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   } = useAuth();
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
+  const [avatarError, setAvatarError] = useState(false);
   const hasPrivilegedRole = isTeacher || isAdmin;
+  const primaryCourseId = getPrimaryCourseId(progress);
+  const instrumentVisual = COURSE_TRACK_VISUALS[primaryCourseId];
 
   if (!isOpen || !user) return null;
 
@@ -108,7 +116,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
       aria-labelledby="user-profile-title"
     >
       <div 
-        className="relative w-full max-w-md bg-[#FAF9F6] dark:bg-[#1A1216] rounded-2xl border border-[#E8E6E1] dark:border-[#422933] shadow-2xl p-6 sm:p-7 overflow-hidden text-[#25252A] dark:text-[#F8F7F4]"
+        className="relative w-full max-w-md bg-[#FAF9F6] dark:bg-[#1A1216] rounded-2xl border border-[#E8E6E1] dark:border-[#422933] shadow-2xl p-6 sm:p-7 max-h-[92dvh] overflow-y-auto text-[#25252A] dark:text-[#F8F7F4]"
       >
         {/* Fechar */}
         <button
@@ -121,12 +129,13 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
 
         {/* Perfil Header */}
         <div className="flex items-center gap-3.5 mb-5">
-          {user.photoURL ? (
+          {user.photoURL && !avatarError ? (
             <img 
               src={user.photoURL} 
               alt={user.displayName || 'Estudante'} 
               className="w-14 h-14 rounded-2xl object-cover border-2 border-[#C5A059] shadow-sm"
               referrerPolicy="no-referrer"
+              onError={() => setAvatarError(true)}
             />
           ) : (
             <div className="w-14 h-14 rounded-2xl bg-[#7B1E2B] text-white font-bold text-lg flex items-center justify-center border-2 border-[#C5A059] shadow-sm">
@@ -296,6 +305,56 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
           </div>
         </div>
 
+        {/* Instrumento em Formação */}
+        {instrumentVisual && (
+          <div className="mb-4 p-2.5 rounded-xl bg-white dark:bg-[#251820] border border-[#E8E6E1] dark:border-[#422933] flex items-center gap-3">
+            <img
+              src={instrumentVisual.src}
+              alt={instrumentVisual.alt}
+              className="w-12 h-12 rounded-lg object-cover border border-[#C5A059]/40 shrink-0"
+              loading="lazy"
+            />
+            <div className="min-w-0 flex-1">
+              <span className="text-[10px] font-mono-code font-bold uppercase tracking-wider text-[#C5A059] block">
+                Instrumento em Formação
+              </span>
+              <span className="text-xs font-bold text-[#1F1F24] dark:text-[#F8F7F4] block truncate">
+                {instrumentVisual.title}
+              </span>
+              <span className="text-[10px] text-[#666672] dark:text-[#B8B3C0] block truncate">
+                {instrumentVisual.eyebrow}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Turmas Matriculadas */}
+        {studentEnrollments.length > 0 && (
+          <div className="mb-4 p-3 rounded-xl bg-white dark:bg-[#251820] border border-[#E8E6E1] dark:border-[#422933] space-y-1.5">
+            <span className="text-[10px] font-mono-code font-bold uppercase tracking-wider text-[#C5A059] block">
+              Minhas Turmas ({studentEnrollments.length})
+            </span>
+            <div className="space-y-1">
+              {studentEnrollments.map((enr) => (
+                <div
+                  key={enr.enrollmentId}
+                  className="text-xs flex items-center justify-between gap-2 text-[#1F1F24] dark:text-[#F8F7F4]"
+                >
+                  <span className="font-bold truncate">
+                    {enr.className}
+                    {enr.instrument ? ` · ${enr.instrument}` : ''}
+                  </span>
+                  {enr.classCode && (
+                    <span className="font-mono-code text-[10px] px-1.5 py-0.5 rounded bg-[#FAF1F2] dark:bg-[#381A25] text-[#7B1E2B] dark:text-[#FF6B81] shrink-0">
+                      {enr.classCode}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Ações Pedagógicas & Conta */}
         <div className="space-y-2 border-t border-[#E8E6E1] dark:border-[#422933] pt-3">
           {isAdmin && (
@@ -311,7 +370,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
             </button>
           )}
 
-          {hasPrivilegedRole ? (
+          {hasPrivilegedRole && (
             <button
               onClick={() => {
                 onClose();
@@ -322,18 +381,19 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
               <GraduationCap className="w-4 h-4" />
               <span>Abrir Painel de Gestão Pedagógica</span>
             </button>
-          ) : (
-            <button
-              onClick={() => {
-                onClose();
-                onOpenJoinClass?.();
-              }}
-              className="w-full h-10 rounded-xl bg-[#FAF4E6] dark:bg-[#332211] hover:bg-[#F3E7C4] dark:hover:bg-[#442D15] text-[#8C5F18] dark:text-[#F3D17A] font-bold text-xs transition border border-[#C5A059]/40 flex items-center justify-center gap-2 cursor-pointer"
-            >
-              <KeyRound className="w-4 h-4 text-[#C5A059]" />
-              <span>Vincular a uma Turma com Código</span>
-            </button>
           )}
+
+          <button
+            onClick={() => {
+              onClose();
+              onOpenJoinClass?.();
+            }}
+            title="Vincular a uma Turma com Código"
+            className="w-full h-10 rounded-xl bg-[#FAF4E6] dark:bg-[#332211] hover:bg-[#F3E7C4] dark:hover:bg-[#442D15] text-[#8C5F18] dark:text-[#F3D17A] font-bold text-xs transition border border-[#C5A059]/40 flex items-center justify-center gap-2 cursor-pointer"
+          >
+            <KeyRound className="w-4 h-4 text-[#C5A059]" />
+            <span>Entrar em uma turma</span>
+          </button>
 
           <div className="grid grid-cols-2 gap-2">
             <button

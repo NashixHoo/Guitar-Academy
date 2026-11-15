@@ -49,12 +49,16 @@ import { StudentPrivacyNotice } from './components/teacher/StudentPrivacyNotice'
 import { AdminPortalView } from './components/admin/AdminPortalView';
 import { ChordModalProvider } from './contexts/ChordModalContext';
 import { ChordPreviewModal } from './components/chords/ChordPreviewModal';
+import { TeacherService } from './services/teacherService';
+import { StudentEnrolledClassInfo } from './types/teacher';
 
 function MainAppContent() {
   const { user, loading, isAdmin, isTeacher, adminPreviewMode, showLegacyModal } = useAuth();
+  const { refreshUserProfile } = useAuth();
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showJoinClassModal, setShowJoinClassModal] = useState(false);
+  const [studentEnrollments, setStudentEnrollments] = useState<StudentEnrolledClassInfo[]>([]);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
   const [currentTab, setCurrentTab] = useState<NavigationTab>('home');
@@ -74,10 +78,17 @@ function MainAppContent() {
     themeService.applyTheme(active);
   }, []);
 
-  // Sincroniza o progresso isolado do estudante sempre que o usuário ativo alternar
+  // Sincroniza o progresso isolado e matrículas reais do estudante sempre que o usuário ativo alternar
   useEffect(() => {
     const loaded = storageService.loadProgress(user?.uid);
     setProgress(loaded);
+    if (user?.uid) {
+      void TeacherService.getStudentEnrollments(user.uid)
+        .then((list) => setStudentEnrollments(list))
+        .catch(() => setStudentEnrollments([]));
+    } else {
+      setStudentEnrollments([]);
+    }
   }, [user]);
 
   // Ouvinte de histórico popstate do navegador (botão voltar físico ou browser)
@@ -419,6 +430,8 @@ function MainAppContent() {
                   onUpdateProgress={setProgress}
                   onNavigateTab={(tab) => navigateToTab(tab, null)}
                   onSelectLesson={handleSelectLesson}
+                  onOpenJoinClass={() => setShowJoinClassModal(true)}
+                  studentEnrollments={studentEnrollments}
                 />
               )}
 
@@ -446,6 +459,8 @@ function MainAppContent() {
                   <CurriculumView
                     progress={progress}
                     onSelectLesson={handleSelectLesson}
+                    onOpenJoinClass={() => setShowJoinClassModal(true)}
+                    studentEnrollments={studentEnrollments}
                   />
                 )
               )}
@@ -594,6 +609,7 @@ function MainAppContent() {
           setShowProfileModal(false);
           setShowPrivacyModal(true);
         }}
+        studentEnrollments={studentEnrollments}
       />
 
       {/* Modal de Entrada em Turma via Código Seguro (para Alunos) */}
@@ -604,8 +620,15 @@ function MainAppContent() {
         studentName={user?.displayName || 'Estudante'}
         studentEmail={user?.email || ''}
         studentPhotoUrl={user?.photoURL || undefined}
-        onJoined={() => {
-          setShowJoinClassModal(false);
+        onJoined={async () => {
+          if (user?.uid) {
+            const [updatedEnrollments] = await Promise.all([
+              TeacherService.getStudentEnrollments(user.uid).catch(() => studentEnrollments),
+              refreshUserProfile().catch(() => undefined),
+            ]);
+            setStudentEnrollments(updatedEnrollments);
+          }
+          window.dispatchEvent(new CustomEvent('guitar-academy:enrollment-updated'));
         }}
       />
 

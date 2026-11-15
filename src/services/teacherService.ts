@@ -10,14 +10,21 @@ import {
   PedagogicalBottleneck,
   StudentAnalyticsSummary,
   UserRole,
+  InviteValidationResult,
+  StudentEnrolledClassInfo,
 } from '../types/teacher';
 import { auth, db, fetchSystemRole } from './firebase';
+import { getProfessorApiBaseUrl } from './professorService';
 import {
   collection,
   doc,
   getDoc,
+  getDocFromServer,
   getDocs,
+  getDocsFromServer,
   setDoc,
+  updateDoc,
+  arrayUnion,
   query,
   where,
   serverTimestamp,
@@ -48,6 +55,76 @@ const LOCAL_ENROLLMENTS_KEY = 'guitar_academy:teacher_enrollments_v1';
 const LOCAL_EVENTS_KEY = 'guitar_academy:teacher_events_v1';
 const LOCAL_STUDENT_CLASS_LINK_KEY = 'guitar_academy:student_class_link_v1';
 
+const LEGACY_DEMO_STUDENT_IDS = new Set([
+  'user_aluno_diego_01',
+  'user_aluno_carolina_02',
+  'user_aluno_lucas_03',
+]);
+const INACTIVE_ENROLLMENT_STATUSES = new Set(['cancelled', 'suspended', 'inactive']);
+const VALID_OFFICIAL_COURSES = new Set(['violao', 'canonical', 'solo', 'baixo', 'teclado', 'bateria']);
+const VALID_INVITE_CODE_REGEX = /^[A-Z0-9_\-.:]{1,128}$/;
+
+export function formatClassInstrumentLabel(courseId?: string, instrument?: string): string {
+  if (typeof instrument === 'string' && instrument.trim()) return instrument.trim();
+  switch (courseId) {
+    case 'violao':
+      return 'Violão';
+    case 'canonical':
+      return 'Guitarra Elétrica';
+    case 'solo':
+      return 'Guitarra Solo';
+    case 'baixo':
+      return 'Contrabaixo';
+    case 'teclado':
+      return 'Teclado & Piano';
+    case 'bateria':
+      return 'Bateria';
+    case 'geral':
+      return 'Formação Geral';
+    default:
+      return 'Formação Geral';
+  }
+}
+
+function isRealClassRecord(cls: Partial<ClassGroup> | null | undefined): cls is ClassGroup {
+  if (!cls || typeof cls.id !== 'string' || !cls.id.trim()) return false;
+  if (cls.code === 'GA-TURMA-101' || cls.id.endsWith('-turma-1')) return false;
+  return true;
+}
+
+function isRealEnrollmentRecord(
+  enr: Partial<ClassEnrollment> | null | undefined
+): enr is ClassEnrollment {
+  if (!enr || typeof enr.studentId !== 'string' || !enr.studentId.trim()) return false;
+  if (enr.studentId.startsWith('user_aluno_') || LEGACY_DEMO_STUDENT_IDS.has(enr.studentId)) {
+    return false;
+  }
+  const status = typeof enr.status === 'string' ? enr.status.trim().toLowerCase() : 'active';
+  if (INACTIVE_ENROLLMENT_STATUSES.has(status)) return false;
+  return true;
+}
+
+function deduplicateRealEnrollments(enrollments: ClassEnrollment[]): ClassEnrollment[] {
+  const map = new Map<string, ClassEnrollment>();
+  for (const enr of enrollments) {
+    if (!isRealEnrollmentRecord(enr)) continue;
+    const key = `${enr.classId || 'no-class'}::${enr.studentId}`;
+    const existing = map.get(key);
+    if (!existing) {
+      map.set(key, enr);
+    } else {
+      map.set(key, {
+        ...existing,
+        ...enr,
+        studentName: enr.studentName || existing.studentName,
+        studentEmail: enr.studentEmail || existing.studentEmail,
+        studentPhotoUrl: enr.studentPhotoUrl || existing.studentPhotoUrl,
+      });
+    }
+  }
+  return Array.from(map.values());
+}
+
 export class TeacherService {
   /**
    * Determina o papel do usuário (STUDENT, TEACHER ou ADMIN).
@@ -60,65 +137,42 @@ export class TeacherService {
   }
 
   /**
-   * Retorna as turmas de responsabilidade do professor
+   * Retorna exclusivamente as turmas reais de responsabilidade do professor no Firestore.
+   * Nunca fabrica turmas padrão ou registros demonstrativos.
    */
-  static async getTeacherClasses(teacherId: string, teacherEmail?: string): Promise<ClassGroup[]> {
-    // 1. Tenta carregar do Firestore
-    try {
-      const classesRef = collection(db, 'classes');
-      const q = query(classesRef, where('teacherId', '==', teacherId));
-      const snap = await getDocs(q);
-      if (!snap.empty) {
-        const firestoreClasses = snap.docs.map((d) => ({ id: d.id, ...d.data() } as ClassGroup));
-        this.saveLocalClasses(firestoreClasses);
+  static async getTeacherClasses(teacherId: string, _teacherEmail?: string): Promise<ClassGroup[]> {
+    if (!teacherId) return [];
+
+    // 1. Quando autenticado, consulta exclusivamente o Cloud Firestore
+    if (auth.currentUser) {
+      try {
+        const classesRef = collection(db, 'classes');
+        const q = query(classesRef, where('teacherId', '==', teacherId));
+        let snap;
+        try {
+          snap = await getDocsFromServer(q);
+        } catch {
+          snap = await getDocs(q);
+        }
+        const firestoreClasses = snap.docs
+          .map((d) => ({ id: d.id, ...d.data() } as ClassGroup))
+          .filter(isRealClassRecord);
+
+        // Atualiza cache local removendo qualquer turma antiga daquele professor que não exista no servidor
+        const otherLocalClasses = this.loadLocalClasses().filter(
+          (c) => c.teacherId !== teacherId && isRealClassRecord(c)
+        );
+        this.saveLocalClasses([...otherLocalClasses, ...firestoreClasses]);
         return firestoreClasses;
+      } catch {
+        // Fallback offline apenas se a consulta ao servidor falhar por conectividade
       }
-    } catch {
-      // Offline fallback
     }
 
-    // 2. Fallback de cache local
-    const local = this.loadLocalClasses().filter((c) => c.teacherId === teacherId);
-    if (local.length > 0) return local;
-
-    // 3. Inicialização padrão de turma base para o professor
-    const defaultClass: ClassGroup = {
-      id: `class-${teacherId}-turma-1`,
-      name: 'Turma Geral de Conservatório (Violão & Guitarra)',
-      code: 'GA-TURMA-101',
-      description: 'Turma de formação continuada em harmonia, braço, acordes abertos e técnica.',
-      teacherId,
-      teacherEmail: teacherEmail || 'professor@guitaracademy.com',
-      teacherName: 'Professor Titular Guitar Academy',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      active: true,
-      maxStudents: 50,
-    };
-
-    const initialList = [defaultClass];
-    this.saveLocalClasses(initialList);
-
-    // Tenta persistir no Firestore (turma + convite indexado sem expor listagem de turmas)
-    try {
-      await setDoc(doc(db, 'classes', defaultClass.id), {
-        ...defaultClass,
-        updatedAt: serverTimestamp(),
-      });
-      await setDoc(doc(db, 'class_invites', defaultClass.code), {
-        classId: defaultClass.id,
-        code: defaultClass.code,
-        name: defaultClass.name,
-        teacherId: defaultClass.teacherId,
-        teacherName: defaultClass.teacherName,
-        active: true,
-        updatedAt: serverTimestamp(),
-      });
-    } catch {
-      // offline
-    }
-
-    return initialList;
+    // 2. Cache local sanitizado (ambiente offline ou suíte de testes Node sem auth.currentUser)
+    return this.loadLocalClasses().filter(
+      (c) => c.teacherId === teacherId && isRealClassRecord(c)
+    );
   }
 
   /**
@@ -130,23 +184,46 @@ export class TeacherService {
     teacherName: string,
     name: string,
     description?: string,
-    customCode?: string
+    customCode?: string,
+    options?: {
+      courseId?: ClassGroup['courseId'];
+      instrument?: string;
+      expiresAt?: string | null;
+      maxStudents?: number;
+    }
   ): Promise<ClassGroup> {
     const classId = `class-${Date.now()}`;
-    const code = customCode?.toUpperCase().trim() || `GA-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
+    const rawCode =
+      customCode?.toUpperCase().trim() ||
+      `GA-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
+    const code = rawCode.replace(/[^A-Z0-9_\-.:]/g, '-').slice(0, 64) || `GA-${Date.now()}`;
+    const courseId = options?.courseId || 'geral';
+    const instrument = formatClassInstrumentLabel(courseId, options?.instrument);
+    const expiresAt =
+      typeof options?.expiresAt === 'string' && options.expiresAt.trim()
+        ? options.expiresAt.trim()
+        : null;
+    const maxStudents =
+      typeof options?.maxStudents === 'number' && options.maxStudents > 0
+        ? Math.min(500, Math.round(options.maxStudents))
+        : 60;
+    const nowIso = new Date().toISOString();
 
     const newClass: ClassGroup = {
       id: classId,
       name: name.trim(),
       code,
       description: description?.trim() || '',
+      courseId,
+      instrument,
       teacherId,
       teacherEmail,
       teacherName,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      createdAt: nowIso,
+      updatedAt: nowIso,
+      expiresAt,
       active: true,
-      maxStudents: 60,
+      maxStudents,
     };
 
     const currentClasses = this.loadLocalClasses();
@@ -161,8 +238,15 @@ export class TeacherService {
         classId,
         code,
         name: newClass.name,
+        description: newClass.description,
+        courseId,
+        instrument,
         teacherId,
+        teacherEmail,
         teacherName,
+        createdAt: nowIso,
+        expiresAt,
+        maxStudents,
         active: true,
         updatedAt: serverTimestamp(),
       });
@@ -171,6 +255,314 @@ export class TeacherService {
     }
 
     return newClass;
+  }
+
+  /**
+   * Valida um código de convite antes da confirmação de matrícula do aluno.
+   * Prioriza o backend Express autenticado quando disponível (com fallback seguro no Cloud Firestore).
+   */
+  static async validateInviteCode(
+    inviteCode: string,
+    studentUid?: string
+  ): Promise<InviteValidationResult> {
+    const cleanCode = (inviteCode || '').trim().toUpperCase();
+    if (!cleanCode) {
+      return {
+        valid: false,
+        reason: 'empty',
+        message: 'Por favor, digite ou cole o código de convite fornecido pelo seu professor.',
+      };
+    }
+
+    if (!VALID_INVITE_CODE_REGEX.test(cleanCode)) {
+      return {
+        valid: false,
+        reason: 'invalid_format',
+        message: 'Código de convite inválido. Utilize apenas letras, números, hífen (-) ou ponto (.).',
+      };
+    }
+
+    const currentUser = auth.currentUser;
+    const effectiveUid = (studentUid || currentUser?.uid || '').trim();
+
+    if (currentUser && studentUid && studentUid.trim() !== currentUser.uid) {
+      return {
+        valid: false,
+        reason: 'unauthenticated',
+        message: 'Operação negada: o aluno só pode validar turmas para o próprio UID autenticado.',
+      };
+    }
+
+    // 1. Quando autenticado, tenta validação autoritativa no backend Express (quando disponível com Admin SDK)
+    if (currentUser) {
+      try {
+        const idToken = await currentUser.getIdToken();
+        const baseUrl = getProfessorApiBaseUrl();
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3500);
+        try {
+          const resp = await fetch(`${baseUrl}/api/classes/validate-invite`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${idToken}`,
+            },
+            body: JSON.stringify({ code: cleanCode }),
+            signal: controller.signal,
+          });
+          const contentType = resp.headers.get('content-type') || '';
+          if (resp.status !== 503 && contentType.includes('application/json')) {
+            const payload = (await resp.json()) as InviteValidationResult & { code?: string };
+            if (payload && payload.code !== 'admin/credentials-unavailable') {
+              return {
+                ...payload,
+                source: 'backend',
+              };
+            }
+          }
+        } finally {
+          clearTimeout(timeoutId);
+        }
+      } catch {
+        // Fallback automático para Cloud Firestore em ambientes serverless/GitHub Pages
+      }
+
+      // 2. Fallback seguro direto no Cloud Firestore (/class_invites/{code})
+      try {
+        let inviteSnap;
+        try {
+          inviteSnap = await getDocFromServer(doc(db, 'class_invites', cleanCode));
+        } catch {
+          inviteSnap = await getDoc(doc(db, 'class_invites', cleanCode));
+        }
+
+        let candidateClass: ClassGroup | undefined;
+        let isInviteClosed = false;
+        let expiresAt: string | null = null;
+
+        if (inviteSnap.exists()) {
+          const inv = inviteSnap.data() || {};
+          if (inv.active === false) {
+            isInviteClosed = true;
+          }
+          if (typeof inv.expiresAt === 'string' && inv.expiresAt.trim()) {
+            expiresAt = inv.expiresAt.trim();
+          }
+          if (inv.classId && inv.teacherId) {
+            candidateClass = {
+              id: String(inv.classId),
+              name: String(inv.name || 'Turma Guitar Academy'),
+              code: String(inv.code || cleanCode),
+              description: String(inv.description || ''),
+              courseId: inv.courseId || 'geral',
+              instrument: formatClassInstrumentLabel(inv.courseId, inv.instrument),
+              teacherId: String(inv.teacherId),
+              teacherEmail: String(inv.teacherEmail || ''),
+              teacherName: String(inv.teacherName || 'Professor Guitar Academy'),
+              createdAt: String(inv.createdAt || new Date().toISOString()),
+              updatedAt: new Date().toISOString(),
+              expiresAt,
+              active: inv.active !== false,
+              maxStudents: Number(inv.maxStudents || 60),
+            };
+          }
+        } else {
+          // Tentativa secundária caso professor/admin esteja testando em classes/{classId}
+          try {
+            const q = query(collection(db, 'classes'), where('code', '==', cleanCode));
+            const snap = await getDocs(q);
+            if (!snap.empty) {
+              const raw = { id: snap.docs[0].id, ...snap.docs[0].data() } as ClassGroup;
+              if (isRealClassRecord(raw)) {
+                candidateClass = {
+                  ...raw,
+                  instrument: formatClassInstrumentLabel(raw.courseId, raw.instrument),
+                };
+                if (raw.active === false) isInviteClosed = true;
+                if (typeof raw.expiresAt === 'string' && raw.expiresAt.trim()) {
+                  expiresAt = raw.expiresAt.trim();
+                }
+              }
+            }
+          } catch {
+            // Alunos não podem listar /classes pelas regras de segurança — esperado
+          }
+        }
+
+        if (!candidateClass) {
+          return {
+            valid: false,
+            reason: 'not_found',
+            message: 'Código de turma não encontrado. Verifique com seu professor o código exato da turma.',
+            source: 'firestore',
+          };
+        }
+
+        if (isInviteClosed || !candidateClass.active) {
+          return {
+            valid: false,
+            reason: 'closed',
+            message: 'Esta turma ou código de convite foi encerrado pelo professor.',
+            classGroup: candidateClass,
+            source: 'firestore',
+          };
+        }
+
+        if (expiresAt) {
+          const expMs = Date.parse(expiresAt);
+          if (!Number.isNaN(expMs) && expMs < Date.now()) {
+            return {
+              valid: false,
+              reason: 'expired',
+              message: 'Este código de convite expirou. Solicite um novo código ao seu professor.',
+              classGroup: candidateClass,
+              source: 'firestore',
+            };
+          }
+        }
+
+        // Verifica matrícula duplicada do usuário autenticado na turma
+        if (effectiveUid) {
+          let alreadyActive = false;
+          try {
+            const subSnap = await getDocFromServer(
+              doc(db, 'classes', candidateClass.id, 'students', effectiveUid)
+            ).catch(() => getDoc(doc(db, 'classes', candidateClass.id, 'students', effectiveUid)));
+            if (subSnap.exists()) {
+              const st = String(subSnap.data()?.status || 'active').toLowerCase();
+              if (!INACTIVE_ENROLLMENT_STATUSES.has(st)) {
+                alreadyActive = true;
+              }
+            }
+          } catch {
+            // Ignora falha pontual
+          }
+
+          if (!alreadyActive) {
+            try {
+              const enrQ = query(
+                collection(db, 'enrollments'),
+                where('studentId', '==', effectiveUid)
+              );
+              const enrSnap = await getDocsFromServer(enrQ).catch(() => getDocs(enrQ));
+              alreadyActive = enrSnap.docs.some((d) => {
+                const data = d.data();
+                if (data?.classId !== candidateClass!.id) return false;
+                const st = String(data?.status || 'active').toLowerCase();
+                return !INACTIVE_ENROLLMENT_STATUSES.has(st);
+              });
+            } catch {
+              // Ignora
+            }
+          }
+
+          if (alreadyActive) {
+            return {
+              valid: false,
+              reason: 'already_enrolled',
+              alreadyEnrolled: true,
+              message: `Você já está matriculado na turma "${candidateClass.name}".`,
+              classGroup: candidateClass,
+              source: 'firestore',
+            };
+          }
+        }
+
+        return {
+          valid: true,
+          message: 'Turma localizada e disponível para matrícula.',
+          classGroup: candidateClass,
+          source: 'firestore',
+        };
+      } catch (err: any) {
+        return {
+          valid: false,
+          reason: 'error',
+          message:
+            err?.code === 'unavailable'
+              ? 'Não foi possível alcançar o Firebase. Verifique sua conexão e tente novamente.'
+              : 'Erro ao validar o código de convite no Firebase.',
+          source: 'firestore',
+        };
+      }
+    }
+
+    // 3. Ambiente offline / suíte de testes em Node sem auth.currentUser
+    const localClasses = this.loadLocalClasses().filter(isRealClassRecord);
+    const localMatch = localClasses.find(
+      (c) => c.code === cleanCode || (c as any).inviteCode === cleanCode
+    );
+    if (!localMatch) {
+      return {
+        valid: false,
+        reason: 'not_found',
+        message: 'Código de turma não encontrado. Verifique com seu professor o código exato da sua turma.',
+        source: 'local',
+      };
+    }
+
+    const enrichedLocal: ClassGroup = {
+      ...localMatch,
+      instrument: formatClassInstrumentLabel(localMatch.courseId, localMatch.instrument),
+    };
+
+    if (!localMatch.active) {
+      return {
+        valid: false,
+        reason: 'closed',
+        message: 'Esta turma ou código de convite foi encerrado pelo professor.',
+        classGroup: enrichedLocal,
+        source: 'local',
+      };
+    }
+
+    if (localMatch.expiresAt) {
+      const expMs = Date.parse(localMatch.expiresAt);
+      if (!Number.isNaN(expMs) && expMs < Date.now()) {
+        return {
+          valid: false,
+          reason: 'expired',
+          message: 'Este código de convite expirou. Solicite um novo código ao seu professor.',
+          classGroup: enrichedLocal,
+          source: 'local',
+        };
+      }
+    }
+
+    const localEnrollments = this.loadLocalEnrollments().filter(isRealEnrollmentRecord);
+    if (
+      effectiveUid &&
+      localEnrollments.some((e) => e.classId === localMatch.id && e.studentId === effectiveUid)
+    ) {
+      return {
+        valid: false,
+        reason: 'already_enrolled',
+        alreadyEnrolled: true,
+        message: `Você já está matriculado na turma "${localMatch.name}".`,
+        classGroup: enrichedLocal,
+        source: 'local',
+      };
+    }
+
+    const activeCount = localEnrollments.filter((e) => e.classId === localMatch.id).length;
+    if (typeof localMatch.maxStudents === 'number' && localMatch.maxStudents > 0 && activeCount >= localMatch.maxStudents) {
+      return {
+        valid: false,
+        reason: 'full',
+        message: 'Esta turma já atingiu o limite máximo de alunos matriculados.',
+        classGroup: enrichedLocal,
+        currentStudentCount: activeCount,
+        source: 'local',
+      };
+    }
+
+    return {
+      valid: true,
+      message: 'Turma localizada e disponível para matrícula.',
+      classGroup: enrichedLocal,
+      currentStudentCount: activeCount,
+      source: 'local',
+    };
   }
 
   /**
@@ -215,77 +607,270 @@ export class TeacherService {
       return { success: false, message: 'Código de convite inválido ou vazio.', error: 'Código de convite inválido ou vazio.' };
     }
 
-    // 1. Busca direta segura pelo documento /class_invites/{cleanCode} (evita expor listagem de classes)
+    const safeStudentName = (studentName || 'Estudante').trim().slice(0, 120);
+    const safeStudentEmail = (studentEmail || '').trim().slice(0, 254);
+    const safePhotoUrl =
+      typeof studentPhotoUrl === 'string' && studentPhotoUrl.trim()
+        ? studentPhotoUrl.trim().slice(0, 1024)
+        : null;
+
     let matchedClass: ClassGroup | undefined;
+    let persistedEnrollment: ClassEnrollment | undefined;
 
-    try {
-      const inviteSnap = await getDoc(doc(db, 'class_invites', cleanCode));
-      if (inviteSnap.exists()) {
-        const inv = inviteSnap.data();
-        if (inv.active === true && inv.classId && inv.teacherId) {
-          matchedClass = {
-            id: inv.classId,
-            name: inv.name || 'Turma Guitar Academy',
-            code: inv.code || cleanCode,
-            description: inv.description || '',
-            teacherId: inv.teacherId,
-            teacherEmail: inv.teacherEmail || '',
-            teacherName: inv.teacherName || 'Professor Guitar Academy',
-            createdAt: inv.createdAt || new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            active: true,
-            maxStudents: inv.maxStudents || 60,
-          };
-        }
-      }
-    } catch {
-      // fallback abaixo
-    }
-
-    if (!matchedClass) {
+    if (auth.currentUser) {
+      // 1. Tenta execução autoritativa via backend Express (quando disponível com Admin SDK)
+      let handledByBackend = false;
       try {
-        const classesRef = collection(db, 'classes');
-        const q = query(classesRef, where('code', '==', cleanCode), where('active', '==', true));
-        const snap = await getDocs(q);
-        if (!snap.empty) {
-          matchedClass = { id: snap.docs[0].id, ...snap.docs[0].data() } as ClassGroup;
+        const idToken = await auth.currentUser.getIdToken();
+        const baseUrl = getProfessorApiBaseUrl();
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 4500);
+        try {
+          const resp = await fetch(`${baseUrl}/api/classes/join`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${idToken}`,
+            },
+            body: JSON.stringify({
+              code: cleanCode,
+              studentName: safeStudentName,
+              studentEmail: safeStudentEmail,
+              studentPhotoUrl: safePhotoUrl,
+            }),
+            signal: controller.signal,
+          });
+          const contentType = resp.headers.get('content-type') || '';
+          if (resp.status !== 503 && contentType.includes('application/json')) {
+            const payload = (await resp.json()) as {
+              success?: boolean;
+              message?: string;
+              code?: string;
+              classGroup?: ClassGroup;
+              enrollment?: ClassEnrollment;
+            };
+            if (payload && payload.code !== 'admin/credentials-unavailable') {
+              handledByBackend = true;
+              if (!resp.ok || !payload.success || !payload.classGroup) {
+                return {
+                  success: false,
+                  message: payload.message || 'Não foi possível concluir a matrícula na turma.',
+                  error: payload.message || 'Falha na matrícula.',
+                  classGroup: payload.classGroup,
+                };
+              }
+              matchedClass = payload.classGroup;
+              persistedEnrollment = payload.enrollment;
+            }
+          }
+        } finally {
+          clearTimeout(timeoutId);
         }
       } catch {
-        // offline ou bloqueado para listagem direta de classes
+        // Fallback automático para Cloud Firestore
       }
-    }
 
-    if (!matchedClass) {
-      // Procura no cache local
-      const localClasses = this.loadLocalClasses();
-      matchedClass = localClasses.find((c) => (c.code === cleanCode || (c as any).inviteCode === cleanCode) && c.active);
+      // 2. Fallback direto no Cloud Firestore respeitando estritamente firestore.rules
+      if (!handledByBackend) {
+        const validation = await this.validateInviteCode(cleanCode, cleanStudentUid);
+        if (!validation.valid || !validation.classGroup) {
+          return {
+            success: false,
+            message: validation.message,
+            error: validation.message,
+            classGroup: validation.classGroup,
+          };
+        }
+
+        matchedClass = validation.classGroup;
+        const deterministicId = `enroll-${matchedClass.id}-${cleanStudentUid}`.slice(0, 128);
+        let enrollmentId = deterministicId;
+
+        // Se existir matrícula anterior cancelada no slot determinístico, gera novo ID válido
+        try {
+          const existingDetSnap = await getDocFromServer(doc(db, 'enrollments', deterministicId)).catch(() =>
+            getDoc(doc(db, 'enrollments', deterministicId))
+          );
+          if (existingDetSnap.exists()) {
+            const existingStatus = String(existingDetSnap.data()?.status || 'active').toLowerCase();
+            if (!INACTIVE_ENROLLMENT_STATUSES.has(existingStatus)) {
+              return {
+                success: false,
+                message: `Você já está matriculado na turma "${matchedClass.name}".`,
+                error: 'Matrícula duplicada.',
+                classGroup: matchedClass,
+              };
+            }
+            enrollmentId = `enroll-${matchedClass.id}-${cleanStudentUid}-${Date.now()}`.slice(0, 128);
+          }
+        } catch {
+          // Prossegue com ID determinístico
+        }
+
+        const nowIso = new Date().toISOString();
+        const courseIdField =
+          matchedClass.courseId && VALID_OFFICIAL_COURSES.has(matchedClass.courseId)
+            ? { courseId: matchedClass.courseId }
+            : {};
+
+        const firestorePayload: Record<string, any> = {
+          id: enrollmentId,
+          classId: matchedClass.id,
+          ...courseIdField,
+          studentId: cleanStudentUid,
+          studentName: safeStudentName,
+          studentEmail: safeStudentEmail,
+          studentPhotoUrl: safePhotoUrl,
+          teacherId: matchedClass.teacherId,
+          joinedAt: nowIso,
+          status: 'active',
+          lastActivityAt: nowIso,
+          updatedAt: serverTimestamp(),
+        };
+
+        // Garante que não exista registro cancelado impedindo create em /classes/{classId}/students/{uid}
+        const subDocRef = doc(db, 'classes', matchedClass.id, 'students', cleanStudentUid);
+        let subDocExists = false;
+        try {
+          const subSnap = await getDocFromServer(subDocRef).catch(() => getDoc(subDocRef));
+          if (subSnap.exists()) {
+            subDocExists = true;
+            const subStatus = String(subSnap.data()?.status || 'active').toLowerCase();
+            if (!INACTIVE_ENROLLMENT_STATUSES.has(subStatus)) {
+              return {
+                success: false,
+                message: `Você já está matriculado na turma "${matchedClass.name}".`,
+                error: 'Matrícula duplicada.',
+                classGroup: matchedClass,
+              };
+            }
+          }
+        } catch {
+          // Ignora
+        }
+
+        try {
+          if (subDocExists) {
+            await Promise.all([
+              updateDoc(subDocRef, {
+                studentName: safeStudentName,
+                studentEmail: safeStudentEmail,
+                studentPhotoUrl: safePhotoUrl,
+                lastActivityAt: nowIso,
+                updatedAt: serverTimestamp(),
+              }),
+              setDoc(doc(db, 'enrollments', enrollmentId), firestorePayload),
+            ]);
+          } else {
+            await Promise.all([
+              setDoc(subDocRef, firestorePayload),
+              setDoc(doc(db, 'enrollments', enrollmentId), firestorePayload),
+            ]);
+          }
+        } catch (writeErr: any) {
+          const msg =
+            writeErr?.code === 'permission-denied'
+              ? 'A turma está fechada ou o servidor recusou a matrícula pelas regras de segurança.'
+              : 'Erro ao gravar matrícula no Firebase. Verifique sua conexão e tente novamente.';
+          return {
+            success: false,
+            message: msg,
+            error: writeErr?.message || msg,
+            classGroup: matchedClass,
+          };
+        }
+
+        // Após entrar na subcoleção, o aluno já possui permissão de leitura em /classes/{classId}
+        try {
+          const classDocRef = doc(db, 'classes', matchedClass.id);
+          const classDocSnap = await getDocFromServer(classDocRef).catch(() =>
+            getDoc(classDocRef)
+          );
+          if (classDocSnap.exists()) {
+            const cData = classDocSnap.data() || {};
+            matchedClass = {
+              ...matchedClass,
+              name: String(cData.name || matchedClass.name),
+              description: String(cData.description || matchedClass.description || ''),
+              courseId: cData.courseId || matchedClass.courseId,
+              instrument: formatClassInstrumentLabel(cData.courseId || matchedClass.courseId, cData.instrument || matchedClass.instrument),
+              teacherName: String(cData.teacherName || matchedClass.teacherName),
+            };
+          }
+        } catch {
+          // Dados de class_invites já garantem exibição completa
+        }
+
+        // Sincroniza enrolledCourses no perfil users/{uid} quando aplicável (sem tocar em role ou campos protegidos)
+        if (courseIdField.courseId) {
+          try {
+            await updateDoc(doc(db, 'users', cleanStudentUid), {
+              enrolledCourses: arrayUnion(courseIdField.courseId),
+              updatedAt: serverTimestamp(),
+            });
+          } catch {
+            // Não bloqueia matrícula caso o documento de perfil ainda esteja sincronizando
+          }
+        }
+
+        persistedEnrollment = {
+          id: enrollmentId,
+          classId: matchedClass.id,
+          ...(courseIdField.courseId ? { courseId: courseIdField.courseId } : {}),
+          studentId: cleanStudentUid,
+          studentName: safeStudentName,
+          studentEmail: safeStudentEmail,
+          ...(safePhotoUrl ? { studentPhotoUrl: safePhotoUrl } : {}),
+          teacherId: matchedClass.teacherId,
+          joinedAt: nowIso,
+          status: 'active',
+          lastActivityAt: nowIso,
+        };
+      }
+    } else {
+      // Ambiente offline / testes Node
+      const validation = await this.validateInviteCode(cleanCode, cleanStudentUid);
+      if (!validation.valid || !validation.classGroup) {
+        return {
+          success: false,
+          message: validation.message,
+          error: validation.message,
+          classGroup: validation.classGroup,
+        };
+      }
+      matchedClass = validation.classGroup;
     }
 
     if (!matchedClass) {
       return {
         success: false,
-        message: 'Código de turma não encontrado. Verifique com seu professor o código exato da sua turma.',
-        error: 'Código de turma não encontrado.',
+        message: 'Não foi possível localizar os dados da turma.',
+        error: 'Turma não encontrada.',
       };
     }
 
-    const enrollmentId = `enroll-${matchedClass.id}-${cleanStudentUid}`;
-    const enrollment: ClassEnrollment = {
-      id: enrollmentId,
+    const nowIso = new Date().toISOString();
+    const enrollment: ClassEnrollment = persistedEnrollment || {
+      id: `enroll-${matchedClass.id}-${cleanStudentUid}`.slice(0, 128),
       classId: matchedClass.id,
+      ...(matchedClass.courseId && VALID_OFFICIAL_COURSES.has(matchedClass.courseId)
+        ? { courseId: matchedClass.courseId }
+        : {}),
       studentId: cleanStudentUid,
-      studentName: studentName || 'Estudante',
-      studentEmail: studentEmail || '',
-      studentPhotoUrl,
+      studentName: safeStudentName,
+      studentEmail: safeStudentEmail,
+      ...(safePhotoUrl ? { studentPhotoUrl: safePhotoUrl } : {}),
       teacherId: matchedClass.teacherId,
-      joinedAt: new Date().toISOString(),
+      joinedAt: nowIso,
       status: 'active',
-      lastActivityAt: new Date().toISOString(),
+      lastActivityAt: nowIso,
     };
 
-    // Salva localmente
-    const localEnrollments = this.loadLocalEnrollments();
-    const existingIndex = localEnrollments.findIndex((e) => e.studentId === cleanStudentUid && e.classId === matchedClass!.id);
+    // Atualiza cache local somente após validação e persistência reais
+    const localEnrollments = this.loadLocalEnrollments().filter(isRealEnrollmentRecord);
+    const existingIndex = localEnrollments.findIndex(
+      (e) => e.studentId === cleanStudentUid && e.classId === matchedClass!.id
+    );
     if (existingIndex >= 0) {
       localEnrollments[existingIndex] = enrollment;
     } else {
@@ -293,21 +878,16 @@ export class TeacherService {
     }
     this.saveLocalEnrollments(localEnrollments);
 
-    // Registra link do aluno
+    // Garante que os metadados da turma fiquem em cache local para exibição offline do aluno
+    const localClasses = this.loadLocalClasses().filter(isRealClassRecord);
+    if (!localClasses.some((c) => c.id === matchedClass!.id)) {
+      this.saveLocalClasses([...localClasses, matchedClass]);
+    }
+
     if (typeof localStorage !== 'undefined') {
       try {
         localStorage.setItem(LOCAL_STUDENT_CLASS_LINK_KEY, JSON.stringify(enrollment));
       } catch {}
-    }
-
-    // Salva no Firestore (coleção da turma e registro de matrícula isolado)
-    try {
-      await setDoc(doc(db, 'classes', matchedClass.id, 'students', cleanStudentUid), {
-        ...enrollment,
-        updatedAt: serverTimestamp(),
-      });
-    } catch {
-      // offline
     }
 
     return {
@@ -318,53 +898,184 @@ export class TeacherService {
   }
 
   /**
-   * Retorna os alunos vinculados às turmas do professor
+   * Retorna exclusivamente as turmas reais em que o aluno autenticado está matriculado.
+   */
+  static async getStudentEnrollments(studentUid: string): Promise<StudentEnrolledClassInfo[]> {
+    const cleanUid = (studentUid || '').trim();
+    if (!cleanUid) return [];
+
+    if (auth.currentUser && auth.currentUser.uid === cleanUid) {
+      try {
+        const enrQ = query(collection(db, 'enrollments'), where('studentId', '==', cleanUid));
+        const snap = await getDocsFromServer(enrQ).catch(() => getDocs(enrQ));
+        const realEnrollments = deduplicateRealEnrollments(
+          snap.docs.map((d) => ({ id: d.id, ...d.data() } as ClassEnrollment))
+        );
+
+        const classDetailsList = await Promise.all(
+          realEnrollments.map(async (enr) => {
+            try {
+              const clsSnap = await getDocFromServer(doc(db, 'classes', enr.classId)).catch(() =>
+                getDoc(doc(db, 'classes', enr.classId))
+              );
+              const clsData = clsSnap.exists() ? clsSnap.data() : null;
+              return {
+                enrollmentId: enr.id,
+                classId: enr.classId,
+                className: String(clsData?.name || 'Turma Guitar Academy'),
+                classCode: typeof clsData?.code === 'string' ? clsData.code : undefined,
+                instrument: formatClassInstrumentLabel(
+                  clsData?.courseId || enr.courseId,
+                  clsData?.instrument
+                ),
+                courseId: String(clsData?.courseId || enr.courseId || 'geral'),
+                description: typeof clsData?.description === 'string' ? clsData.description : '',
+                teacherId: enr.teacherId,
+                teacherName:
+                  typeof clsData?.teacherName === 'string'
+                    ? clsData.teacherName
+                    : 'Professor Guitar Academy',
+                joinedAt: enr.joinedAt,
+                status: enr.status,
+                active: clsData ? clsData.active !== false : true,
+              } satisfies StudentEnrolledClassInfo;
+            } catch {
+              return {
+                enrollmentId: enr.id,
+                classId: enr.classId,
+                className: 'Turma Guitar Academy',
+                instrument: formatClassInstrumentLabel(enr.courseId),
+                courseId: String(enr.courseId || 'geral'),
+                teacherId: enr.teacherId,
+                joinedAt: enr.joinedAt,
+                status: enr.status,
+                active: true,
+              } satisfies StudentEnrolledClassInfo;
+            }
+          })
+        );
+
+        // Sincroniza matrículas reais do aluno no cache local
+        const otherLocal = this.loadLocalEnrollments().filter(
+          (e) => e.studentId !== cleanUid && isRealEnrollmentRecord(e)
+        );
+        this.saveLocalEnrollments([...otherLocal, ...realEnrollments]);
+
+        return classDetailsList;
+      } catch {
+        // Fallback offline abaixo
+      }
+    }
+
+    const localClassesMap = new Map(
+      this.loadLocalClasses()
+        .filter(isRealClassRecord)
+        .map((c) => [c.id, c])
+    );
+
+    const localEnrollments = deduplicateRealEnrollments(
+      this.loadLocalEnrollments().filter((e) => e.studentId === cleanUid)
+    );
+
+    return localEnrollments.map((enr) => {
+      const cls = localClassesMap.get(enr.classId);
+      return {
+        enrollmentId: enr.id,
+        classId: enr.classId,
+        className: cls?.name || 'Turma Guitar Academy',
+        classCode: cls?.code,
+        instrument: formatClassInstrumentLabel(cls?.courseId || enr.courseId, cls?.instrument),
+        courseId: String(cls?.courseId || enr.courseId || 'geral'),
+        description: cls?.description || '',
+        teacherId: enr.teacherId,
+        teacherName: cls?.teacherName || 'Professor Guitar Academy',
+        joinedAt: enr.joinedAt,
+        status: enr.status,
+        active: cls ? cls.active !== false : true,
+      };
+    });
+  }
+
+  /**
+   * Retorna exclusivamente os alunos reais matriculados nas turmas do professor.
+   * Consulta classes/{classId}/students e enrollments no Firestore, deduplica e filtra inativos/cancelados.
    */
   static async getEnrolledStudents(teacherId: string, classId?: string): Promise<ClassEnrollment[]> {
-    let enrollments: ClassEnrollment[] = [];
+    if (!teacherId) return [];
 
-    try {
-      if (classId && classId !== 'all') {
-        const classes = await this.getTeacherClasses(teacherId);
-        const ownsClass = classes.some((c) => c.id === classId && c.teacherId === teacherId);
-        if (!ownsClass) {
-          return [];
+    const classes = await this.getTeacherClasses(teacherId);
+    const ownedClassIds = new Set(classes.map((c) => c.id));
+
+    if (classId && classId !== 'all' && !ownedClassIds.has(classId)) {
+      return [];
+    }
+
+    const targetClassIds =
+      classId && classId !== 'all' ? [classId] : Array.from(ownedClassIds);
+
+    if (targetClassIds.length === 0) {
+      return [];
+    }
+
+    if (auth.currentUser) {
+      try {
+        const gathered: ClassEnrollment[] = [];
+
+        const classSnaps = await Promise.all(
+          targetClassIds.map(async (cId) => {
+            const colRef = collection(db, 'classes', cId, 'students');
+            try {
+              return await getDocsFromServer(colRef);
+            } catch {
+              return await getDocs(colRef);
+            }
+          })
+        );
+
+        classSnaps.forEach((snap, idx) => {
+          const currentClassId = targetClassIds[idx];
+          snap.docs.forEach((d) => {
+            const raw = { id: d.id, ...d.data() } as ClassEnrollment;
+            if (!raw.classId) raw.classId = currentClassId;
+            if ((!raw.teacherId || raw.teacherId === teacherId) && raw.classId === currentClassId) {
+              gathered.push(raw);
+            }
+          });
+        });
+
+        try {
+          const enrQ = query(collection(db, 'enrollments'), where('teacherId', '==', teacherId));
+          const enrSnap = await getDocsFromServer(enrQ).catch(() => getDocs(enrQ));
+          enrSnap.docs.forEach((d) => {
+            const raw = { id: d.id, ...d.data() } as ClassEnrollment;
+            if (ownedClassIds.has(raw.classId) && (!classId || classId === 'all' || raw.classId === classId)) {
+              gathered.push(raw);
+            }
+          });
+        } catch {
+          // Opcional caso alguma regra restrinja query
         }
-        const snap = await getDocs(collection(db, 'classes', classId, 'students'));
-        enrollments = snap.docs
-          .map((d) => ({ id: d.id, ...d.data() } as ClassEnrollment))
-          .filter((e) => !e.teacherId || e.teacherId === teacherId);
-      } else {
-        const classes = await this.getTeacherClasses(teacherId);
-        for (const c of classes) {
-          const snap = await getDocs(collection(db, 'classes', c.id, 'students'));
-          const classStudents = snap.docs
-            .map((d) => ({ id: d.id, ...d.data() } as ClassEnrollment))
-            .filter((e) => !e.teacherId || e.teacherId === teacherId);
-          enrollments.push(...classStudents);
-        }
+
+        const deduped = deduplicateRealEnrollments(gathered);
+        const preservedOther = this.loadLocalEnrollments().filter(
+          (e) => e.teacherId !== teacherId && isRealEnrollmentRecord(e)
+        );
+        this.saveLocalEnrollments([...preservedOther, ...deduped]);
+        return deduped;
+      } catch {
+        // Fallback offline se Firestore estiver inacessível
       }
-    } catch {
-      // offline
     }
 
-    if (enrollments.length === 0) {
-      const local = this.loadLocalEnrollments().filter((e) => {
-        if (e.teacherId !== teacherId) return false;
-        if (classId && classId !== 'all' && e.classId !== classId) return false;
-        return true;
-      });
-      enrollments = local;
-    }
+    const local = this.loadLocalEnrollments().filter((e) => {
+      if (!isRealEnrollmentRecord(e)) return false;
+      if (e.teacherId !== teacherId) return false;
+      if (!ownedClassIds.has(e.classId)) return false;
+      if (classId && classId !== 'all' && e.classId !== classId) return false;
+      return true;
+    });
 
-    // Se ainda não houver nenhum aluno vinculado, provisiona alunos de demonstração acadêmica
-    // isolados estritamente ao teacherId atual para permitir visualização analítica imediata
-    if (enrollments.length === 0) {
-      enrollments = this.getBootstrapDemoEnrollments(teacherId, classId);
-      this.saveLocalEnrollments([...this.loadLocalEnrollments(), ...enrollments]);
-    }
-
-    return enrollments;
+    return deduplicateRealEnrollments(local);
   }
 
   /**
@@ -544,14 +1255,13 @@ export class TeacherService {
       if (Array.isArray(courseIdOrEnrollments)) {
         enrolledStudents = courseIdOrEnrollments;
       } else {
-        enrolledStudents = this.loadLocalEnrollments();
+        enrolledStudents = this.loadLocalEnrollments().filter(isRealEnrollmentRecord);
       }
     } else {
       enrolledStudents = Array.isArray(enrolledOrCourseId) ? enrolledOrCourseId : [];
       courseId = (typeof courseIdOrEnrollments === 'string' ? courseIdOrEnrollments : 'violao') as any;
     }
 
-    const totalStudents = enrolledStudents.length || 1;
     const allCourseLessons = getAllLessons().filter((l) => {
       if (courseId === 'violao') return l.id.startsWith('violao-');
       if (courseId === 'solo') return l.id.startsWith('solo-');
@@ -610,7 +1320,12 @@ export class TeacherService {
     enrolledOrEvents?: number | any
   ): PedagogicalBottleneck[] {
     const bottlenecks: PedagogicalBottleneck[] = [];
-    const count = typeof enrolledOrEvents === 'number' ? enrolledOrEvents : Array.isArray(enrolledOrEvents) ? enrolledOrEvents.length : 1;
+    const count =
+      typeof enrolledOrEvents === 'number'
+        ? enrolledOrEvents
+        : Array.isArray(enrolledOrEvents)
+        ? enrolledOrEvents.length
+        : 0;
 
     // 1. Gargalos por alta taxa de abandono na aula (>= 30% dos que iniciaram)
     const highDropLessons = funnelRows.filter((r) => {
@@ -692,28 +1407,30 @@ export class TeacherService {
   ): StudentAnalyticsSummary[] {
     let studentList: ClassEnrollment[] = [];
     if (typeof enrolledStudents === 'string') {
-      studentList = this.loadLocalEnrollments().filter((e) => enrolledStudents === 'all' || e.classId === enrolledStudents);
+      studentList = this.loadLocalEnrollments()
+        .filter(isRealEnrollmentRecord)
+        .filter((e) => enrolledStudents === 'all' || e.classId === enrolledStudents);
     } else if (Array.isArray(enrolledStudents)) {
-      studentList = enrolledStudents;
+      studentList = enrolledStudents.filter(isRealEnrollmentRecord);
     } else {
-      studentList = this.loadLocalEnrollments();
+      studentList = this.loadLocalEnrollments().filter(isRealEnrollmentRecord);
     }
-    const classList = classes || this.loadLocalClasses();
+    const classList = classes || this.loadLocalClasses().filter(isRealClassRecord);
     const classMap = new Map(classList.map((c) => [c.id, c.name]));
+    const totalCatalogLessons = getAllLessons().length;
+    const sevenDaysAgoMs = Date.now() - 7 * 24 * 60 * 60 * 1000;
 
     return studentList.map((student) => {
       const progress: UserProgress = storageService.loadProgress(student.studentId);
-      const className = classMap.get(student.classId) || 'Turma Principal';
+      const className = classMap.get(student.classId) || student.classId || 'Turma não informada';
 
       const totalSec = progress.totalStudyTimeSeconds || 0;
-      // Separa tempo interativo medido de registros manuais
       const manualSec = (progress.manualPracticeLogs || []).reduce(
         (acc, l) => acc + (l.durationMinutes || 0) * 60,
         0
       );
       const verifiedSec = Math.max(0, totalSec - manualSec);
 
-      // Avaliações de habilidades do perfil pedagógico
       const profile = progress.pedagogicalProfile;
       let evaluatedCount = 0;
       let proficientCount = 0;
@@ -729,10 +1446,29 @@ export class TeacherService {
       }
 
       const activeCoursesList: string[] = [];
-      if (progress.completedLessons.some((id) => id.startsWith('violao-'))) activeCoursesList.push('Violão');
-      if (progress.completedLessons.some((id) => id.startsWith('solo-'))) activeCoursesList.push('Guitarra Solo');
-      if (progress.completedLessons.some((id) => !id.startsWith('violao-') && !id.startsWith('solo-'))) activeCoursesList.push('Conservatório');
-      if (activeCoursesList.length === 0) activeCoursesList.push('Conservatório (Iniciante)');
+      const completed = progress.completedLessons || [];
+      if (completed.some((id) => id.startsWith('violao-'))) activeCoursesList.push('Violão');
+      if (completed.some((id) => id.startsWith('solo-'))) activeCoursesList.push('Guitarra Solo');
+      if (completed.some((id) => id.startsWith('baixo-'))) activeCoursesList.push('Contrabaixo');
+      if (completed.some((id) => id.startsWith('teclado-'))) activeCoursesList.push('Teclado & Piano');
+      if (completed.some((id) => id.startsWith('bateria-'))) activeCoursesList.push('Bateria');
+      if (completed.some((id) => id.startsWith('lesson-'))) activeCoursesList.push('Conservatório');
+
+      // Frequência semanal real calculada por datas distintas de estudo nos últimos 7 dias
+      const recentStudyDates = new Set<string>();
+      (progress.practiceSessions || []).forEach((sess) => {
+        if (sess?.date && new Date(sess.date).getTime() >= sevenDaysAgoMs) {
+          recentStudyDates.add(sess.date.slice(0, 10));
+        }
+      });
+      (progress.manualPracticeLogs || []).forEach((log) => {
+        if (log?.date && new Date(log.date).getTime() >= sevenDaysAgoMs) {
+          recentStudyDates.add(log.date.slice(0, 10));
+        }
+      });
+      if (progress.lastStudyDate && new Date(progress.lastStudyDate).getTime() >= sevenDaysAgoMs) {
+        recentStudyDates.add(progress.lastStudyDate.slice(0, 10));
+      }
 
       return {
         studentUid: student.studentId,
@@ -746,12 +1482,12 @@ export class TeacherService {
         totalStudyTimeSeconds: totalSec,
         verifiedInteractiveSeconds: verifiedSec,
         manualLoggedSeconds: manualSec,
-        completedLessonsCount: progress.completedLessons.length,
+        completedLessonsCount: completed.length,
         activeCourses: activeCoursesList,
-        currentLessons: progress.courseLastLesson || { canonical: 'lesson-1' },
-        studyFrequencyDaysPerWeek: progress.todayStudyTimeSeconds > 0 ? 4 : 2,
-        practicedBpmMax: progress.practicedBpm || 80,
-        pendingActivitiesCount: Math.max(0, 98 - progress.completedLessons.length),
+        currentLessons: progress.courseLastLesson || {},
+        studyFrequencyDaysPerWeek: recentStudyDates.size,
+        practicedBpmMax: progress.practicedBpm || 0,
+        pendingActivitiesCount: Math.max(0, totalCatalogLessons - completed.length),
         evaluatedSkillsCount: evaluatedCount,
         unevaluatedSkillsCount: Math.max(0, 21 - evaluatedCount),
         skillsProficientCount: proficientCount,
@@ -814,7 +1550,9 @@ export class TeacherService {
     if (typeof localStorage === 'undefined') return [];
     try {
       const data = localStorage.getItem(LOCAL_CLASSES_KEY);
-      return data ? JSON.parse(data) : [];
+      if (!data) return [];
+      const parsed = JSON.parse(data);
+      return Array.isArray(parsed) ? parsed.filter(isRealClassRecord) : [];
     } catch {
       return [];
     }
@@ -823,7 +1561,7 @@ export class TeacherService {
   private static saveLocalClasses(classes: ClassGroup[]): void {
     if (typeof localStorage === 'undefined') return;
     try {
-      localStorage.setItem(LOCAL_CLASSES_KEY, JSON.stringify(classes));
+      localStorage.setItem(LOCAL_CLASSES_KEY, JSON.stringify(classes.filter(isRealClassRecord)));
     } catch {}
   }
 
@@ -831,7 +1569,9 @@ export class TeacherService {
     if (typeof localStorage === 'undefined') return [];
     try {
       const data = localStorage.getItem(LOCAL_ENROLLMENTS_KEY);
-      return data ? JSON.parse(data) : [];
+      if (!data) return [];
+      const parsed = JSON.parse(data);
+      return Array.isArray(parsed) ? parsed.filter(isRealEnrollmentRecord) : [];
     } catch {
       return [];
     }
@@ -840,7 +1580,10 @@ export class TeacherService {
   private static saveLocalEnrollments(enrollments: ClassEnrollment[]): void {
     if (typeof localStorage === 'undefined') return;
     try {
-      localStorage.setItem(LOCAL_ENROLLMENTS_KEY, JSON.stringify(enrollments));
+      localStorage.setItem(
+        LOCAL_ENROLLMENTS_KEY,
+        JSON.stringify(enrollments.filter(isRealEnrollmentRecord))
+      );
     } catch {}
   }
 
@@ -862,49 +1605,7 @@ export class TeacherService {
   }
 
   /**
-   * Provisiona os dados iniciais dos 3 alunos do estúdio para exibição inicial no painel do professor
-   */
-  private static getBootstrapDemoEnrollments(teacherId: string, classId?: string): ClassEnrollment[] {
-    const cId = classId && classId !== 'all' ? classId : `class-${teacherId}-turma-1`;
-    return [
-      {
-        id: `enroll-${cId}-student-1`,
-        classId: cId,
-        studentId: 'user_aluno_diego_01',
-        studentName: 'Diego Ramos',
-        studentEmail: 'diegoramos.violao@gmail.com',
-        teacherId,
-        joinedAt: new Date(Date.now() - 28 * 24 * 60 * 60 * 1000).toISOString(),
-        status: 'active',
-        lastActivityAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-      },
-      {
-        id: `enroll-${cId}-student-2`,
-        classId: cId,
-        studentId: 'user_aluno_carolina_02',
-        studentName: 'Carolina Mendes',
-        studentEmail: 'carolina.guitarra@gmail.com',
-        teacherId,
-        joinedAt: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000).toISOString(),
-        status: 'active',
-        lastActivityAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
-      },
-      {
-        id: `enroll-${cId}-student-3`,
-        classId: cId,
-        studentId: 'user_aluno_lucas_03',
-        studentName: 'Lucas Ferreira',
-        studentEmail: 'lucas.acordes@gmail.com',
-        teacherId,
-        joinedAt: new Date(Date.now() - 12 * 24 * 60 * 60 * 1000).toISOString(),
-        status: 'active',
-        lastActivityAt: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString(),
-      },
-    ];
-  }
-
-  /**
-   * Deriva eventos analíticos realistas dos registros de estudo reais dos alunos
+   * Deriva eventos analíticos exclusivamente dos registros de estudo reais dos alunos
    */
   private static generateDerivedEventsFromStudents(students: ClassEnrollment[]): EducationalEvent[] {
     const events: EducationalEvent[] = [];
@@ -914,9 +1615,18 @@ export class TeacherService {
       const progress = storageService.loadProgress(s.studentId);
       const studentClass = s.classId;
 
-      // Eventos de aulas concluídas
       progress.completedLessons.forEach((lessonId, lIdx) => {
-        const courseId = lessonId.startsWith('violao-') ? 'violao' : lessonId.startsWith('solo-') ? 'solo' : 'canonical';
+        const courseId = lessonId.startsWith('violao-')
+          ? 'violao'
+          : lessonId.startsWith('solo-')
+          ? 'solo'
+          : lessonId.startsWith('baixo-')
+          ? 'baixo'
+          : lessonId.startsWith('teclado-')
+          ? 'teclado'
+          : lessonId.startsWith('bateria-')
+          ? 'bateria'
+          : 'canonical';
         events.push({
           id: `evt-derived-${s.studentId}-${lessonId}`,
           studentUid: s.studentId,
@@ -933,7 +1643,6 @@ export class TeacherService {
         });
       });
 
-      // Evento de prática instrumental
       if (progress.totalStudyTimeSeconds > 0) {
         events.push({
           id: `evt-derived-practice-${s.studentId}`,
@@ -941,7 +1650,7 @@ export class TeacherService {
           studentName: s.studentName,
           studentEmail: s.studentEmail,
           classId: studentClass,
-          courseId: 'violao',
+          courseId: progress.primaryCourseId || 'violao',
           eventType: 'practice_session_recorded',
           category: 'instrumental_practice',
           durationSeconds: progress.totalStudyTimeSeconds,

@@ -83,8 +83,8 @@ export const TeacherDashboardView: React.FC<TeacherDashboardViewProps> = ({ onBa
       const loadedEvents = TeacherService.getFilteredEvents(filterState, loadedEnrollments);
       setEvents(loadedEvents);
 
-      // 4. Tabela analítica correlacionada
-      const totalStudents = loadedEnrollments.length || 1;
+      // 4. Tabela analítica correlacionada (sem distorcer 0 para 1)
+      const totalStudents = loadedEnrollments.length;
       const rows = TeacherService.buildAnalyticsTable(loadedEvents, totalStudents);
       setAnalyticsRows(rows);
 
@@ -108,6 +108,16 @@ export const TeacherDashboardView: React.FC<TeacherDashboardViewProps> = ({ onBa
 
   useEffect(() => {
     loadDashboardData();
+  }, [teacherUid, filterState, selectedCourseId]);
+
+  useEffect(() => {
+    const handleEnrollmentUpdated = () => {
+      void loadDashboardData();
+    };
+    window.addEventListener('guitar-academy:enrollment-updated', handleEnrollmentUpdated);
+    return () => {
+      window.removeEventListener('guitar-academy:enrollment-updated', handleEnrollmentUpdated);
+    };
   }, [teacherUid, filterState, selectedCourseId]);
 
   const activeClass = classes.find((c) => c.id === filterState.classId);
@@ -218,6 +228,9 @@ export const TeacherDashboardView: React.FC<TeacherDashboardViewProps> = ({ onBa
             <option value="violao">Domínio Total do Violão</option>
             <option value="canonical">Conservatório Geral</option>
             <option value="solo">Guitarra Solo</option>
+            <option value="baixo">Contrabaixo Elétrico</option>
+            <option value="teclado">Teclado & Piano</option>
+            <option value="bateria">Bateria & Percussão</option>
           </select>
         </div>
       </div>
@@ -278,7 +291,7 @@ export const TeacherDashboardView: React.FC<TeacherDashboardViewProps> = ({ onBa
             <TeacherAnalyticsTab
               events={events}
               tableRows={analyticsRows}
-              totalEligibleStudents={enrollments.length || 1}
+              totalEligibleStudents={enrollments.length}
             />
           )}
 

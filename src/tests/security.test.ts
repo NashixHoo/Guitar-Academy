@@ -47,7 +47,11 @@ import {
   parseSystemRoleDoc,
 } from '../services/firebase';
 import { matchesAdminLogEventFilter } from '../services/adminLogsService';
-import { buildAdminDirectoryUsers } from '../services/adminUsersService';
+import {
+  buildAdminDirectoryUsers,
+  computeEnrolledUsersCountByClass,
+} from '../services/adminUsersService';
+import { TeacherService } from '../services/teacherService';
 
 const DEFAULT_FIRESTORE_DATABASE_ID =
   'ai-studio-guitaracademyfor-e7ce9efa-82d3-4dd1-8b8e-58aa69749913';
@@ -270,8 +274,248 @@ describe('Zero-Trust RBAC Role Resolution (Client Fail-Closed Unit Tests)', () =
     assert.equal(merged[1].hasUserProfileDoc, true);
     assert.deepEqual(merged[1].enrolledCourses, ['violao', 'solo']);
     assert.deepEqual(merged[1].classNames, ['Turma Violão Real']);
+    assert.equal(merged[1].isEnrolledStudent, true);
+    assert.equal(merged[1].activeEnrollmentsCount, 1);
     assert.equal(merged[1].completedLessonsCount, 7);
     assert.equal(merged[1].totalStudyMinutes, 95);
+  });
+
+  it('merges Firebase Auth accounts missing users/{uid} docs, separates study tracks from enrollments, and deduplicates valid class counts', async () => {
+    const mergedWithAuth = buildAdminDirectoryUsers({
+      authUsers: [
+        {
+          uid: 'reginaldo-auth-uid',
+          email: 'reginaldo.teste@example.com',
+          displayName: 'Reginaldo Teste',
+          provider: 'google.com',
+          disabled: false,
+          createdAt: '2026-11-01T12:00:00.000Z',
+          lastSignInTime: '2026-11-10T18:30:00.000Z',
+        },
+        {
+          uid: 'admin-auth-uid',
+          email: 'admin@example.com',
+          displayName: 'Admin Real',
+          provider: 'google.com',
+          disabled: false,
+        },
+      ],
+      userDocs: [
+        {
+          id: 'admin-auth-uid',
+          data: {
+            uid: 'admin-auth-uid',
+            displayName: 'Admin Real',
+            email: 'admin@example.com',
+            accountStatus: 'active',
+            enrolledCourses: [],
+          },
+        },
+      ],
+      studentDocs: [],
+      roleDocs: [{ id: 'admin-auth-uid', data: { role: 'admin' } }],
+      classes: [
+        {
+          id: 'cls-real-1',
+          name: 'Turma Violão Real',
+          code: 'GA-REAL-1',
+          teacherId: 'teacher-1',
+          teacherEmail: 'prof@example.com',
+          teacherName: 'Professor Real',
+          createdAt: '2026-11-01T00:00:00.000Z',
+          updatedAt: '2026-11-01T00:00:00.000Z',
+          active: true,
+        },
+      ],
+      enrollments: [
+        // Duplicate enrollment for the same student + same class (enrollments + subcollection)
+        { studentId: 'reginaldo-auth-uid', classId: 'cls-real-1', status: 'active' },
+        { studentId: 'reginaldo-auth-uid', classId: 'cls-real-1', status: 'active' },
+        // Cancelled / suspended / orphan enrollments must NOT inflate counts
+        { studentId: 'cancelled-stu-uid', classId: 'cls-real-1', status: 'cancelled' },
+        { studentId: 'suspended-stu-uid', classId: 'cls-real-1', status: 'suspended' },
+        { studentId: 'orphan-stu-uid', classId: 'non-existent-class', status: 'active' },
+      ],
+      progressByUid: {
+        'reginaldo-auth-uid': {
+          completedLessonsCount: 3,
+          totalStudyMinutes: 45,
+          primaryCourseId: 'violao',
+        },
+      },
+    });
+
+    const reginaldo = mergedWithAuth.find((u) => u.uid === 'reginaldo-auth-uid');
+    assert.ok(reginaldo);
+    assert.equal(reginaldo.email, 'reginaldo.teste@example.com');
+    assert.equal(reginaldo.hasAuthAccount, true);
+    assert.equal(reginaldo.hasUserProfileDoc, false);
+    assert.equal(reginaldo.role, 'student');
+    assert.equal(reginaldo.isEnrolledStudent, true);
+    assert.equal(reginaldo.activeEnrollmentsCount, 1);
+    assert.equal(reginaldo.primaryStudyCourse, 'violao');
+    assert.deepEqual(reginaldo.enrolledCourses, []); // primaryStudyCourse does not spoof enrolledCourses
+
+    const stats = computeEnrolledUsersCountByClass(
+      [
+        {
+          id: 'cls-real-1',
+          name: 'Turma Violão Real',
+          code: 'GA-REAL-1',
+          teacherId: 'teacher-1',
+          teacherEmail: 'prof@example.com',
+          teacherName: 'Professor Real',
+          createdAt: '2026-11-01T00:00:00.000Z',
+          updatedAt: '2026-11-01T00:00:00.000Z',
+          active: true,
+        },
+      ],
+      [
+        { studentId: 'reginaldo-auth-uid', classId: 'cls-real-1', status: 'active' },
+        { studentId: 'reginaldo-auth-uid', classId: 'cls-real-1', status: 'active' },
+        { studentId: 'cancelled-stu-uid', classId: 'cls-real-1', status: 'cancelled' },
+        { studentId: 'orphan-stu-uid', classId: 'non-existent-class', status: 'active' },
+      ]
+    );
+    assert.equal(stats.countsByClass['cls-real-1'], 1);
+    assert.equal(stats.validUniqueEnrollmentsCount, 1);
+    assert.equal(stats.enrolledStudentsCount, 1);
+
+    // TeacherService never returns fabricated demo classes or demo students on empty state
+    const emptyClasses = await TeacherService.getTeacherClasses('brand-new-teacher-uid');
+    assert.equal(emptyClasses.length, 0);
+    const emptyEnrollments = await TeacherService.getEnrolledStudents('brand-new-teacher-uid');
+    assert.equal(emptyEnrollments.length, 0);
+  });
+
+  it('validates invite codes, blocks duplicates/expired/closed/full classes, and propagates real enrollments across student, teacher, and admin', async () => {
+    const prevStorage = (globalThis as any).localStorage;
+    const store = new Map<string, string>();
+    (globalThis as any).localStorage = {
+      getItem: (k: string) => (store.has(k) ? store.get(k)! : null),
+      setItem: (k: string, v: string) => {
+        store.set(k, String(v));
+      },
+      removeItem: (k: string) => {
+        store.delete(k);
+      },
+      clear: () => {
+        store.clear();
+      },
+    };
+
+    try {
+      const created = await TeacherService.createClass(
+        'teacher-invite-1',
+        'prof.convite@guitaracademy.test',
+        'Prof. Henrique',
+        'Turma Violão Fingerpicking',
+        'Estudo de dedilhado e harmonia',
+        'GA-FINGER1',
+        {
+          courseId: 'violao',
+          instrument: 'Violão Clássico',
+          maxStudents: 1,
+          expiresAt: '2099-12-31T23:59:59.000Z',
+        }
+      );
+
+      // 1. Empty / invalid / unknown codes fail safely
+      assert.equal((await TeacherService.validateInviteCode('')).reason, 'empty');
+      assert.equal((await TeacherService.validateInviteCode('INVALID CODE!')).reason, 'invalid_format');
+      assert.equal((await TeacherService.validateInviteCode('GA-NOT-FOUND')).reason, 'not_found');
+
+      // 2. Valid invite code returns preview metadata BEFORE confirmation
+      const preview = await TeacherService.validateInviteCode('ga-finger1', 'stu-invite-1');
+      assert.equal(preview.valid, true);
+      assert.equal(preview.classGroup?.id, created.id);
+      assert.equal(preview.classGroup?.name, 'Turma Violão Fingerpicking');
+      assert.equal(preview.classGroup?.instrument, 'Violão Clássico');
+      assert.equal(preview.classGroup?.teacherName, 'Prof. Henrique');
+
+      // 3. Expired and closed invites are rejected cleanly
+      await TeacherService.createClass(
+        'teacher-invite-1',
+        'prof.convite@guitaracademy.test',
+        'Prof. Henrique',
+        'Turma Expirada',
+        'Expirou ontem',
+        'GA-EXPIRED1',
+        {
+          courseId: 'solo',
+          expiresAt: '2020-01-01T00:00:00.000Z',
+        }
+      );
+      assert.equal((await TeacherService.validateInviteCode('GA-EXPIRED1', 'stu-invite-1')).reason, 'expired');
+
+      const closedClass = await TeacherService.createClass(
+        'teacher-invite-1',
+        'prof.convite@guitaracademy.test',
+        'Prof. Henrique',
+        'Turma Encerrada',
+        'Fechada',
+        'GA-CLOSED1'
+      );
+      // Mark class as closed in storage
+      const savedClasses = JSON.parse(store.get('guitar_academy:teacher_classes_v1') || '[]');
+      for (const c of savedClasses) {
+        if (c.id === closedClass.id) c.active = false;
+      }
+      store.set('guitar_academy:teacher_classes_v1', JSON.stringify(savedClasses));
+      assert.equal((await TeacherService.validateInviteCode('GA-CLOSED1', 'stu-invite-1')).reason, 'closed');
+
+      // 4. Student confirms enrollment in valid class
+      const joinRes = await TeacherService.joinClassWithInviteCode(
+        'stu-invite-1',
+        'Lucas Violonista',
+        'lucas@guitaracademy.test',
+        'GA-FINGER1'
+      );
+      assert.equal(joinRes.success, true);
+      assert.equal(joinRes.classGroup?.id, created.id);
+
+      // 5. Duplicate enrollment for the same student is blocked
+      const dupPreview = await TeacherService.validateInviteCode('GA-FINGER1', 'stu-invite-1');
+      assert.equal(dupPreview.valid, false);
+      assert.equal(dupPreview.reason, 'already_enrolled');
+      const dupJoin = await TeacherService.joinClassWithInviteCode(
+        'stu-invite-1',
+        'Lucas Violonista',
+        'lucas@guitaracademy.test',
+        'GA-FINGER1'
+      );
+      assert.equal(dupJoin.success, false);
+
+      // 6. Capacity limit blocks second student when maxStudents === 1
+      const fullPreview = await TeacherService.validateInviteCode('GA-FINGER1', 'stu-invite-2');
+      assert.equal(fullPreview.valid, false);
+      assert.equal(fullPreview.reason, 'full');
+
+      // 7. Student profile, Teacher panel, and Admin directory all reflect the real enrollment
+      const studentClasses = await TeacherService.getStudentEnrollments('stu-invite-1');
+      assert.equal(studentClasses.length, 1);
+      assert.equal(studentClasses[0].classId, created.id);
+      assert.equal(studentClasses[0].className, 'Turma Violão Fingerpicking');
+      assert.equal(studentClasses[0].instrument, 'Violão Clássico');
+      assert.equal(studentClasses[0].teacherName, 'Prof. Henrique');
+
+      const teacherStudents = await TeacherService.getEnrolledStudents('teacher-invite-1', created.id);
+      assert.equal(teacherStudents.length, 1);
+      assert.equal(teacherStudents[0].studentId, 'stu-invite-1');
+
+      const adminUsers = buildAdminDirectoryUsers({
+        userDocs: [{ id: 'stu-invite-1', data: { uid: 'stu-invite-1', displayName: 'Lucas Violonista', email: 'lucas@guitaracademy.test' } }],
+        roleDocs: [],
+        classes: [created],
+        enrollments: teacherStudents,
+      });
+      const stuEntry = adminUsers.find((u) => u.uid === 'stu-invite-1');
+      assert.ok(stuEntry);
+      assert.equal(stuEntry.isEnrolledStudent, true);
+      assert.deepEqual(stuEntry.classNames, ['Turma Violão Fingerpicking']);
+    } finally {
+      (globalThis as any).localStorage = prevStorage;
+    }
   });
 });
 
@@ -1040,10 +1284,98 @@ describe('Backend Express HTTP — Zero-Trust Auth, RBAC & CORS (Real Server Req
       }
     },
     listAdminLogs: async () => [],
+    listAdminDirectoryData: async () => ({
+      authUsers: [
+        {
+          uid: 'reginaldo-http-1',
+          email: 'reginaldo@guitaracademy.test',
+          displayName: 'Reginaldo Real',
+          photoURL: null,
+          provider: 'google.com',
+          disabled: false,
+          createdAt: '2026-11-02T00:00:00.000Z',
+          lastSignInTime: '2026-11-12T00:00:00.000Z',
+        },
+      ],
+      userDocs: [],
+      studentDocs: [],
+      roleDocs: [{ id: 'admin-http-1', data: { role: 'admin' } }],
+      classes: [],
+      enrollments: [],
+      progressByUid: {},
+    }),
     updateUserAccountStatus: async (uid, accountStatus) => {
       void uid;
       void accountStatus;
       return { firestorePersisted: true, authDisabledUpdated: true };
+    },
+    validateClassInvite: async ({ code, callerUid }) => {
+      if (code === 'GA-HTTP-OK') {
+        return {
+          valid: true,
+          message: 'Turma localizada.',
+          classGroup: {
+            id: 'cls-http-1',
+            name: 'Turma Violão HTTP',
+            code: 'GA-HTTP-OK',
+            courseId: 'violao',
+            instrument: 'Violão',
+            teacherId: 'teacher-http-1',
+            teacherEmail: 'teacher@guitaracademy.test',
+            teacherName: 'Prof. HTTP',
+            createdAt: '2026-11-10T00:00:00.000Z',
+            updatedAt: '2026-11-10T00:00:00.000Z',
+            active: true,
+            maxStudents: 30,
+          },
+        };
+      }
+      void callerUid;
+      return {
+        valid: false,
+        reason: 'not_found',
+        message: 'Código não encontrado.',
+      };
+    },
+    joinClassWithInvite: async ({ code, callerUid, studentName, studentEmail }) => {
+      if (code !== 'GA-HTTP-OK') {
+        return {
+          statusCode: 400,
+          success: false,
+          reason: 'not_found',
+          message: 'Código não encontrado.',
+        };
+      }
+      return {
+        statusCode: 200,
+        success: true,
+        message: 'Matrícula confirmada com sucesso!',
+        classGroup: {
+          id: 'cls-http-1',
+          name: 'Turma Violão HTTP',
+          code: 'GA-HTTP-OK',
+          courseId: 'violao',
+          instrument: 'Violão',
+          teacherId: 'teacher-http-1',
+          teacherEmail: 'teacher@guitaracademy.test',
+          teacherName: 'Prof. HTTP',
+          createdAt: '2026-11-10T00:00:00.000Z',
+          updatedAt: '2026-11-10T00:00:00.000Z',
+          active: true,
+        },
+        enrollment: {
+          id: `enroll-cls-http-1-${callerUid}`,
+          classId: 'cls-http-1',
+          courseId: 'violao',
+          studentId: callerUid,
+          studentName,
+          studentEmail,
+          teacherId: 'teacher-http-1',
+          joinedAt: '2026-11-15T00:00:00.000Z',
+          status: 'active',
+          lastActivityAt: '2026-11-15T00:00:00.000Z',
+        },
+      };
     },
   });
 
@@ -1322,6 +1654,127 @@ describe('Backend Express HTTP — Zero-Trust Auth, RBAC & CORS (Real Server Req
     assert.ok(
       statusAuditCalls.some((c) => c.uid === 'student-http-1' && c.actorUid === 'admin-http-1')
     );
+  });
+
+  it('protects GET /api/admin/users with Zero-Trust auth and admin role, returning real directory only to admin', async () => {
+    const noAuthRes = await fetch(`${baseUrl}/api/admin/users`);
+    assert.equal(noAuthRes.status, 401);
+
+    const studentRes = await fetch(`${baseUrl}/api/admin/users`, {
+      headers: { Authorization: 'Bearer valid-student-jwt' },
+    });
+    assert.equal(studentRes.status, 403);
+
+    const teacherRes = await fetch(`${baseUrl}/api/admin/users`, {
+      headers: { Authorization: 'Bearer valid-teacher-jwt' },
+    });
+    assert.equal(teacherRes.status, 403);
+
+    const adminRes = await fetch(`${baseUrl}/api/admin/users`, {
+      headers: { Authorization: 'Bearer valid-admin-jwt' },
+    });
+    assert.equal(adminRes.status, 200);
+    const body = (await adminRes.json()) as {
+      status: string;
+      mode: string;
+      authUsers: Array<{ uid: string; email: string }>;
+    };
+    assert.equal(body.status, 'ok');
+    assert.equal(body.mode, 'backend_admin_sdk');
+    assert.ok(body.authUsers.some((u) => u.uid === 'reginaldo-http-1'));
+  });
+
+  it('protects POST /api/classes/validate-invite and /api/classes/join against unauthenticated access and UID spoofing', async () => {
+    // 1. Unauthenticated access rejected
+    const unauthValidate = await fetch(`${baseUrl}/api/classes/validate-invite`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: 'GA-HTTP-OK' }),
+    });
+    assert.equal(unauthValidate.status, 401);
+
+    const unauthJoin = await fetch(`${baseUrl}/api/classes/join`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: 'GA-HTTP-OK' }),
+    });
+    assert.equal(unauthJoin.status, 401);
+
+    // 2. Empty or invalid invite format rejected with HTTP 400
+    const emptyValidate = await fetch(`${baseUrl}/api/classes/validate-invite`, {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer valid-student-jwt',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ code: '   ' }),
+    });
+    assert.equal(emptyValidate.status, 400);
+
+    const invalidFormatValidate = await fetch(`${baseUrl}/api/classes/validate-invite`, {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer valid-student-jwt',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ code: 'GA INVALID!' }),
+    });
+    assert.equal(invalidFormatValidate.status, 400);
+
+    // 3. Valid invite preview returns class metadata
+    const okValidate = await fetch(`${baseUrl}/api/classes/validate-invite`, {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer valid-student-jwt',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ code: 'ga-http-ok' }),
+    });
+    assert.equal(okValidate.status, 200);
+    const validateBody = (await okValidate.json()) as {
+      valid: boolean;
+      classGroup?: { name: string; instrument: string; teacherName: string };
+    };
+    assert.equal(validateBody.valid, true);
+    assert.equal(validateBody.classGroup?.name, 'Turma Violão HTTP');
+    assert.equal(validateBody.classGroup?.instrument, 'Violão');
+    assert.equal(validateBody.classGroup?.teacherName, 'Prof. HTTP');
+
+    // 4. Attempting to enroll another student UID is blocked with HTTP 403
+    const spoofedJoin = await fetch(`${baseUrl}/api/classes/join`, {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer valid-student-jwt',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        code: 'GA-HTTP-OK',
+        studentUid: 'other-victim-uid',
+      }),
+    });
+    assert.equal(spoofedJoin.status, 403);
+
+    // 5. Valid self-join derives studentId from verified token
+    const okJoin = await fetch(`${baseUrl}/api/classes/join`, {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer valid-student-jwt',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        code: 'GA-HTTP-OK',
+        studentName: 'Aluno HTTP',
+      }),
+    });
+    assert.equal(okJoin.status, 200);
+    const joinBody = (await okJoin.json()) as {
+      success: boolean;
+      enrollment?: { studentId: string; classId: string; status: string };
+    };
+    assert.equal(joinBody.success, true);
+    assert.equal(joinBody.enrollment?.studentId, 'student-http-1');
+    assert.equal(joinBody.enrollment?.classId, 'cls-http-1');
+    assert.equal(joinBody.enrollment?.status, 'active');
   });
 });
 

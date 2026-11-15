@@ -25,16 +25,26 @@ export interface AdminDirectoryUser {
   lastSeenAt: string | null;
   enrolledCourses: string[];
   classNames: string[];
+  enrolledClassIds: string[];
+  activeEnrollmentsCount: number;
+  isEnrolledStudent: boolean;
+  hasAuthAccount: boolean;
+  authDisabled: boolean;
+  primaryStudyCourse: string | null;
   completedLessonsCount: number | null;
   totalStudyMinutes: number | null;
   hasUserProfileDoc: boolean;
-  sources: Array<'users' | 'system_roles' | 'enrollments' | 'class_students'>;
+  sources: Array<'firebase_auth' | 'users' | 'students' | 'system_roles' | 'enrollments' | 'class_students'>;
 }
 
 export interface AdminDirectoryLoadResult {
   users: AdminDirectoryUser[];
   classes: ClassGroup[];
   enrollmentsCount: number;
+  enrolledStudentsCount: number;
+  enrolledUsersCountByClass: Record<string, number>;
+  authUsersCount: number;
+  directoryMode: 'backend_admin_sdk' | 'firestore_serverless';
   warnings: string[];
 }
 
@@ -44,6 +54,17 @@ export interface AccountStatusUpdateResult {
   firestorePersisted: boolean;
   authDisabledUpdated: boolean;
   mode: 'backend_admin_sdk' | 'firestore_serverless';
+}
+
+export interface RawAuthUserInput {
+  uid: string;
+  email?: string | null;
+  displayName?: string | null;
+  photoURL?: string | null;
+  provider?: string | null;
+  disabled?: boolean;
+  createdAt?: string | null;
+  lastSignInTime?: string | null;
 }
 
 export interface RawUserRecordInput {
@@ -70,6 +91,80 @@ export interface RawProgressRecordInput {
 }
 
 const VALID_UID_REGEX = /^[a-zA-Z0-9_\-.:]{1,128}$/;
+const INACTIVE_ENROLLMENT_STATUSES = new Set(['cancelled', 'suspended', 'inactive']);
+
+function isEnrollmentValid(enr: RawEnrollmentRecordInput): boolean {
+  const status = typeof enr.status === 'string' ? enr.status.trim().toLowerCase() : 'active';
+  return !INACTIVE_ENROLLMENT_STATUSES.has(status);
+}
+
+function deduplicateEnrollments(
+  enrollments: RawEnrollmentRecordInput[],
+  validClassIds?: Set<string>
+): RawEnrollmentRecordInput[] {
+  const byKey = new Map<string, RawEnrollmentRecordInput>();
+  for (const enr of enrollments) {
+    const uid = typeof enr.studentId === 'string' ? enr.studentId.trim() : '';
+    if (!uid) continue;
+    if (!isEnrollmentValid(enr)) continue;
+    const classId = typeof enr.classId === 'string' ? enr.classId.trim() : '';
+    if (validClassIds && validClassIds.size > 0 && classId && !validClassIds.has(classId)) {
+      continue;
+    }
+    const key = `${classId || 'no-class'}::${uid}`;
+    const existing = byKey.get(key);
+    if (!existing) {
+      byKey.set(key, enr);
+    } else {
+      byKey.set(key, {
+        ...existing,
+        ...enr,
+        studentName: enr.studentName || existing.studentName,
+        studentEmail: enr.studentEmail || existing.studentEmail,
+        studentPhotoUrl: enr.studentPhotoUrl || existing.studentPhotoUrl,
+        courseId: enr.courseId || existing.courseId,
+      });
+    }
+  }
+  return Array.from(byKey.values());
+}
+
+export function computeEnrolledUsersCountByClass(
+  classes: ClassGroup[],
+  enrollments: RawEnrollmentRecordInput[]
+): { countsByClass: Record<string, number>; validUniqueEnrollmentsCount: number; enrolledStudentsCount: number } {
+  const validClassIds = new Set(classes.map((c) => c.id).filter(Boolean));
+  const deduped = deduplicateEnrollments(enrollments, validClassIds.size > 0 ? validClassIds : undefined);
+  const studentsPerClass = new Map<string, Set<string>>();
+  const uniqueEnrolledStudents = new Set<string>();
+
+  classes.forEach((cls) => {
+    if (cls.id) studentsPerClass.set(cls.id, new Set<string>());
+  });
+
+  for (const enr of deduped) {
+    const uid = typeof enr.studentId === 'string' ? enr.studentId.trim() : '';
+    const classId = typeof enr.classId === 'string' ? enr.classId.trim() : '';
+    if (!uid) continue;
+    if (classId) {
+      if (validClassIds.size > 0 && !validClassIds.has(classId)) continue;
+      if (!studentsPerClass.has(classId)) studentsPerClass.set(classId, new Set<string>());
+      studentsPerClass.get(classId)!.add(uid);
+      uniqueEnrolledStudents.add(uid);
+    }
+  }
+
+  const countsByClass: Record<string, number> = {};
+  studentsPerClass.forEach((studentSet, classId) => {
+    countsByClass[classId] = studentSet.size;
+  });
+
+  return {
+    countsByClass,
+    validUniqueEnrollmentsCount: deduped.filter((e) => Boolean(e.classId?.trim())).length,
+    enrolledStudentsCount: uniqueEnrolledStudents.size,
+  };
+}
 
 function normalizeAccountStatus(raw: unknown): AccountStatus {
   if (raw === 'suspended') return 'suspended';
@@ -158,17 +253,27 @@ export function formatCourseLabel(courseId: string): string {
 }
 
 /**
- * Consolida exclusivamente registros reais do Firestore (sem nenhum dado fictício).
- * Função pura para permitir testes unitários determinísticos.
+ * Consolida exclusivamente registros reais do Firebase Authentication e Firestore (sem nenhum dado fictício).
+ * Separa contas cadastradas de alunos com matrícula válida em turmas reais.
  */
 export function buildAdminDirectoryUsers(params: {
+  authUsers?: RawAuthUserInput[];
   userDocs: RawUserRecordInput[];
+  studentDocs?: RawUserRecordInput[];
   roleDocs: RawUserRecordInput[];
   classes: ClassGroup[];
   enrollments: RawEnrollmentRecordInput[];
   progressByUid?: Record<string, RawProgressRecordInput>;
 }): AdminDirectoryUser[] {
-  const { userDocs, roleDocs, classes, enrollments, progressByUid = {} } = params;
+  const {
+    authUsers = [],
+    userDocs,
+    studentDocs = [],
+    roleDocs,
+    classes,
+    enrollments,
+    progressByUid = {},
+  } = params;
 
   const classNameMap = new Map<string, string>();
   classes.forEach((cls) => {
@@ -203,6 +308,12 @@ export function buildAdminDirectoryUsers(params: {
       lastSeenAt: null,
       enrolledCourses: [],
       classNames: [],
+      enrolledClassIds: [],
+      activeEnrollmentsCount: 0,
+      isEnrolledStudent: false,
+      hasAuthAccount: false,
+      authDisabled: false,
+      primaryStudyCourse: null,
       completedLessonsCount: null,
       totalStudyMinutes: null,
       hasUserProfileDoc: false,
@@ -211,6 +322,38 @@ export function buildAdminDirectoryUsers(params: {
     usersByUid.set(uid, created);
     return created;
   };
+
+  // 0. Contas reais no Firebase Authentication (quando carregadas pelo Admin SDK)
+  for (const authUser of authUsers) {
+    const uid = typeof authUser.uid === 'string' ? authUser.uid.trim() : '';
+    if (!uid) continue;
+
+    const entry = ensureEntry(uid);
+    entry.hasAuthAccount = true;
+    entry.authDisabled = Boolean(authUser.disabled);
+    if (!entry.sources.includes('firebase_auth')) entry.sources.push('firebase_auth');
+
+    if (authUser.displayName && authUser.displayName.trim()) {
+      entry.displayName = authUser.displayName.trim();
+    } else if (authUser.email && authUser.email.trim()) {
+      entry.displayName = authUser.email.trim();
+    }
+    if (authUser.email && authUser.email.trim()) {
+      entry.email = authUser.email.trim();
+    }
+    if (authUser.photoURL && authUser.photoURL.trim()) {
+      entry.photoURL = authUser.photoURL.trim();
+    }
+    if (authUser.provider && authUser.provider.trim()) {
+      entry.provider = authUser.provider.trim();
+    }
+    if (authUser.disabled) {
+      entry.accountStatus = 'suspended';
+    }
+    entry.createdAt = normalizeIsoTimestamp(authUser.createdAt) || entry.createdAt;
+    entry.lastLoginAt = normalizeIsoTimestamp(authUser.lastSignInTime) || entry.lastLoginAt;
+    entry.role = roleMap.get(uid) || 'student';
+  }
 
   // 1. Documentos reais em users/{uid}
   for (const docItem of userDocs) {
@@ -229,14 +372,18 @@ export function buildAdminDirectoryUsers(params: {
         ? data.displayName.trim()
         : typeof data.email === 'string' && data.email.trim()
         ? data.email.trim()
+        : entry.displayName !== 'Usuário sem perfil completo'
+        ? entry.displayName
         : 'Usuário sem nome';
-    entry.email = typeof data.email === 'string' ? data.email.trim() : '';
-    entry.photoURL = typeof data.photoURL === 'string' && data.photoURL.trim() ? data.photoURL.trim() : null;
-    entry.provider = typeof data.provider === 'string' ? data.provider.trim() : '';
-    entry.accountStatus = normalizeAccountStatus(data.accountStatus);
-    entry.createdAt = normalizeIsoTimestamp(data.createdAt);
-    entry.lastLoginAt = normalizeIsoTimestamp(data.lastLoginAt);
-    entry.lastSeenAt = normalizeIsoTimestamp(data.lastSeenAt);
+    entry.email = typeof data.email === 'string' && data.email.trim() ? data.email.trim() : entry.email;
+    entry.photoURL =
+      typeof data.photoURL === 'string' && data.photoURL.trim() ? data.photoURL.trim() : entry.photoURL;
+    entry.provider =
+      typeof data.provider === 'string' && data.provider.trim() ? data.provider.trim() : entry.provider;
+    entry.accountStatus = entry.authDisabled ? 'suspended' : normalizeAccountStatus(data.accountStatus);
+    entry.createdAt = normalizeIsoTimestamp(data.createdAt) || entry.createdAt;
+    entry.lastLoginAt = normalizeIsoTimestamp(data.lastLoginAt) || entry.lastLoginAt;
+    entry.lastSeenAt = normalizeIsoTimestamp(data.lastSeenAt) || entry.lastSeenAt;
     entry.role = roleMap.get(uid) || 'student';
 
     const courses = normalizeStringArray(data.enrolledCourses);
@@ -245,7 +392,33 @@ export function buildAdminDirectoryUsers(params: {
     });
   }
 
-  // 2. Papéis autoritativos em system_roles/{uid} (garante visibilidade de admins/teachers mesmo antes de criarem perfil em users/)
+  // 1b. Documentos reais na coleção auxiliar students/{uid}
+  for (const stDoc of studentDocs) {
+    const uid =
+      typeof stDoc.data?.uid === 'string' && stDoc.data.uid.trim()
+        ? stDoc.data.uid.trim()
+        : stDoc.id;
+    if (!uid) continue;
+    const entry = ensureEntry(uid);
+    const data = stDoc.data || {};
+    if (!entry.sources.includes('students')) entry.sources.push('students');
+
+    if (
+      (!entry.displayName || entry.displayName === 'Usuário sem perfil completo' || entry.displayName === 'Usuário sem nome') &&
+      typeof data.displayName === 'string' &&
+      data.displayName.trim()
+    ) {
+      entry.displayName = data.displayName.trim();
+    }
+    if (!entry.email && typeof data.email === 'string' && data.email.trim()) {
+      entry.email = data.email.trim();
+    }
+    if (!entry.photoURL && typeof data.photoURL === 'string' && data.photoURL.trim()) {
+      entry.photoURL = data.photoURL.trim();
+    }
+  }
+
+  // 2. Papéis autoritativos em system_roles/{uid}
   for (const roleDoc of roleDocs) {
     const uid =
       typeof roleDoc.data?.uid === 'string' && roleDoc.data.uid.trim()
@@ -257,15 +430,21 @@ export function buildAdminDirectoryUsers(params: {
     if (!entry.sources.includes('system_roles')) entry.sources.push('system_roles');
   }
 
-  // 3. Matrículas reais em enrollments/{id} e classes/{classId}/students/{studentId}
-  for (const enr of enrollments) {
+  // 3. Matrículas reais em enrollments/{id} e classes/{classId}/students/{studentId} (deduplicadas e válidas)
+  const validClassIds = new Set(classes.map((c) => c.id).filter(Boolean));
+  const dedupedEnrollments = deduplicateEnrollments(
+    enrollments,
+    validClassIds.size > 0 ? validClassIds : undefined
+  );
+
+  for (const enr of dedupedEnrollments) {
     const uid = typeof enr.studentId === 'string' ? enr.studentId.trim() : '';
     if (!uid) continue;
     const entry = ensureEntry(uid);
     if (!entry.sources.includes('enrollments')) entry.sources.push('enrollments');
 
     if (
-      (!entry.displayName || entry.displayName === 'Usuário sem perfil completo') &&
+      (!entry.displayName || entry.displayName === 'Usuário sem perfil completo' || entry.displayName === 'Usuário sem nome') &&
       typeof enr.studentName === 'string' &&
       enr.studentName.trim()
     ) {
@@ -281,11 +460,17 @@ export function buildAdminDirectoryUsers(params: {
       const course = enr.courseId.trim();
       if (!entry.enrolledCourses.includes(course)) entry.enrolledCourses.push(course);
     }
-    if (enr.classId && typeof enr.classId === 'string') {
-      const clsLabel = classNameMap.get(enr.classId) || enr.classId;
+    if (enr.classId && typeof enr.classId === 'string' && enr.classId.trim()) {
+      const cleanClassId = enr.classId.trim();
+      if (!entry.enrolledClassIds.includes(cleanClassId)) {
+        entry.enrolledClassIds.push(cleanClassId);
+      }
+      const clsLabel = classNameMap.get(cleanClassId) || cleanClassId;
       if (clsLabel && !entry.classNames.includes(clsLabel)) {
         entry.classNames.push(clsLabel);
       }
+      entry.activeEnrollmentsCount = entry.enrolledClassIds.length;
+      entry.isEnrolledStudent = entry.enrolledClassIds.length > 0;
     }
     if (!entry.createdAt && enr.joinedAt) {
       entry.createdAt = normalizeIsoTimestamp(enr.joinedAt);
@@ -296,13 +481,14 @@ export function buildAdminDirectoryUsers(params: {
   }
 
   // 4. Progresso real na nuvem em users/{uid}/data/progress quando disponível
+  // Mantém a trilha estudada no app (primaryStudyCourse) separada de matrículas oficiais em turmas.
   for (const [uid, prog] of Object.entries(progressByUid)) {
     const entry = usersByUid.get(uid);
     if (!entry) continue;
     entry.completedLessonsCount = prog.completedLessonsCount;
     entry.totalStudyMinutes = prog.totalStudyMinutes;
-    if (prog.primaryCourseId && !entry.enrolledCourses.includes(prog.primaryCourseId)) {
-      entry.enrolledCourses.push(prog.primaryCourseId);
+    if (prog.primaryCourseId && typeof prog.primaryCourseId === 'string') {
+      entry.primaryStudyCourse = prog.primaryCourseId;
     }
   }
 
@@ -329,7 +515,81 @@ function mapFirestoreLoadError(err: unknown, contextPath: string): string {
 export async function fetchAdminGlobalDirectory(): Promise<AdminDirectoryLoadResult> {
   const warnings: string[] = [];
 
-  // 1. Leitura obrigatória da coleção users (list permitida exclusivamente para isAdmin())
+  // 0. Tenta consultar rota protegida no backend Express com Firebase Admin SDK
+  //    (retorna TODAS as contas do Firebase Authentication + coleções do Firestore, incluindo contas sem users/{uid})
+  const currentUser = auth.currentUser;
+  if (currentUser) {
+    try {
+      const idToken = await currentUser.getIdToken();
+      const baseUrl = getProfessorApiBaseUrl();
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      try {
+        const resp = await fetch(`${baseUrl}/api/admin/users`, {
+          headers: { Authorization: `Bearer ${idToken}` },
+          signal: controller.signal,
+        });
+        const contentType = resp.headers.get('content-type') || '';
+        if (resp.ok && contentType.includes('application/json')) {
+          const payload = (await resp.json()) as {
+            status?: string;
+            authUsers?: RawAuthUserInput[];
+            userDocs?: RawUserRecordInput[];
+            studentDocs?: RawUserRecordInput[];
+            roleDocs?: RawUserRecordInput[];
+            classes?: ClassGroup[];
+            enrollments?: RawEnrollmentRecordInput[];
+            progressByUid?: Record<string, RawProgressRecordInput>;
+          };
+          if (payload?.status === 'ok') {
+            const authUsers = payload.authUsers || [];
+            const userDocs = payload.userDocs || [];
+            const studentDocs = payload.studentDocs || [];
+            const roleDocs = payload.roleDocs || [];
+            const classes = payload.classes || [];
+            const enrollments = payload.enrollments || [];
+            const progressByUid = payload.progressByUid || {};
+
+            const users = buildAdminDirectoryUsers({
+              authUsers,
+              userDocs,
+              studentDocs,
+              roleDocs,
+              classes,
+              enrollments,
+              progressByUid,
+            });
+            const stats = computeEnrolledUsersCountByClass(classes, enrollments);
+
+            return {
+              users,
+              classes,
+              enrollmentsCount: stats.validUniqueEnrollmentsCount,
+              enrolledStudentsCount: stats.enrolledStudentsCount,
+              enrolledUsersCountByClass: stats.countsByClass,
+              authUsersCount: authUsers.length,
+              directoryMode: 'backend_admin_sdk',
+              warnings,
+            };
+          }
+        } else if (resp.status === 401 || resp.status === 403) {
+          const errBody = contentType.includes('application/json')
+            ? ((await resp.json()) as { error?: string })
+            : {};
+          throw new Error(errBody.error || `Autorização recusada (HTTP ${resp.status}).`);
+        }
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    } catch (err) {
+      if (err instanceof Error && (err.message.includes('HTTP 401') || err.message.includes('HTTP 403'))) {
+        throw err;
+      }
+      // Backend Express indisponível (GitHub Pages / modo serverless) -> segue para Firestore direto
+    }
+  }
+
+  // 1. Leitura direta da coleção users no Cloud Firestore (list permitida exclusivamente para isAdmin())
   let userDocs: RawUserRecordInput[] = [];
   try {
     const usersSnap = await getDocsFromServer(collection(db, 'users'));
@@ -338,12 +598,20 @@ export async function fetchAdminGlobalDirectory(): Promise<AdminDirectoryLoadRes
     throw new Error(mapFirestoreLoadError(err, 'users'));
   }
 
-  // 2. Consultas complementares autorizadas para admin (system_roles, classes, enrollments)
-  const [rolesRes, classesRes, enrollmentsRes] = await Promise.allSettled([
+  // 2. Consultas complementares autorizadas para admin (students, system_roles, classes, enrollments)
+  const [studentsRes, rolesRes, classesRes, enrollmentsRes] = await Promise.allSettled([
+    getDocsFromServer(collection(db, 'students')),
     getDocsFromServer(collection(db, 'system_roles')),
     getDocsFromServer(collection(db, 'classes')),
     getDocsFromServer(collection(db, 'enrollments')),
   ]);
+
+  let studentDocs: RawUserRecordInput[] = [];
+  if (studentsRes.status === 'fulfilled') {
+    studentDocs = studentsRes.value.docs.map((d) => ({ id: d.id, data: d.data() as Record<string, any> }));
+  } else {
+    warnings.push(mapFirestoreLoadError(studentsRes.reason, 'students'));
+  }
 
   let roleDocs: RawUserRecordInput[] = [];
   if (rolesRes.status === 'fulfilled') {
@@ -382,11 +650,26 @@ export async function fetchAdminGlobalDirectory(): Promise<AdminDirectoryLoadRes
     });
   }
 
-  // 4. Progresso real na nuvem (users/{uid}/data/progress) para os usuários encontrados
+  // 4. Progresso real na nuvem (users/{uid}/data/progress) para todos os UIDs encontrados
   const progressByUid: Record<string, RawProgressRecordInput> = {};
-  const uidsToInspect = userDocs
-    .map((u) => (typeof u.data?.uid === 'string' && u.data.uid.trim() ? u.data.uid.trim() : u.id))
-    .filter((uid) => Boolean(uid && VALID_UID_REGEX.test(uid)));
+  const uidSet = new Set<string>();
+  userDocs.forEach((u) => {
+    const uid = typeof u.data?.uid === 'string' && u.data.uid.trim() ? u.data.uid.trim() : u.id;
+    if (uid && VALID_UID_REGEX.test(uid)) uidSet.add(uid);
+  });
+  studentDocs.forEach((s) => {
+    const uid = typeof s.data?.uid === 'string' && s.data.uid.trim() ? s.data.uid.trim() : s.id;
+    if (uid && VALID_UID_REGEX.test(uid)) uidSet.add(uid);
+  });
+  roleDocs.forEach((r) => {
+    const uid = typeof r.data?.uid === 'string' && r.data.uid.trim() ? r.data.uid.trim() : r.id;
+    if (uid && VALID_UID_REGEX.test(uid)) uidSet.add(uid);
+  });
+  allEnrollments.forEach((e) => {
+    const uid = typeof e.studentId === 'string' ? e.studentId.trim() : '';
+    if (uid && VALID_UID_REGEX.test(uid)) uidSet.add(uid);
+  });
+  const uidsToInspect = Array.from(uidSet);
 
   const BATCH_SIZE = 10;
   for (let i = 0; i < uidsToInspect.length; i += BATCH_SIZE) {
@@ -413,16 +696,22 @@ export async function fetchAdminGlobalDirectory(): Promise<AdminDirectoryLoadRes
 
   const users = buildAdminDirectoryUsers({
     userDocs,
+    studentDocs,
     roleDocs,
     classes,
     enrollments: allEnrollments,
     progressByUid,
   });
+  const stats = computeEnrolledUsersCountByClass(classes, allEnrollments);
 
   return {
     users,
     classes,
-    enrollmentsCount: allEnrollments.length,
+    enrollmentsCount: stats.validUniqueEnrollmentsCount,
+    enrolledStudentsCount: stats.enrolledStudentsCount,
+    enrolledUsersCountByClass: stats.countsByClass,
+    authUsersCount: users.length,
+    directoryMode: 'firestore_serverless',
     warnings,
   };
 }

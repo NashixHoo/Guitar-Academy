@@ -9,6 +9,7 @@ import {
   sendPasswordReset as fbSendPasswordReset,
   logOut as fbLogOut, 
   fetchUserProfile,
+  saveUserProfile,
   fetchSystemRole,
   fetchSystemRoleWithDiagnostics,
   SystemRoleResolution,
@@ -152,20 +153,37 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         // Carrega o perfil do estudante e o papel confiável exclusivamente de system_roles/{uid}
         try {
-          const [profile, resolution] = await Promise.all([
+          const [loadedProfile, resolution] = await Promise.all([
             fetchUserProfile(currentUser.uid),
             resolveAndApplyRole(currentUser.uid),
           ]);
           if (authSeqRef.current !== seq) return;
+
+          // Backfill automático: garante que usuários autenticados via sessão persistida
+          // (ou logins anteriores sem registro em users/{uid}) tenham perfil sincronizado no Firestore.
+          let effectiveProfile = loadedProfile;
+          if (
+            !effectiveProfile ||
+            (!effectiveProfile.email && Boolean(currentUser.email)) ||
+            (!effectiveProfile.displayName && Boolean(currentUser.displayName))
+          ) {
+            const syncedProfile = await saveUserProfile(currentUser);
+            if (authSeqRef.current !== seq) return;
+            if (syncedProfile) {
+              effectiveProfile = syncedProfile;
+            }
+          } else {
+            void updateUserLastSeen(currentUser.uid);
+          }
+
           setStudentProfile(
-            profile
+            effectiveProfile
               ? {
-                  ...profile,
-                  role: resolution?.role ?? profile.role,
+                  ...effectiveProfile,
+                  role: resolution?.role ?? effectiveProfile.role,
                 }
               : null
           );
-          updateUserLastSeen(currentUser.uid);
         } catch (err) {
           if (authSeqRef.current !== seq) return;
           console.error('[AuthContext] Erro ao sincronizar sessão e papel Zero-Trust:', err);

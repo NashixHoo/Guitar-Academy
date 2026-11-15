@@ -6613,6 +6613,73 @@ assert(
   '37.7 Loop de startListening() aplica ganho adaptativo progressivo sobre AudioContext/GainNode sem erros'
 );
 
+// =============================================================
+// GRUPO 38 — ENTRADA DO ALUNO EM TURMA VIA CÓDIGO DE CONVITE
+// =============================================================
+console.log('\n--- GRUPO 38: ENTRADA DO ALUNO EM TURMA VIA CÓDIGO DE CONVITE ---');
+
+const dashboardInviteSrc = fs.readFileSync('src/components/dashboard/DashboardView.tsx', 'utf-8');
+const curriculumInviteSrc = fs.readFileSync('src/components/curriculum/CurriculumView.tsx', 'utf-8');
+const profileInviteSrc = fs.readFileSync('src/components/profile/UserProfileModal.tsx', 'utf-8');
+const joinModalSrc = fs.readFileSync('src/components/teacher/StudentJoinClassModal.tsx', 'utf-8');
+const classMgmtSrc = fs.readFileSync('src/components/teacher/ClassManagementModal.tsx', 'utf-8');
+const teacherDashSrc = fs.readFileSync('src/components/teacher/TeacherDashboardView.tsx', 'utf-8');
+const adminPortalSrc = fs.readFileSync('src/components/admin/AdminPortalView.tsx', 'utf-8');
+
+assert(
+  dashboardInviteSrc.includes('Entrar em uma turma') &&
+  dashboardInviteSrc.includes('onOpenJoinClass') &&
+  curriculumInviteSrc.includes('Entrar em uma turma') &&
+  curriculumInviteSrc.includes('onOpenJoinClass') &&
+  profileInviteSrc.includes('Entrar em uma turma'),
+  '38.01 Opção visível "Entrar em uma turma" está presente no Início (DashboardView), Cursos (CurriculumView) e Perfil (UserProfileModal)'
+);
+
+assert(
+  joinModalSrc.includes('validateInviteCode') &&
+  joinModalSrc.includes("step === 'enter_code'") &&
+  joinModalSrc.includes("step === 'confirm_class'") &&
+  joinModalSrc.includes('Confirmar entrada na turma') &&
+  joinModalSrc.includes('previewClass.teacherName') &&
+  joinModalSrc.includes('instrumentDisplay'),
+  '38.02 StudentJoinClassModal valida código, exibe prévia com nome da turma, instrumento e professor antes de confirmar a matrícula'
+);
+
+assert(
+  classMgmtSrc.includes('courseId') &&
+  classMgmtSrc.includes('expiresAt') &&
+  teacherDashSrc.includes('guitar-academy:enrollment-updated') &&
+  adminPortalSrc.includes('guitar-academy:enrollment-updated') &&
+  appCodeAudit.includes('guitar-academy:enrollment-updated') &&
+  appCodeAudit.includes('TeacherService.getStudentEnrollments'),
+  '38.03 Criação de turma suporta instrumento/validade e matrícula atualiza automaticamente aluno, professor e administrador'
+);
+
+const g38Class = await TeacherService.createClass(
+  'teacher-g38-uid',
+  'prof38@guitaracademy.test',
+  'Prof. Marcos G38',
+  'Turma Violão Integrado 38',
+  'Turma de verificação ponta a ponta',
+  'GA-G38-OK',
+  { courseId: 'violao', instrument: 'Violão Popular', maxStudents: 25 }
+);
+const g38Preview = await TeacherService.validateInviteCode('ga-g38-ok', 'stu-g38-uid');
+const g38Join = await TeacherService.joinClassWithInviteCode('stu-g38-uid', 'Aluno G38', 'aluno38@test.dev', 'GA-G38-OK');
+const g38Duplicate = await TeacherService.validateInviteCode('GA-G38-OK', 'stu-g38-uid');
+const g38StudentClasses = await TeacherService.getStudentEnrollments('stu-g38-uid');
+
+assert(
+  g38Preview.valid === true &&
+  g38Preview.classGroup?.id === g38Class.id &&
+  g38Preview.classGroup?.instrument === 'Violão Popular' &&
+  g38Join.success === true &&
+  g38Duplicate.valid === false &&
+  g38Duplicate.reason === 'already_enrolled' &&
+  g38StudentClasses.some((c) => c.classId === g38Class.id && c.teacherName === 'Prof. Marcos G38'),
+  '38.04 Fluxo completo validateInviteCode -> joinClassWithInviteCode -> bloqueio de duplicidade -> getStudentEnrollments funciona corretamente'
+);
+
 console.log('\n===========================================================');
 console.log(`TOTAL DE TESTES: ${totalTests}`);
 console.log(`PASSOU: ${passedTests}`);
@@ -6622,7 +6689,7 @@ console.log('===========================================================');
 if (failedTests > 0) {
   process.exit(1);
 } else {
-  console.log('✓ Todos os testes de integração do motor musical, detector, currículo, Central de Prática, Busca Global, Diagramas Cifra Club, Autenticação Obrigatória, Separação de Ambientes Aluno/Admin, Backend Hardening, SMART TUNER V1.2, AUTENTICAÇÃO ADMINISTRATIVA DEFINITIVA, CORREÇÃO GERAL DEFINITIVA, MODAL/IMAGENS DOS CURSOS, AUDITORIA DE ÁUDIO, MASTER TUNER V2.1, CORREÇÃO PRIORITÁRIA DO AFINADOR e HOTFIX GANHO ADAPTATIVO foram APROVADOS com sucesso!\n');
+  console.log('✓ Todos os testes de integração do motor musical, detector, currículo, Central de Prática, Busca Global, Diagramas Cifra Club, Autenticação Obrigatória, Separação de Ambientes Aluno/Admin, Backend Hardening, SMART TUNER V1.2, AUTENTICAÇÃO ADMINISTRATIVA DEFINITIVA, CORREÇÃO GERAL DEFINITIVA, MODAL/IMAGENS DOS CURSOS, AUDITORIA DE ÁUDIO, MASTER TUNER V2.1, CORREÇÃO PRIORITÁRIA DO AFINADOR, HOTFIX GANHO ADAPTATIVO e CONVITE DE TURMA foram APROVADOS com sucesso!\n');
   process.exit(0);
 }
 

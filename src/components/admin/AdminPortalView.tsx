@@ -70,6 +70,8 @@ export const AdminPortalView: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive' | 'suspended'>('all');
   const [roleFilter, setRoleFilter] = useState<'all' | UserRole>('all');
+  const [enrollmentFilter, setEnrollmentFilter] = useState<'all' | 'enrolled' | 'not_enrolled'>('all');
+  const [brokenAvatars, setBrokenAvatars] = useState<Record<string, boolean>>({});
 
   const [isLoadingDirectory, setIsLoadingDirectory] = useState<boolean>(true);
   const [directoryError, setDirectoryError] = useState<string | null>(null);
@@ -79,10 +81,14 @@ export const AdminPortalView: React.FC = () => {
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
   const [backendAuthStatus, setBackendAuthStatus] = useState<'checking' | 'verified' | 'serverless' | 'denied'>('checking');
 
-  // Dados reais carregados diretamente do Cloud Firestore (sem usuários fictícios)
+  // Dados reais carregados diretamente do Firebase Authentication / Cloud Firestore (sem usuários fictícios)
   const [users, setUsers] = useState<AdminDirectoryUser[]>([]);
   const [classes, setClasses] = useState<ClassGroup[]>([]);
   const [enrollmentsCount, setEnrollmentsCount] = useState<number>(0);
+  const [enrolledStudentsCount, setEnrolledStudentsCount] = useState<number>(0);
+  const [enrolledUsersCountByClass, setEnrolledUsersCountByClass] = useState<Record<string, number>>({});
+  const [authUsersCount, setAuthUsersCount] = useState<number>(0);
+  const [directoryMode, setDirectoryMode] = useState<'backend_admin_sdk' | 'firestore_serverless'>('firestore_serverless');
 
   // Estatísticas reais de catálogo da plataforma (152 aulas oficiais)
   const totalCourses = 6;
@@ -104,6 +110,9 @@ export const AdminPortalView: React.FC = () => {
       setUsers([]);
       setClasses([]);
       setEnrollmentsCount(0);
+      setEnrolledStudentsCount(0);
+      setEnrolledUsersCountByClass({});
+      setAuthUsersCount(0);
       setIsLoadingDirectory(false);
       return;
     }
@@ -117,6 +126,10 @@ export const AdminPortalView: React.FC = () => {
       setUsers(result.users);
       setClasses(result.classes);
       setEnrollmentsCount(result.enrollmentsCount);
+      setEnrolledStudentsCount(result.enrolledStudentsCount);
+      setEnrolledUsersCountByClass(result.enrolledUsersCountByClass);
+      setAuthUsersCount(result.authUsersCount);
+      setDirectoryMode(result.directoryMode);
       setDirectoryWarnings(result.warnings);
     } catch (err) {
       const message =
@@ -127,6 +140,9 @@ export const AdminPortalView: React.FC = () => {
       setUsers([]);
       setClasses([]);
       setEnrollmentsCount(0);
+      setEnrolledStudentsCount(0);
+      setEnrolledUsersCountByClass({});
+      setAuthUsersCount(0);
     } finally {
       setIsLoadingDirectory(false);
     }
@@ -134,6 +150,16 @@ export const AdminPortalView: React.FC = () => {
 
   useEffect(() => {
     void loadGlobalDirectory();
+  }, [loadGlobalDirectory]);
+
+  useEffect(() => {
+    const handleEnrollmentUpdated = () => {
+      void loadGlobalDirectory();
+    };
+    window.addEventListener('guitar-academy:enrollment-updated', handleEnrollmentUpdated);
+    return () => {
+      window.removeEventListener('guitar-academy:enrollment-updated', handleEnrollmentUpdated);
+    };
   }, [loadGlobalDirectory]);
 
   // Verificação real de autorização administrativa junto ao backend (/api/admin/overview) quando Express estiver ativo
@@ -190,7 +216,10 @@ export const AdminPortalView: React.FC = () => {
       item.uid.toLowerCase().includes(q);
     const matchesStatus = statusFilter === 'all' || item.accountStatus === statusFilter;
     const matchesRole = roleFilter === 'all' || item.role === roleFilter;
-    return matchesSearch && matchesStatus && matchesRole;
+    const matchesEnrollment =
+      enrollmentFilter === 'all' ||
+      (enrollmentFilter === 'enrolled' ? item.isEnrolledStudent : !item.isEnrolledStudent);
+    return matchesSearch && matchesStatus && matchesRole && matchesEnrollment;
   });
 
   const activeUsersCount = users.filter((u) => u.accountStatus === 'active').length;
@@ -283,7 +312,7 @@ export const AdminPortalView: React.FC = () => {
       <header className="h-16 px-4 sm:px-8 border-b border-[#27272A] bg-[#09090B] flex items-center justify-between shrink-0 sticky top-0 z-30 shadow-md">
         <div className="flex items-center gap-3.5">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-[#7B1E2B] to-[#B52A3A] p-2 flex items-center justify-center shadow-md border border-[#C5A059]/40">
-            <img src="./icon.svg" alt="Guitar Academy" className="w-full h-full object-contain filter brightness-200 invert" />
+            <img src={`${import.meta.env.BASE_URL}icon.svg`} alt="Guitar Academy" className="w-full h-full object-contain filter brightness-200 invert" />
           </div>
           <div>
             <div className="flex items-center gap-2">
@@ -451,24 +480,27 @@ export const AdminPortalView: React.FC = () => {
                   <div className="text-2xl font-black text-white">
                     {isLoadingDirectory ? '...' : users.length}
                   </div>
-                  <div className="text-[10px] text-[#A1A1AA] mt-1">
-                    <span>
+                  <div className="text-[10px] text-[#A1A1AA] mt-1 space-y-0.5">
+                    <span className="block">
                       {activeUsersCount} ativas • {suspendedUsersCount} suspensas
+                    </span>
+                    <span className="block text-[#71717A]">
+                      {studentsCount} alunos • {teachersCount} prof. • {adminsCount} admin
                     </span>
                   </div>
                 </div>
 
                 <div className="p-4 rounded-2xl bg-[#1C1C21] border border-[#27272A] shadow-sm">
                   <div className="flex items-center justify-between text-[#A1A1AA] mb-2">
-                    <span className="text-xs font-semibold">Perfis RBAC</span>
-                    <KeyRound className="w-4 h-4 text-[#C5A059]" />
+                    <span className="text-xs font-semibold">Matriculados em Turmas</span>
+                    <GraduationCap className="w-4 h-4 text-[#C5A059]" />
                   </div>
                   <div className="text-2xl font-black text-white">
-                    {isLoadingDirectory ? '...' : studentsCount}
+                    {isLoadingDirectory ? '...' : enrolledStudentsCount}
                   </div>
                   <div className="text-[10px] text-[#A1A1AA] mt-1">
                     <span>
-                      Alunos • {teachersCount} prof. • {adminsCount} admin
+                      {classes.length} {classes.length === 1 ? 'turma real' : 'turmas reais'} • {enrollmentsCount} matrículas
                     </span>
                   </div>
                 </div>
@@ -619,8 +651,28 @@ export const AdminPortalView: React.FC = () => {
                 </div>
               )}
 
+              {/* Contadores rápidos de separação entre Contas Cadastradas vs Alunos Matriculados */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                <div className="p-3 rounded-xl bg-[#1C1C21] border border-[#27272A] flex items-center justify-between">
+                  <span className="text-[#A1A1AA]">Contas Reais Cadastradas</span>
+                  <strong className="font-mono-code text-white">
+                    {directoryMode === 'backend_admin_sdk' ? `${users.length} (${authUsersCount} Auth)` : users.length}
+                  </strong>
+                </div>
+                <div className="p-3 rounded-xl bg-[#1C1C21] border border-[#27272A] flex items-center justify-between">
+                  <span className="text-[#A1A1AA]">Matriculados em Turmas</span>
+                  <strong className="font-mono-code text-emerald-400">{enrolledStudentsCount}</strong>
+                </div>
+                <div className="p-3 rounded-xl bg-[#1C1C21] border border-[#27272A] flex items-center justify-between">
+                  <span className="text-[#A1A1AA]">Contas sem Turma Vinculada</span>
+                  <strong className="font-mono-code text-zinc-300">
+                    {users.filter((u) => !u.isEnrolledStudent).length}
+                  </strong>
+                </div>
+              </div>
+
               {/* Filtros e Busca */}
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
                 <div className="sm:col-span-2 relative">
                   <Search className="w-4 h-4 text-[#A1A1AA] absolute left-3.5 top-1/2 -translate-y-1/2" />
                   <input
@@ -643,6 +695,21 @@ export const AdminPortalView: React.FC = () => {
                     <option value="student">Alunos</option>
                     <option value="teacher">Professores</option>
                     <option value="admin">Administradores</option>
+                  </select>
+                </div>
+
+                <div>
+                  <select
+                    aria-label="Filtrar por vínculo em turmas"
+                    value={enrollmentFilter}
+                    onChange={(e) =>
+                      setEnrollmentFilter(e.target.value as 'all' | 'enrolled' | 'not_enrolled')
+                    }
+                    className="w-full h-10 px-3 rounded-xl bg-[#1C1C21] border border-[#27272A] text-xs text-white focus:border-[#7B1E2B] outline-hidden"
+                  >
+                    <option value="all">Todas as Contas</option>
+                    <option value="enrolled">Matriculados em Turma</option>
+                    <option value="not_enrolled">Sem Turma Vinculada</option>
                   </select>
                 </div>
 
@@ -708,12 +775,15 @@ export const AdminPortalView: React.FC = () => {
                             <tr key={account.uid} className="hover:bg-[#27272A]/40 transition">
                               <td className="py-3 px-4">
                                 <div className="flex items-center gap-2.5">
-                                  {account.photoURL ? (
+                                  {account.photoURL && !brokenAvatars[account.uid] ? (
                                     <img
                                       src={account.photoURL}
                                       alt={account.displayName}
                                       className="w-8 h-8 rounded-lg object-cover border border-[#3F3F46] shrink-0"
                                       referrerPolicy="no-referrer"
+                                      onError={() =>
+                                        setBrokenAvatars((prev) => ({ ...prev, [account.uid]: true }))
+                                      }
                                     />
                                   ) : (
                                     <div className="w-8 h-8 rounded-lg bg-[#27272A] text-[#E4E4E7] font-bold text-[11px] flex items-center justify-center border border-[#3F3F46] shrink-0">
@@ -772,8 +842,23 @@ export const AdminPortalView: React.FC = () => {
                               </td>
 
                               <td className="py-3 px-4">
-                                <div className="space-y-1">
-                                  {account.enrolledCourses.length > 0 ? (
+                                <div className="space-y-1.5">
+                                  {account.isEnrolledStudent ? (
+                                    <span className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-mono-code font-bold bg-emerald-950/60 text-emerald-300 border border-emerald-800/80">
+                                      Matriculado em {account.activeEnrollmentsCount}{' '}
+                                      {account.activeEnrollmentsCount === 1 ? 'turma' : 'turmas'}
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-mono-code bg-zinc-900 text-zinc-400 border border-zinc-700">
+                                      Conta cadastrada sem turma
+                                    </span>
+                                  )}
+                                  {account.classNames.length > 0 && (
+                                    <div className="text-[10px] text-[#C5A059]">
+                                      Turmas: {account.classNames.join(', ')}
+                                    </div>
+                                  )}
+                                  {account.enrolledCourses.length > 0 && (
                                     <div className="flex flex-wrap gap-1">
                                       {account.enrolledCourses.map((c) => (
                                         <span
@@ -784,14 +869,10 @@ export const AdminPortalView: React.FC = () => {
                                         </span>
                                       ))}
                                     </div>
-                                  ) : (
-                                    <span className="text-[10px] text-[#71717A]">
-                                      Sem cursos registrados
-                                    </span>
                                   )}
-                                  {account.classNames.length > 0 && (
-                                    <div className="text-[10px] text-[#C5A059]">
-                                      Turmas: {account.classNames.join(', ')}
+                                  {account.primaryStudyCourse && (
+                                    <div className="text-[10px] text-[#A1A1AA]">
+                                      Trilha em estudo: {formatCourseLabel(account.primaryStudyCourse)}
                                     </div>
                                   )}
                                   {account.completedLessonsCount !== null && (
@@ -908,23 +989,30 @@ export const AdminPortalView: React.FC = () => {
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {classes.map((cls) => (
-                    <div key={cls.id} className="p-5 rounded-2xl bg-[#1C1C21] border border-[#27272A] space-y-3">
-                      <div className="flex items-center justify-between gap-2">
-                        <h3 className="text-sm font-bold text-white truncate">{cls.name || cls.id}</h3>
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-mono-code bg-emerald-950 text-emerald-400 border border-emerald-800 shrink-0">
-                          Código: {cls.code || '—'}
-                        </span>
+                  {classes.map((cls) => {
+                    const enrolledCount = enrolledUsersCountByClass[cls.id] ?? 0;
+                    return (
+                      <div key={cls.id} className="p-5 rounded-2xl bg-[#1C1C21] border border-[#27272A] space-y-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <h3 className="text-sm font-bold text-white truncate">{cls.name || cls.id}</h3>
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-mono-code bg-emerald-950 text-emerald-400 border border-emerald-800 shrink-0">
+                            Código: {cls.code || '—'}
+                          </span>
+                        </div>
+                        <p className="text-xs text-[#A1A1AA]">
+                          {cls.description || 'Sem descrição cadastrada.'}
+                        </p>
+                        <div className="flex flex-wrap items-center justify-between gap-3 text-xs font-mono-code text-[#E4E4E7] pt-2 border-t border-[#27272A]">
+                          <span>Professor: {cls.teacherName || cls.teacherEmail || cls.teacherId}</span>
+                          <span className="text-[#C5A059] font-bold">
+                            {enrolledCount} {enrolledCount === 1 ? 'aluno matriculado' : 'alunos matriculados'}
+                            {typeof cls.maxStudents === 'number' && cls.maxStudents > 0 ? ` / ${cls.maxStudents} vagas` : ''}
+                          </span>
+                          <span>Status: {cls.active ? 'Aberta' : 'Encerrada'}</span>
+                        </div>
                       </div>
-                      <p className="text-xs text-[#A1A1AA]">
-                        {cls.description || 'Sem descrição cadastrada.'}
-                      </p>
-                      <div className="flex flex-wrap items-center gap-4 text-xs font-mono-code text-[#E4E4E7] pt-2 border-t border-[#27272A]">
-                        <span>Professor: {cls.teacherName || cls.teacherEmail || cls.teacherId}</span>
-                        <span>Status: {cls.active ? 'Aberta' : 'Encerrada'}</span>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
