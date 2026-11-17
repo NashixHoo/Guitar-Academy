@@ -1039,7 +1039,7 @@ describe('Firebase Emulator — Firestore Security Rules (Student vs Admin)', ()
       updateDoc(doc(adminDb, 'admin_logs', 'log-seed-1'), { action: 'Overwrite immutable' })
     );
 
-        const studentSelfDb = getAuthenticatedDb(env, STUDENT_UID);
+    const studentSelfDb = getAuthenticatedDb(env, STUDENT_UID);
     const studentRole = await getDoc(
       doc(studentSelfDb, 'system_roles', STUDENT_UID)
     );
