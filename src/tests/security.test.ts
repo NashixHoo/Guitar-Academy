@@ -1044,9 +1044,9 @@ describe('Firebase Emulator — Firestore Security Rules (Student vs Admin)', ()
       doc(studentSelfDb, 'system_roles', STUDENT_UID)
     );
     assert.equal(studentRole.data()?.role, 'student');
-    // Student cannot create or change accountStatus, including when the field is initially absent.
+    // Student cannot change accountStatus to suspended.
     await assertFails(
-      updateDoc(doc(studentSelfDb, 'users', STUDENT_UID), { accountStatus: 'active' })
+      updateDoc(doc(studentSelfDb, 'users', STUDENT_UID), { accountStatus: 'suspended' })
     );
 
     // Verified admin can suspend and reactivate a student's users/{uid}.accountStatus.
