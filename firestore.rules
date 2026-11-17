@@ -1039,17 +1039,21 @@ service cloud.firestore {
         isValidAccessGrant(request.resource.data, grantId) &&
         request.resource.data.id == resource.data.id &&
         request.resource.data.studentUid == resource.data.studentUid &&
-        request.resource.data.createdAt == resource.data.createdAt;
-      allow delete: if isAdmin() && isValidId(grantId);
-    }
+        
+    // Student cannot create or change accountStatus, including when the field is initially absent.
+    const studentSelfDb = getAuthenticatedDb(env, STUDENT_UID);
+    await assertFails(
+      updateDoc(doc(studentSelfDb, 'users', STUDENT_UID), { accountStatus: 'active' })
+    );
 
-    // 14. Direcionamento Inicial no Currículo (/student_academic_placements/{placementId}):
-    // Alunos leem apenas o próprio direcionamento; criação/edição/limpeza restrita a Admin.
-    match /student_academic_placements/{placementId} {
-      allow get: if isValidId(placementId) && (isAdmin() || isOwner(resource.data.studentUid));
-      allow list: if isAdmin() || (isAuthenticated() && resource.data.studentUid == request.auth.uid);
-      allow create: if isAdmin() &&
-        isValidId(placementId) &&
+    // Verified admin can suspend and reactivate a student's users/{uid}.accountStatus.
+    await assertSucceeds(
+      updateDoc(doc(adminDb, 'users', STUDENT_UID), { accountStatus: 'suspended' })
+    );
+    await assertFails(
+      updateDoc(doc(studentSelfDb, 'users', STUDENT_UID), { accountStatus: 'active' })
+    );
+
         isValidAcademicPlacement(request.resource.data, placementId) &&
         request.resource.data.assignedBy == request.auth.uid;
       allow update: if isAdmin() &&
