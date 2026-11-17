@@ -1045,7 +1045,6 @@ describe('Firebase Emulator — Firestore Security Rules (Student vs Admin)', ()
     );
     assert.equal(studentRole.data()?.role, 'student');
     // Student cannot create or change accountStatus, including when the field is initially absent.
-    const studentSelfDb = getAuthenticatedDb(env, STUDENT_UID);
     await assertFails(
       updateDoc(doc(studentSelfDb, 'users', STUDENT_UID), { accountStatus: 'active' })
     );
