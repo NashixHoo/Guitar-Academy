@@ -1039,17 +1039,21 @@ describe('Firebase Emulator — Firestore Security Rules (Student vs Admin)', ()
       updateDoc(doc(adminDb, 'admin_logs', 'log-seed-1'), { action: 'Overwrite immutable' })
     );
 
-    // Verified admin can suspend and reactivate a student's users/{uid}.accountStatus, while student cannot
+    
+    // Student cannot create or change accountStatus, including when the field is initially absent.
     const studentSelfDb = getAuthenticatedDb(env, STUDENT_UID);
+    await assertFails(
+      updateDoc(doc(studentSelfDb, 'users', STUDENT_UID), { accountStatus: 'active' })
+    );
+
+    // Verified admin can suspend and reactivate a student's users/{uid}.accountStatus.
     await assertSucceeds(
       updateDoc(doc(adminDb, 'users', STUDENT_UID), { accountStatus: 'suspended' })
     );
     await assertFails(
       updateDoc(doc(studentSelfDb, 'users', STUDENT_UID), { accountStatus: 'active' })
     );
-    await assertSucceeds(
-      updateDoc(doc(adminDb, 'users', STUDENT_UID), { accountStatus: 'active' })
-    );
+
 
     // Teacher can read ONLY their own system_roles doc (serverless role resolution)
     const teacherOwnRoleSnap = await assertSucceeds(getDoc(doc(teacherDb, 'system_roles', TEACHER_UID)));
