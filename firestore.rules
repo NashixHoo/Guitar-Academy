@@ -666,11 +666,15 @@ service cloud.firestore {
         (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'isTeacher', 'isAdmin', 'permissions'])) &&
         isValidUserPayload(request.resource.data, userId) &&
         hasNoPrivilegeFields(request.resource.data) &&
-        (isAdmin() || (
-          (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['accountStatus'])) &&
-          (!('uid' in resource.data) || request.resource.data.uid == resource.data.uid) &&
-          (!('createdAt' in resource.data) || request.resource.data.createdAt == resource.data.createdAt)
-        ));
+        
+(isAdmin() || (
+  (!('accountStatus' in request.resource.data) ||
+    ('accountStatus' in resource.data &&
+     request.resource.data.accountStatus == resource.data.accountStatus)) &&
+  (!('uid' in resource.data) || request.resource.data.uid == resource.data.uid) &&
+  (!('createdAt' in resource.data) || request.resource.data.createdAt == resource.data.createdAt)
+));
+
       allow delete: if isAdmin() && isValidId(userId);
 
       // Subcoleções isoladas (ex: progresso /users/{userId}/data/progress)
