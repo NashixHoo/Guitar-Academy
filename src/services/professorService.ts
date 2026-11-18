@@ -14,7 +14,7 @@ import {
 } from '../types';
 import { auth } from './firebase';
 
-export const PROFESSOR_IA_ENABLED = true;
+export const PROFESSOR_IA_ENABLED = false;
 
 export interface ProfessorStatus {
   available: boolean;
