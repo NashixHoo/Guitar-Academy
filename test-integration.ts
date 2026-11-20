@@ -5118,11 +5118,11 @@ assert(
   '31.1 App.tsx impede que alunos acessem o painel administrativo ou pedagógico mesmo autenticados ou via URL direta'
 );
 
-// 31.2 Aluno não consegue promover a própria conta
+// 31.2 Aluno não consegue alterar campos privilegiados nem accountStatus na própria conta
 const rulesAudit = fs.readFileSync('firestore.rules', 'utf-8');
 assert(
-  rulesAudit.includes("!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'isTeacher', 'isAdmin', 'permissions'])"),
-  '31.2 firestore.rules bloqueia qualquer alteração de role, isAdmin, isTeacher ou permissions pelo próprio aluno em users/{userId}'
+  rulesAudit.includes("!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'isTeacher', 'isAdmin', 'permissions', 'accountStatus'])"),
+  '31.2 firestore.rules bloqueia qualquer alteração de role, isAdmin, isTeacher, permissions ou accountStatus pelo próprio aluno em users/{userId}'
 );
 
 // 31.3 Documento sem campo role não concede privilégios

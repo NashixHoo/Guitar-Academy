@@ -846,7 +846,7 @@ describe('Firebase Emulator — Firestore Security Rules (Student vs Admin)', ()
     const newStudentUid = 'student-new-signup';
     const newStudentDb = getAuthenticatedDb(env, newStudentUid);
 
-    // Student cannot update role, isAdmin, isTeacher, or permissions on their profile
+    // Student cannot update role, isAdmin, isTeacher, permissions, or accountStatus on their profile
     await assertFails(
       updateDoc(doc(studentDb, 'users', STUDENT_UID), { role: 'admin' })
     );
@@ -858,6 +858,12 @@ describe('Firebase Emulator — Firestore Security Rules (Student vs Admin)', ()
     );
     await assertFails(
       updateDoc(doc(studentDb, 'users', STUDENT_UID), { permissions: ['admin'] })
+    );
+    await assertFails(
+      updateDoc(doc(studentDb, 'users', STUDENT_UID), { accountStatus: 'suspended' })
+    );
+    await assertFails(
+      updateDoc(doc(studentDb, 'users', STUDENT_UID), { accountStatus: 'active' })
     );
 
     // Benign profile update on own document is still allowed
