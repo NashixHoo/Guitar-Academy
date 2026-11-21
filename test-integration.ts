@@ -5516,12 +5516,12 @@ assert(
 
 assert(
   curriculumSrc33.includes('<CourseVisualBanner') &&
-  lessonViewerSrc33.includes('<CourseVisualBanner') &&
+  (lessonViewerSrc33.includes('<LessonVisualGuide') || lessonViewerSrc33.includes('<CourseVisualBanner')) &&
   courseBannerSrc.includes('ASSET_MAP') &&
   getCourseModuleVisual('baixo', 3).assetKey === 'baixo-slap' &&
   getCourseModuleVisual('teclado', 3).assetKey === 'teclado-harmonia' &&
   getCourseModuleVisual('bateria', 2).assetKey === 'bateria-kit',
-  '33.09 CurriculumView e LessonViewer renderizam CourseVisualBanner com mapeamento por módulo e aula'
+  '33.09 CurriculumView e LessonViewer renderizam CourseVisualBanner / LessonVisualGuide com mapeamento por módulo e aula'
 );
 
 // Verifica existência física de todos os arquivos .jpg referenciados no banner

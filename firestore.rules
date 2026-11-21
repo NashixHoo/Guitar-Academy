@@ -673,7 +673,7 @@ service cloud.firestore {
         (!('accountStatus' in request.resource.data) || request.resource.data.accountStatus == 'active');
       allow update: if isAdmin() && isValidId(userId);
       allow update: if isOwner(userId) && isValidId(userId) &&
-        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'isTeacher', 'isAdmin', 'permissions']) &&
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'isTeacher', 'isAdmin', 'permissions', 'accountStatus']) &&
         (
           (!('accountStatus' in resource.data) && !('accountStatus' in request.resource.data)) ||
           (('accountStatus' in resource.data) && ('accountStatus' in request.resource.data) && request.resource.data.accountStatus == resource.data.accountStatus)
