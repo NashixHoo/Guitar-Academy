@@ -38,6 +38,7 @@ import { useChordModal } from '../../contexts/ChordModalContext';
 import { ChordNameButton } from '../chords/ChordNameButton';
 import { findChordTokensInText } from '../../services/chordLookupService';
 import { CourseVisualBanner } from './CourseVisualBanner';
+import { LessonVisualGuide } from './LessonVisualGuide';
 import { getLessonVisual } from '../../data/courseLessonVisuals';
 
 interface LessonViewerProps {
@@ -536,7 +537,7 @@ export const LessonViewer: React.FC<LessonViewerProps> = ({
           </div>
 
           {currentPartIndex === 0 && (
-            <CourseVisualBanner visual={lessonVisual} variant="lesson" />
+            <LessonVisualGuide visual={lessonVisual} />
           )}
 
           {/* Interactive Audio Examples for Lesson 1 */}
@@ -718,7 +719,7 @@ export const LessonViewer: React.FC<LessonViewerProps> = ({
             </p>
           </div>
 
-          <CourseVisualBanner visual={lessonVisual} variant="module" />
+          <LessonVisualGuide visual={lessonVisual} />
 
           {/* Integrated Metronome Control Box */}
           <div className="bg-[#F8F7F4] border border-[#D9D9D9] rounded-2xl p-5 space-y-4">

@@ -30,6 +30,7 @@ import {
   collection,
   connectFirestoreEmulator,
   deleteDoc,
+  deleteField,
   doc,
   EmulatorMockTokenOptions,
   Firestore,
@@ -1057,6 +1058,9 @@ describe('Firebase Emulator — Firestore Security Rules (Student vs Admin)', ()
     );
     await assertFails(
       updateDoc(doc(studentSelfDb, 'users', STUDENT_UID), { accountStatus: 'active' })
+    );
+    await assertFails(
+      updateDoc(doc(studentSelfDb, 'users', STUDENT_UID), { accountStatus: deleteField() })
     );
     await assertSucceeds(
       updateDoc(doc(adminDb, 'users', STUDENT_UID), { accountStatus: 'active' })
