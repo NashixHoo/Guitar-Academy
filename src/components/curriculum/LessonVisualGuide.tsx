@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { CourseVisualInfo } from '../../data/courseLessonVisuals';
 import { CourseVisualBanner } from './CourseVisualBanner';
+import { PedagogicalSvgDiagrams } from './PedagogicalSvgDiagrams';
 import { Sparkles, CheckCircle2, AlertTriangle, ArrowRight, BookOpen, Compass, ShieldCheck } from 'lucide-react';
 
 interface LessonVisualGuideProps {
@@ -186,6 +187,23 @@ export const LessonVisualGuide: React.FC<LessonVisualGuideProps> = ({
 
       {/* Visual Banner Component */}
       <CourseVisualBanner visual={visual} variant="module" />
+
+      {/* Specific Pedagogical SVG Technical Diagram */}
+      <PedagogicalSvgDiagrams
+        instrumentType={
+          visual.assetKey.startsWith('violao')
+            ? 'violao'
+            : visual.assetKey.startsWith('guitarra')
+            ? 'guitarra'
+            : visual.assetKey.startsWith('baixo')
+            ? 'baixo'
+            : visual.assetKey.startsWith('teclado')
+            ? 'teclado'
+            : 'bateria'
+        }
+        topicKey={visual.assetKey}
+        title={visual.title}
+      />
 
       {/* Steps List */}
       <div className="space-y-3">
