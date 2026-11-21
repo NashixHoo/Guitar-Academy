@@ -46,6 +46,7 @@ import {
   writeBatch,
 } from 'firebase/firestore';
 import {
+  auth,
   fetchSystemRole,
   fetchSystemRoleWithDiagnostics,
   parseSystemRoleDoc,
@@ -394,6 +395,8 @@ describe('Zero-Trust RBAC Role Resolution (Client Fail-Closed Unit Tests)', () =
 
   it('validates invite codes, blocks duplicates/expired/closed/full classes, and propagates real enrollments across student, teacher, and admin', async () => {
     const prevStorage = (globalThis as any).localStorage;
+    const prevAuthUser = (auth as any).currentUser;
+    (auth as any).currentUser = null;
     const store = new Map<string, string>();
     (globalThis as any).localStorage = {
       getItem: (k: string) => (store.has(k) ? store.get(k)! : null),
@@ -519,6 +522,7 @@ describe('Zero-Trust RBAC Role Resolution (Client Fail-Closed Unit Tests)', () =
       assert.deepEqual(stuEntry.classNames, ['Turma Violão Fingerpicking']);
     } finally {
       (globalThis as any).localStorage = prevStorage;
+      (auth as any).currentUser = prevAuthUser;
     }
   });
 });
