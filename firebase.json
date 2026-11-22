@@ -1,6 +1,11 @@
 {
   "firestore": [
     {
+      "database": "(default)",
+      "rules": "firestore.rules",
+      "indexes": "firestore.indexes.json"
+    },
+    {
       "database": "ai-studio-guitaracademyfor-e7ce9efa-82d3-4dd1-8b8e-58aa69749913",
       "rules": "firestore.rules",
       "indexes": "firestore.indexes.json"
