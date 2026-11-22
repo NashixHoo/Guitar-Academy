@@ -4,7 +4,9 @@ import {
   GoogleAuthProvider, 
   FacebookAuthProvider,
   OAuthProvider,
-  signInWithPopup, 
+  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   sendPasswordResetEmail,
@@ -123,15 +125,38 @@ export function mapFirebaseAuthError(error: any): string {
       return 'Credenciais do provedor (App ID / Secret) pendentes de configuração no console Firebase.';
     case 'auth/user-disabled':
       return 'Esta conta de aluno foi desativada pelo suporte ou administração.';
+    case 'auth/account-exists-with-different-credential':
+      return 'Já existe uma conta cadastrada com este e-mail utilizando outro método de login. Faça login pelo método original ou utilize a recuperação de senha.';
     default:
       return error?.message || 'Ocorreu um erro na autenticação. Tente novamente.';
   }
 }
 
 /**
- * Realiza login com Conta Google utilizando popup seguro
+ * Processa o resultado de redirecionamento OAuth ao retornar para a aplicação (ex: GitHub Pages, mobile)
  */
-export async function signInWithGoogle(): Promise<User> {
+export async function handleRedirectResult(): Promise<User | null> {
+  try {
+    const result = await getRedirectResult(auth);
+    if (result && result.user) {
+      await saveUserProfile(result.user);
+      return result.user;
+    }
+  } catch (err: any) {
+    console.error('Erro ao processar resultado do redirecionamento OAuth:', err);
+    throw err;
+  }
+  return null;
+}
+
+/**
+ * Realiza login com Conta Google utilizando popup seguro com fallback para redirecionamento
+ */
+export async function signInWithGoogle(useRedirect = false): Promise<User | null> {
+  if (useRedirect) {
+    await signInWithRedirect(auth, googleProvider);
+    return null;
+  }
   try {
     const result = await signInWithPopup(auth, googleProvider);
     if (result.user) {
@@ -139,15 +164,27 @@ export async function signInWithGoogle(): Promise<User> {
     }
     return result.user;
   } catch (error: any) {
+    if (
+      error?.code === 'auth/popup-blocked' ||
+      error?.code === 'auth/popup-closed-by-user' ||
+      error?.code === 'auth/cancelled-popup-request'
+    ) {
+      await signInWithRedirect(auth, googleProvider);
+      return null;
+    }
     console.error('Erro na autenticação Google:', error);
     throw error;
   }
 }
 
 /**
- * Realiza login com Facebook utilizando popup seguro
+ * Realiza login com Facebook utilizando popup seguro com fallback para redirecionamento
  */
-export async function signInWithFacebook(): Promise<User> {
+export async function signInWithFacebook(useRedirect = false): Promise<User | null> {
+  if (useRedirect) {
+    await signInWithRedirect(auth, facebookProvider);
+    return null;
+  }
   try {
     const result = await signInWithPopup(auth, facebookProvider);
     if (result.user) {
@@ -155,15 +192,27 @@ export async function signInWithFacebook(): Promise<User> {
     }
     return result.user;
   } catch (error: any) {
+    if (
+      error?.code === 'auth/popup-blocked' ||
+      error?.code === 'auth/popup-closed-by-user' ||
+      error?.code === 'auth/cancelled-popup-request'
+    ) {
+      await signInWithRedirect(auth, facebookProvider);
+      return null;
+    }
     console.error('Erro na autenticação Facebook:', error);
     throw error;
   }
 }
 
 /**
- * Realiza login com Apple utilizando popup seguro
+ * Realiza login com Apple utilizando popup seguro com fallback para redirecionamento
  */
-export async function signInWithApple(): Promise<User> {
+export async function signInWithApple(useRedirect = false): Promise<User | null> {
+  if (useRedirect) {
+    await signInWithRedirect(auth, appleProvider);
+    return null;
+  }
   try {
     const result = await signInWithPopup(auth, appleProvider);
     if (result.user) {
@@ -171,6 +220,14 @@ export async function signInWithApple(): Promise<User> {
     }
     return result.user;
   } catch (error: any) {
+    if (
+      error?.code === 'auth/popup-blocked' ||
+      error?.code === 'auth/popup-closed-by-user' ||
+      error?.code === 'auth/cancelled-popup-request'
+    ) {
+      await signInWithRedirect(auth, appleProvider);
+      return null;
+    }
     console.error('Erro na autenticação Apple:', error);
     throw error;
   }

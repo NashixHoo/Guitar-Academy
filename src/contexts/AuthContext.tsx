@@ -15,6 +15,7 @@ import {
   SystemRoleResolution,
   updateUserLastSeen,
   mapFirebaseAuthError,
+  handleRedirectResult,
   onAuthStateChanged,
   auth
 } from '../services/firebase';
@@ -140,9 +141,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, [resolveAndApplyRole]);
 
-  // Inicialização preventiva de arquivamento de dados legados e listener de autenticação
+  // Inicialização preventiva de arquivamento de dados legados, redirect OAuth e listener de autenticação
   useEffect(() => {
     storageService.archiveLegacyData();
+    handleRedirectResult().catch((err) => {
+      console.error('[AuthContext] Erro ao processar resultado de redirecionamento:', err);
+      setAuthError(mapFirebaseAuthError(err));
+    });
 
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       const seq = ++authSeqRef.current;
