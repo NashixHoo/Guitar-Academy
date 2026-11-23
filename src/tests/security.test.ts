@@ -410,6 +410,7 @@ describe('Zero-Trust RBAC Role Resolution (Client Fail-Closed Unit Tests)', () =
         store.clear();
       },
     };
+    store.clear();
 
     try {
       const created = await TeacherService.createClass(
@@ -608,7 +609,15 @@ describe('Firebase Emulator — Firestore Security Rules (Student vs Admin)', ()
           rules,
           host,
           port,
-        },
+          databases: {
+            [FIRESTORE_DATABASE_ID]: {
+              rules,
+            },
+            '(default)': {
+              rules,
+            },
+          },
+        } as any,
       });
       // Verify that the endpoint actually responds as a Firestore Emulator and clear the named database
       await clearNamedFirestore(env);
