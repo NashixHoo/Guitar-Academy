@@ -14,7 +14,7 @@
     "test": "tsx test-integration.ts",
     "test:security": "tsx --test src/tests/security.test.ts",
     "test:security:unit": "tsx --test --test-name-pattern=\"Zero-Trust RBAC|Backend Express HTTP\" src/tests/security.test.ts",
-    "test:security:emulator": "REQUIRE_FIREBASE_EMULATOR=true firebase emulators:exec --only firestore --project demo-guitar-academy-security-test \"REQUIRE_FIREBASE_EMULATOR=true tsx --test src/tests/security.test.ts\"",
+    "test:security:emulator": "REQUIRE_FIREBASE_EMULATOR=true firebase emulators:exec --config firebase.emulator.json --only firestore --project demo-guitar-academy-security-test \"REQUIRE_FIREBASE_EMULATOR=true tsx --test src/tests/security.test.ts\"",
     "verify": "tsx scripts/verify-phase6.ts"
   },
   "dependencies": {
