@@ -685,7 +685,7 @@ service cloud.firestore {
       allow delete: if isAdmin() && isValidId(userId);
 
       // Subcoleções isoladas (ex: progresso /users/{userId}/data/progress)
-      match /{allSubcollections=**} {
+      match /{subcollection}/{nestedDocuments=**} {
         allow read: if (isOwner(userId) || isAdmin()) && isValidId(userId);
         allow create, update: if isOwner(userId) && isValidId(userId) &&
           (!('uid' in request.resource.data) || request.resource.data.uid == userId) &&
