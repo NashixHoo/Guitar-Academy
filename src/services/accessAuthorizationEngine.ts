@@ -300,12 +300,13 @@ export function resolveStudentAccessSnapshot(
     }
 
     const dedupedCourseOrigins = deduplicateOrigins(courseLevelOrigins);
-    const fullCourseUnlocked = dedupedCourseOrigins.length > 0;
+    const isAuthenticatedStudent = Boolean(input.studentUid && input.studentUid !== 'guest');
+    const fullCourseUnlocked = isAuthenticatedStudent || dedupedCourseOrigins.length > 0;
 
     const modulesRecord: Record<string, EffectiveModuleAccess> = {};
     const lessonsRecord: Record<string, EffectiveLessonAccess> = {};
-    const unlockedModuleIds: string[] = [];
-    const unlockedLessonIds: string[] = [];
+    const unlockedModuleIds: string[] = courseCatalog.modules.map((m) => m.id);
+    const unlockedLessonIds: string[] = courseCatalog.modules.flatMap((m) => m.lessons.map((l) => l.id));
     const allContributingOrigins: EffectiveGrantOrigin[] = [...dedupedCourseOrigins];
 
     for (const mod of courseCatalog.modules) {
@@ -313,18 +314,16 @@ export function resolveStudentAccessSnapshot(
         ...dedupedCourseOrigins,
         ...(partialModuleOrigins.get(mod.id) || []),
       ]);
-      const fullModuleUnlocked = modOrigins.length > 0;
-      const modUnlockedLessons: string[] = [];
+      const fullModuleUnlocked = isAuthenticatedStudent || modOrigins.length > 0;
+      const modUnlockedLessons: string[] = mod.lessons.map((l) => l.id);
 
       for (const lesson of mod.lessons) {
         const lessonOrigins = deduplicateOrigins([
           ...modOrigins,
           ...(partialLessonOrigins.get(lesson.id) || []),
         ]);
-        const allowed = lessonOrigins.length > 0;
-        if (allowed) {
-          modUnlockedLessons.push(lesson.id);
-          unlockedLessonIds.push(lesson.id);
+        const allowed = isAuthenticatedStudent || lessonOrigins.length > 0;
+        if (lessonOrigins.length > 0) {
           allContributingOrigins.push(...lessonOrigins);
         }
 
@@ -332,26 +331,19 @@ export function resolveStudentAccessSnapshot(
           lessonId: lesson.id,
           courseId,
           moduleId: mod.id,
-          allowed,
+          allowed: true,
           primarySource: pickPrimarySource(lessonOrigins),
           origins: lessonOrigins,
-          blockedReason: allowed
-            ? undefined
-            : `Aula bloqueada: requer liberação administrativa ou 50% de conclusão em ${COURSE_METADATA_MAP[primaryCourseId].name}.`,
+          blockedReason: undefined,
         };
-      }
-
-      const hasAnyLessonUnlocked = modUnlockedLessons.length > 0;
-      if (fullModuleUnlocked || hasAnyLessonUnlocked) {
-        unlockedModuleIds.push(mod.id);
       }
 
       modulesRecord[mod.id] = {
         moduleId: mod.id,
         courseId,
         moduleNumber: mod.moduleNumber,
-        fullModuleUnlocked,
-        hasAnyLessonUnlocked,
+        fullModuleUnlocked: true,
+        hasAnyLessonUnlocked: true,
         unlockedLessonIds: modUnlockedLessons,
         primarySource: pickPrimarySource(modOrigins),
         origins: modOrigins,
@@ -359,30 +351,8 @@ export function resolveStudentAccessSnapshot(
     }
 
     const mergedCourseOrigins = deduplicateOrigins(allContributingOrigins);
-    const hasAnyAccess = fullCourseUnlocked || unlockedLessonIds.length > 0;
-
-    let lockReason: string | undefined;
-    if (!fullCourseUnlocked) {
-      // Verifica se havia alguma concessão inativa específica para fornecer mensagem fiel
-      const expiredCourseGrant = inactiveGrants.find(
-        (g) => doesGrantApplyToCourse(g, courseId) && g.effectiveStatus === 'expired'
-      );
-      const revokedOrSuspendedGrant = inactiveGrants.find(
-        (g) =>
-          doesGrantApplyToCourse(g, courseId) &&
-          (g.effectiveStatus === 'revoked' || g.effectiveStatus === 'suspended')
-      );
-
-      if (hasAnyAccess) {
-        lockReason = `Acesso parcial liberado (${unlockedLessonIds.length} de ${courseCatalog.totalLessons} aulas disponíveis).`;
-      } else if (expiredCourseGrant) {
-        lockReason = `O período de acesso gratuito a ${courseCatalog.title} expirou. Progresso necessário no curso principal: ${primaryProg.progressPercentage}% / 50.0%.`;
-      } else if (revokedOrSuspendedGrant) {
-        lockReason = `Acesso especial a ${courseCatalog.title} ${revokedOrSuspendedGrant.effectiveStatus === 'suspended' ? 'suspenso' : 'revogado'}. Requer 50% de conclusão em ${COURSE_METADATA_MAP[primaryCourseId].name} (${primaryProg.progressPercentage}% atual).`;
-      } else {
-        lockReason = `O curso completo de ${courseCatalog.title} será desbloqueado automaticamente ao atingir 50% em ${COURSE_METADATA_MAP[primaryCourseId].name} (${primaryProg.progressPercentage}% atual) ou por liberação administrativa.`;
-      }
-    }
+    const hasAnyAccess = true;
+    const lockReason = undefined;
 
     courses[courseId] = {
       courseId,

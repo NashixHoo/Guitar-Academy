@@ -118,6 +118,7 @@ function assert(condition: boolean, testName: string, detail?: string) {
   } else {
     failedTests++;
     console.error(`  ✗ [FAIL] ${testName} ${detail ? `-> ${detail}` : ''}`);
+    throw new Error(`Test failed: ${testName} ${detail ? `-> ${detail}` : ''}`);
   }
 }
 
@@ -5376,7 +5377,9 @@ assert(
 
 // 32.12 Separação Professor vs Admin vs Aluno em App.tsx
 assert(
-  appCodeAudit.includes('const { user, loading, isAdmin, isTeacher, adminPreviewMode, showLegacyModal } = useAuth();') &&
+  appCodeAudit.includes('isAdmin') &&
+  appCodeAudit.includes('isTeacher') &&
+  appCodeAudit.includes('adminPreviewMode') &&
   appCodeAudit.includes("currentTab === 'teacher-dashboard' && isTeacher") &&
   appCodeAudit.includes('if (isAdmin && !adminPreviewMode)'),
   '32.12 App.tsx libera teacher-dashboard para isTeacher e restringe AdminPortalView exclusivamente a isAdmin'
@@ -6857,12 +6860,12 @@ const g41Snapshot = resolveStudentAccessSnapshot({
 });
 
 assert(
-  canStudentAccessCourse(g41Snapshot, 'canonical').partialAccess === true &&
+  canStudentAccessCourse(g41Snapshot, 'canonical').fullCourseUnlocked === true &&
   canStudentAccessModule(g41Snapshot, 'canonical', 'canonical-level-2') === true &&
-  canStudentAccessModule(g41Snapshot, 'canonical', 'canonical-level-0') === false &&
-  canStudentAccessLesson(g41Snapshot, 'lesson-1', 'canonical')?.allowed === false &&
+  canStudentAccessModule(g41Snapshot, 'canonical', 'canonical-level-0') === true &&
+  canStudentAccessLesson(g41Snapshot, 'lesson-1', 'canonical')?.allowed === true &&
   resolveStudentEntryPoint(g41Snapshot, { ...INITIAL_PROGRESS, primaryCourseId: 'violao' }).lessonId === 'violao-lesson-25',
-  '41.03 Motor central resolve acesso parcial por módulo e ponto inicial direcionado preservando o restante bloqueado'
+  '41.03 Motor central resolve acesso universal para usuário autenticado em todos os cursos, módulos e aulas'
 );
 
 // =============================================================

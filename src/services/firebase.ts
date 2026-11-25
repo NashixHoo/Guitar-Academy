@@ -607,9 +607,14 @@ export async function fetchUserProfile(uid: string): Promise<StudentProfile | nu
     const role = await fetchSystemRole(uid);
 
     if (snapshot.exists()) {
-      const data = snapshot.data();
+      const data = snapshot.data() || {};
+      const prefs = data.preferences || {};
       return {
         ...(data as StudentProfile),
+        firstName: prefs.firstName || data.firstName || '',
+        lastName: prefs.lastName || data.lastName || '',
+        phone: prefs.phone || data.phone || '',
+        preferences: prefs,
         role,
       };
     }
@@ -617,6 +622,46 @@ export async function fetchUserProfile(uid: string): Promise<StudentProfile | nu
   } catch (err) {
     console.warn('Erro ao carregar perfil do Firestore:', err);
     return null;
+  }
+}
+
+/**
+ * Salva ou atualiza os dados do cadastro complementar obrigatório do aluno (users/{uid})
+ */
+export async function updateStudentRegistration(
+  uid: string,
+  data: { firstName: string; lastName: string; email: string; phone: string }
+): Promise<StudentProfile | null> {
+  try {
+    const userRef = doc(db, 'users', uid);
+    let existingSnap;
+    try {
+      existingSnap = await getDocFromServer(userRef);
+    } catch {
+      existingSnap = await getDoc(userRef);
+    }
+    const existingData = existingSnap.exists() ? existingSnap.data() : {};
+    const prefs = existingData?.preferences && typeof existingData.preferences === 'object' ? existingData.preferences : {};
+
+    const updatedPrefs = {
+      ...prefs,
+      firstName: data.firstName.trim(),
+      lastName: data.lastName.trim(),
+      phone: data.phone.trim(),
+    };
+
+    const payload = {
+      displayName: `${data.firstName.trim()} ${data.lastName.trim()}`.slice(0, 120),
+      email: data.email.trim().slice(0, 254),
+      preferences: updatedPrefs,
+      updatedAt: serverTimestamp(),
+    };
+
+    await setDoc(userRef, payload, { merge: true });
+    return await fetchUserProfile(uid);
+  } catch (err) {
+    console.error('[Firebase] Erro ao salvar cadastro complementar:', err);
+    throw err;
   }
 }
 

@@ -526,6 +526,9 @@ export interface StudentProfile {
   uid: string;
   displayName: string;
   email: string;
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
   photoURL?: string | null;
   provider: AuthProviderType | string;
   createdAt: string;
@@ -538,7 +541,31 @@ export interface StudentProfile {
     theme?: 'light' | 'dark' | 'system';
     metronomeSound?: string;
     preferredInstrument?: string;
+    firstName?: string;
+    lastName?: string;
+    phone?: string;
   };
+}
+
+export function isValidBrazilianPhone(phone: string): boolean {
+  if (!phone || typeof phone !== 'string') return false;
+  const clean = phone.replace(/\D/g, '');
+  return clean.length >= 10 && clean.length <= 13;
+}
+
+export function isValidEmail(email: string): boolean {
+  if (!email || typeof email !== 'string') return false;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+}
+
+export function isProfileComplete(profile: StudentProfile | null): boolean {
+  if (!profile) return false;
+  const prefs = profile.preferences || {};
+  const fn = (profile.firstName || prefs.firstName || '').trim();
+  const ln = (profile.lastName || prefs.lastName || '').trim();
+  const em = (profile.email || '').trim();
+  const ph = (profile.phone || prefs.phone || '').trim();
+  return Boolean(fn && ln && em && isValidEmail(em) && isValidBrazilianPhone(ph));
 }
 
 

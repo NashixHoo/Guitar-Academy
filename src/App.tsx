@@ -57,11 +57,12 @@ import {
   resolveStudentAccessSnapshot,
   canStudentAccessLesson,
 } from './services/accessAuthorizationEngine';
+import { StudentRegistrationModal } from './components/auth/StudentRegistrationModal';
+import { isProfileComplete } from './types';
 import type { CourseAccessGrant, StudentAcademicPlacement } from './types/accessControl';
 
 function MainAppContent() {
-  const { user, loading, isAdmin, isTeacher, adminPreviewMode, showLegacyModal } = useAuth();
-  const { refreshUserProfile } = useAuth();
+  const { user, loading, isAdmin, isTeacher, adminPreviewMode, showLegacyModal, studentProfile, refreshUserProfile } = useAuth();
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showJoinClassModal, setShowJoinClassModal] = useState(false);
@@ -775,6 +776,15 @@ function MainAppContent() {
         onChoiceMade={() => {
           const updated = storageService.loadProgress(user?.uid);
           setProgress(updated);
+        }}
+      />
+
+      <StudentRegistrationModal
+        isOpen={Boolean(user && !isProfileComplete(studentProfile))}
+        user={user}
+        studentProfile={studentProfile}
+        onSuccess={async () => {
+          await refreshUserProfile();
         }}
       />
 
