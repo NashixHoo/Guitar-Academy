@@ -195,7 +195,7 @@ export class TeacherService {
       maxStudents?: number;
     }
   ): Promise<ClassGroup> {
-    const classId = `class-${Date.now()}`;
+    const classId = `class-${crypto.randomUUID()}`;
     const rawCode =
       customCode?.toUpperCase().trim() ||
       `GA-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;

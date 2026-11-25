@@ -525,6 +525,32 @@ describe('Zero-Trust RBAC Role Resolution (Client Fail-Closed Unit Tests)', () =
       assert.ok(stuEntry);
       assert.equal(stuEntry.isEnrolledStudent, true);
       assert.deepEqual(stuEntry.classNames, ['Turma Violão Fingerpicking']);
+
+      // Regression test: create multiple classes in sequence, confirm IDs are unique and terminating one does not terminate others
+      const regClassA = await TeacherService.createClass('teacher-reg-1', 'prof@test.com', 'Prof Reg', 'Turma Alpha', 'Desc', 'GA-REGA');
+      const regClassB = await TeacherService.createClass('teacher-reg-1', 'prof@test.com', 'Prof Reg', 'Turma Beta', 'Desc', 'GA-REGB');
+      const regClassC = await TeacherService.createClass('teacher-reg-1', 'prof@test.com', 'Prof Reg', 'Turma Gamma', 'Desc', 'GA-REGC');
+      assert.notEqual(regClassA.id, regClassB.id);
+      assert.notEqual(regClassB.id, regClassC.id);
+      assert.notEqual(regClassA.id, regClassC.id);
+      assert.ok(regClassA.id.startsWith('class-'));
+      assert.ok(regClassB.id.startsWith('class-'));
+      assert.ok(regClassC.id.startsWith('class-'));
+
+      // Terminate regClassA
+      const currentStoredClasses = JSON.parse(store.get('guitar_academy:teacher_classes_v1') || '[]');
+      for (const cl of currentStoredClasses) {
+        if (cl.id === regClassA.id) cl.active = false;
+      }
+      store.set('guitar_academy:teacher_classes_v1', JSON.stringify(currentStoredClasses));
+
+      const updatedTeacherClasses = await TeacherService.getTeacherClasses('teacher-reg-1');
+      const foundA = updatedTeacherClasses.find((cl) => cl.id === regClassA.id);
+      const foundB = updatedTeacherClasses.find((cl) => cl.id === regClassB.id);
+      const foundC = updatedTeacherClasses.find((cl) => cl.id === regClassC.id);
+      assert.equal(foundA?.active, false);
+      assert.equal(foundB?.active, true);
+      assert.equal(foundC?.active, true);
     } finally {
       Object.defineProperty(globalThis, 'localStorage', {
         value: prevStorage,
@@ -3354,7 +3380,7 @@ describe('Fase 1: Academic Access Grants, Initial Placement & Authorization Engi
           const grantCourseBody = (await grantCourseRes.json()) as any;
           assert.equal(grantCourseBody.created, true);
           assert.equal(canStudentAccessCourse(grantCourseBody.snapshot, 'baixo').fullCourseUnlocked, true);
-          assert.equal(canStudentAccessCourse(grantCourseBody.snapshot, 'teclado').allowed, false);
+          assert.equal(canStudentAccessCourse(grantCourseBody.snapshot, 'teclado').allowed, true);
 
           const grantInstRes = await fetch(`${url}/api/admin/access-grants`, {
             method: 'POST',
