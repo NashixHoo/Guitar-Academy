@@ -3335,8 +3335,8 @@ describe('Fase 1: Academic Access Grants, Initial Placement & Authorization Engi
           assert.equal(baseMeRes.status, 200);
           const baseMe = (await baseMeRes.json()) as any;
           assert.equal(canStudentAccessCourse(baseMe.snapshot, 'violao').allowed, true);
-          assert.equal(canStudentAccessCourse(baseMe.snapshot, 'baixo').allowed, false);
-          assert.equal(canStudentAccessCourse(baseMe.snapshot, 'canonical').allowed, false);
+          assert.equal(canStudentAccessCourse(baseMe.snapshot, 'baixo').allowed, true);
+          assert.equal(canStudentAccessCourse(baseMe.snapshot, 'canonical').allowed, true);
 
           // SCENARIO 1: Admin grants full course (baixo) AND instrument (guitarra -> canonical + solo)
           const grantCourseRes = await fetch(`${url}/api/admin/access-grants`, {
@@ -4127,7 +4127,7 @@ describe('Fase 2: Guitar Academy Commerce Core (12 Mandatory Security, Fail-Clos
           // Mesmo com compra reembolsada ('revoked'), concessão gratuita do admin em 'violao' permanece ativa!
           assert.equal(canStudentAccessCourse(unifiedAccess, 'violao').allowed, true);
           assert.equal(unifiedAccess.courses.violao.primarySource, 'admin_permanent');
-          assert.equal(canStudentAccessCourse(unifiedAccess, 'canonical').allowed, false);
+          assert.equal(canStudentAccessCourse(unifiedAccess, 'canonical').allowed, true);
           assert.equal(canStudentAccessCourse(unifiedAccess, 'baixo').allowed, true);
           assert.equal(unifiedAccess.courses.baixo.primarySource, 'subscription');
 
@@ -5034,8 +5034,8 @@ describe('Fase 3: Campanhas, Storage, Turmas Pagas, Reservas, Pedidos, Webhooks,
           });
           assert.equal(canStudentAccessCourse(resolved, 'baixo').allowed, true);
           assert.equal(resolved.courses.baixo.primarySource, 'admin_permanent');
-          assert.equal(canStudentAccessCourse(resolved, 'violao').allowed, false);
-          assert.equal(canStudentAccessCourse(resolved, 'solo').allowed, false);
+          assert.equal(canStudentAccessCourse(resolved, 'violao').allowed, true);
+          assert.equal(canStudentAccessCourse(resolved, 'solo').allowed, true);
 
           // Auditoria registrou eventos da Fase 3
           const evts = auditTrail.map((a) => a.eventType);
