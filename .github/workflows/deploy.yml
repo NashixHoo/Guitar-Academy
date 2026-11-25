@@ -124,7 +124,7 @@ jobs:
       - firestore-emulator-tests
       - production-build
       - gh-pages-build
-    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && always() && !(contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')) }}
+    if: ${{ github.ref == 'refs/heads/main' && always() && !(contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')) }}
 
     environment:
       name: github-pages
