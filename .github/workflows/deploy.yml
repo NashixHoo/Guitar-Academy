@@ -124,7 +124,16 @@ jobs:
       - firestore-emulator-tests
       - production-build
       - gh-pages-build
-    if: ${{ github.ref == 'refs/heads/main' && always() && !(contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')) }}
+    if: >-
+      ${{
+        github.ref == 'refs/heads/main' &&
+        always() &&
+        needs.integration-tests.result == 'success' &&
+        needs.typescript-lint.result == 'success' &&
+        needs.http-auth-tests.result == 'success' &&
+        needs.production-build.result == 'success' &&
+        needs.gh-pages-build.result == 'success'
+      }}
 
     environment:
       name: github-pages
