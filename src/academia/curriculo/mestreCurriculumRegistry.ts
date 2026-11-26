@@ -1,6 +1,6 @@
 // =========================================================================
-// GUITAR ACADEMY — MASTER CORE V1.0
-// REGISTRO MESTRE UNIFICADO DOS CINCO INSTRUMENTOS OFICIAIS
+// GUITAR ACADEMY — MASTER CORE V1.0 (MASTER CURRICULUM 300)
+// REGISTRO MESTRE UNIFICADO DOS CINCO INSTRUMENTOS OFICIAIS (300 AULAS)
 // =========================================================================
 
 import { 
@@ -14,8 +14,9 @@ import {
 } from '../core/types';
 
 import { CURRICULUM_LEVELS } from '../../data/curriculum';
-import { VIOLAO_MODULES, VIOLAO_LESSONS } from '../../data/violaoCourse';
-import { SOLO_COURSE_STAGES, SOLO_LESSONS } from '../../data/soloCourse';
+import { VIOLAO_MODULES } from '../../data/violaoCourse';
+import { SOLO_LESSONS } from '../../data/soloCourse';
+import { GUITAR_EXPANDED_MODULES } from '../../data/guitarExpandedModules';
 
 import { BAIXO_CURRICULUM_MODULES } from './baixoCurriculum';
 import { TECLADO_CURRICULUM_MODULES } from './tecladoCurriculum';
@@ -46,7 +47,7 @@ export const OFFICIAL_INSTRUMENTS: AcademicInstrument[] = [
     name: 'Guitarra',
     namePlural: 'Guitarras',
     family: 'cordas_eletricas',
-    description: 'Guitarra elétrica: fundamentos, técnica mecânica com metrônomo, palhetada alternada, ligados, escalas pentatônicas, sistema CAGED e solos expressivos.',
+    description: 'Guitarra elétrica: fundamentos, técnica mecânica com metrônomo, palhetada alternada, ligados, escalas pentatônicas, sistema CAGED, harmonia avançada e solos expressivos.',
     tuningStandard: 'E2-A2-D3-G3-B3-E4 (Standard / Drop D / 1/2 Step Down)',
     stringsCount: 6,
     status: 'active',
@@ -151,10 +152,9 @@ export const OFFICIAL_LEVELS: AcademicLevelDefinition[] = [
 ];
 
 // -------------------------------------------------------------------------
-// 3. CATÁLOGO CENTRAL DE CURSOS OFICIAIS DOS 5 INSTRUMENTOS
+// 3. CATÁLOGO CENTRAL DE CURSOS OFICIAIS DOS 5 INSTRUMENTOS (300 AULAS)
 // -------------------------------------------------------------------------
 export const OFFICIAL_COURSES: AcademicCourse[] = [
-  // 1. Violão (60 Aulas, 10 Módulos)
   {
     id: 'violao',
     instrumentId: 'violao',
@@ -166,91 +166,141 @@ export const OFFICIAL_COURSES: AcademicCourse[] = [
     isCanonical: true,
     totalLessons: 60,
     totalModules: 10,
-    levelsCovered: [0, 1, 2, 3, 4],
+    levelsCovered: [0, 1, 2, 3, 4, 5],
     estimatedHours: 40
   },
-  // 2. Guitarra Canônica (18 Aulas, 6 Níveis)
   {
-    id: 'canonical',
+    id: 'guitarra',
     instrumentId: 'guitarra',
-    code: 'CURSO-GUITARRA-CANONICA-18',
-    title: 'Conservatório de Guitarra — Grade Canônica',
-    subtitle: 'Formação Acadêmica Sequencial em 6 Níveis (Nível 0 ao Nível 5)',
-    description: 'A espinha dorsal teórica e prática da Guitarra Academy: 18 aulas completas de rigor pedagógico cobrindo afinação física, notação, técnica com metrônomo, harmonia tonal e improvisação.',
-    category: 'iniciacao',
+    code: 'CURSO-GUITARRA-60',
+    title: 'Conservatório Completo de Guitarra Elétrica',
+    subtitle: 'Formação Acadêmica Unificada em 10 Módulos e 60 Aulas (Canônica, Solo e Expansão)',
+    description: 'Formação definitiva em guitarra elétrica cobrindo desde os fundamentos físicos e técnica mecânica até solos expressivos, harmonia avançada, voicings modernos, modulações e alta performance.',
+    category: 'formacao_completa',
     isCanonical: true,
-    totalLessons: 18,
-    totalModules: 6,
+    totalLessons: 60,
+    totalModules: 10,
     levelsCovered: [0, 1, 2, 3, 4, 5],
-    estimatedHours: 18
+    estimatedHours: 45
   },
-  // 3. Guitarra Solo (20 Aulas, 5 Etapas)
-  {
-    id: 'solo',
-    instrumentId: 'guitarra',
-    code: 'CURSO-GUITARRA-SOLO-20',
-    title: 'Formação Progressiva em Guitarra Solo',
-    subtitle: '20 Aulas Especializadas em 5 Etapas de Mecânica e Expressão',
-    description: 'Formação especializada em guitarra solo focada em técnica rigorosa: palhetada alternada estrita, sincronismo motor, bends de precisão com afinação de referência, legato e fraseado pentatônico.',
-    category: 'especializacao',
-    isCanonical: true,
-    totalLessons: 20,
-    totalModules: 5,
-    levelsCovered: [1, 2, 3, 4, 5],
-    estimatedHours: 25
-  },
-  // 4. Contrabaixo Elétrico (18 Aulas, 6 Níveis)
   {
     id: 'baixo',
     instrumentId: 'baixo',
-    code: 'CURSO-BAIXO-18',
-    title: 'Formação em Contrabaixo Elétrico',
-    subtitle: 'Matriz Acadêmica de Sustentação, Groove, Walking Bass e Slap (Níveis 0 a 5)',
-    description: 'Formação de contrabaixo de conservatório cobrindo anatomia, afinação, técnica de pizzicato alternado, tríade T-5-8, síncopes, walking bass com cromatismos, técnica de slap & pop, métricas ímpares e improvisação.',
+    code: 'CURSO-BAIXO-60',
+    title: 'Formação Completa em Contrabaixo Elétrico',
+    subtitle: 'Matriz Acadêmica de Sustentação, Groove, Walking Bass e Slap em 10 Módulos (60 Aulas)',
+    description: 'Formação de contrabaixo de conservatório cobrindo anatomia, afinação, técnica de pizzicato alternado, walking bass, slap & pop, métricas ímpares, harmonia moderna e performance profissional.',
     category: 'formacao_completa',
     isCanonical: true,
-    totalLessons: 18,
-    totalModules: 6,
+    totalLessons: 60,
+    totalModules: 10,
     levelsCovered: [0, 1, 2, 3, 4, 5],
-    estimatedHours: 24
+    estimatedHours: 40
   },
-  // 5. Teclado e Piano Complementar (18 Aulas, 6 Níveis)
   {
     id: 'teclado',
     instrumentId: 'teclado',
-    code: 'CURSO-TECLADO-18',
-    title: 'Formação em Teclado e Piano Complementar',
-    subtitle: 'Matriz Acadêmica de Geografia, Harmonia Funcional, Voicings e Improvisação (Níveis 0 a 5)',
-    description: 'Formação essencial de conservatório para teclas: geografia e dedilhado canônico, tríades e inversões com voice leading econômico, tétrades e cadências II-V-I, aberturas Drop 2 e quartais, e arranjos solo completos.',
+    code: 'CURSO-TECLADO-60',
+    title: 'Formação Completa em Teclado e Piano Complementar',
+    subtitle: 'Matriz Acadêmica de Geografia, Harmonia Funcional, Voicings e Improvisação (60 Aulas)',
+    description: 'Formação essencial de conservatório para teclas: geografia e dedilhado canônico, tríades, inversões, tétrades, voicings avançados, gospel chops, rearmonização e arranjos solo completos.',
     category: 'formacao_completa',
     isCanonical: true,
-    totalLessons: 18,
-    totalModules: 6,
+    totalLessons: 60,
+    totalModules: 10,
     levelsCovered: [0, 1, 2, 3, 4, 5],
-    estimatedHours: 24
+    estimatedHours: 40
   },
-  // 6. Bateria e Prática Rítmica (18 Aulas, 6 Níveis)
   {
     id: 'bateria',
     instrumentId: 'bateria',
-    code: 'CURSO-BATERIA-18',
-    title: 'Formação em Bateria e Prática Rítmica Fundamental',
-    subtitle: 'Matriz Acadêmica de Postura, Rudimentos, Independência e Performance (Níveis 0 a 5)',
-    description: 'Formação percussiva estruturada: anatomia do kit, fulcro e matched grip, rudimentos essenciais (single, double, paradiddle), levadas de rock e 6/8, viradas dinâmicas, ghost notes Moeller, métricas compostas (7/8) e solos temáticos.',
+    code: 'CURSO-BATERIA-60',
+    title: 'Formação Completa em Bateria e Prática Rítmica',
+    subtitle: 'Matriz Acadêmica de Postura, Rudimentos, Independência e Performance em 10 Módulos (60 Aulas)',
+    description: 'Formação percussiva estruturada: anatomia do kit, fulcro, rudimentos essenciais, levadas de rock, funk, jazz, ritmos latinos, compassos ímpares e solos temáticos.',
     category: 'formacao_completa',
     isCanonical: true,
-    totalLessons: 18,
-    totalModules: 6,
+    totalLessons: 60,
+    totalModules: 10,
     levelsCovered: [0, 1, 2, 3, 4, 5],
-    estimatedHours: 24
+    estimatedHours: 40
   }
 ];
 
 // -------------------------------------------------------------------------
-// 4. ACESSO AOS MÓDULOS CURRICULARES POR INSTRUMENTO
+// 4. CONVERSÃO DOS MÓDULOS DE VIOLÃO
+// -------------------------------------------------------------------------
+export const VIOLAO_CURRICULUM_MODULES: CurriculumModuleDefinition[] = VIOLAO_MODULES.map(m => ({
+  id: m.id,
+  nome: m.title,
+  instrumentId: 'violao',
+  nivel: (m.lessons[0]?.level || 0) as AcademicLevelNumber,
+  moduloNumero: m.moduleNumber,
+  objetivoAcademico: m.description,
+  competenciasDesenvolvidas: [],
+  preRequisitos: [],
+  conteudos: [],
+  exerciciosPraticos: [],
+  criteriosDominio: [],
+  formaAvaliacao: '',
+  aulas: m.lessons.map((l, idx) => ({
+    id: l.id,
+    numero: idx + 1,
+    titulo: l.title,
+    subtitulo: l.subtitle,
+    objetivo: l.objective,
+    duracaoMinutos: l.estimatedMinutes
+  }))
+}));
+
+// -------------------------------------------------------------------------
+// 5. CONSTRUÇÃO UNIFICADA DOS 10 MÓDULOS DE GUITARRA (60 AULAS)
+// -------------------------------------------------------------------------
+export function getGuitarCurriculumModules(): CurriculumModuleDefinition[] {
+  const canonicLessons = CURRICULUM_LEVELS.flatMap(lvl => lvl.lessons);
+  const soloLessons = SOLO_LESSONS;
+
+  const mod1Aulas = canonicLessons.slice(0, 6).map((l, idx) => ({ id: l.id, numero: idx + 1, titulo: l.title, subtitulo: l.subtitle, objetivo: l.objective, duracaoMinutos: l.estimatedMinutes }));
+  const mod2Aulas = canonicLessons.slice(6, 12).map((l, idx) => ({ id: l.id, numero: idx + 1, titulo: l.title, subtitulo: l.subtitle, objetivo: l.objective, duracaoMinutos: l.estimatedMinutes }));
+  const mod3Aulas = canonicLessons.slice(12, 18).map((l, idx) => ({ id: l.id, numero: idx + 1, titulo: l.title, subtitulo: l.subtitle, objetivo: l.objective, duracaoMinutos: l.estimatedMinutes }));
+
+  const mod4Aulas = soloLessons.slice(0, 6).map((l, idx) => ({ id: l.id, numero: idx + 1, titulo: l.title, subtitulo: l.subtitle, objetivo: l.objective, duracaoMinutos: l.estimatedMinutes }));
+  const mod5Aulas = soloLessons.slice(6, 12).map((l, idx) => ({ id: l.id, numero: idx + 1, titulo: l.title, subtitulo: l.subtitle, objetivo: l.objective, duracaoMinutos: l.estimatedMinutes }));
+  const mod6Aulas = soloLessons.slice(12, 18).map((l, idx) => ({ id: l.id, numero: idx + 1, titulo: l.title, subtitulo: l.subtitle, objetivo: l.objective, duracaoMinutos: l.estimatedMinutes }));
+
+  const mod7Aulas = [
+    { id: soloLessons[18].id, numero: 1, titulo: soloLessons[18].title, subtitulo: soloLessons[18].subtitle, objetivo: soloLessons[18].objective, duracaoMinutos: soloLessons[18].estimatedMinutes },
+    { id: soloLessons[19].id, numero: 2, titulo: soloLessons[19].title, subtitulo: soloLessons[19].subtitle, objetivo: soloLessons[19].objective, duracaoMinutos: soloLessons[19].estimatedMinutes },
+    ...GUITAR_EXPANDED_MODULES[0].lessons.slice(2).map((l, idx) => ({ id: l.id, numero: idx + 3, titulo: l.title, subtitulo: l.subtitle, objetivo: l.objective, duracaoMinutos: l.estimatedMinutes }))
+  ];
+
+  const mod8Aulas = GUITAR_EXPANDED_MODULES[1].lessons.map((l, idx) => ({ id: l.id, numero: idx + 1, titulo: l.title, subtitulo: l.subtitle, objetivo: l.objective, duracaoMinutos: l.estimatedMinutes }));
+  const mod9Aulas = GUITAR_EXPANDED_MODULES[2].lessons.map((l, idx) => ({ id: l.id, numero: idx + 1, titulo: l.title, subtitulo: l.subtitle, objetivo: l.objective, duracaoMinutos: l.estimatedMinutes }));
+  const mod10Aulas = GUITAR_EXPANDED_MODULES[3].lessons.map((l, idx) => ({ id: l.id, numero: idx + 1, titulo: l.title, subtitulo: l.subtitle, objetivo: l.objective, duracaoMinutos: l.estimatedMinutes }));
+
+  return [
+    { id: 'guitar-mod-1', nome: 'Módulo 1 — Fundamentos e Notação na Guitarra', instrumentId: 'guitarra', nivel: 0, moduloNumero: 1, objetivoAcademico: 'Dominar afinação, anatomia e primeiras notas.', competenciasDesenvolvidas: ['Afinação', 'Notas naturais'], preRequisitos: ['Nenhum'], conteudos: ['Afinação e anatomia'], exerciciosPraticos: [], criteriosDominio: ['Precisão'], formaAvaliacao: 'Prática', aulas: mod1Aulas },
+    { id: 'guitar-mod-2', nome: 'Módulo 2 — Mecânica com Metrônomo e Ritmo', instrumentId: 'guitarra', nivel: 1, moduloNumero: 2, objetivoAcademico: 'Desenvolver palhetada e subdivisão.', competenciasDesenvolvidas: ['Palhetada'], preRequisitos: ['Mod 1'], conteudos: ['Colcheias'], exerciciosPraticos: [], criteriosDominio: ['Velocidade'], formaAvaliacao: 'Prática', aulas: mod2Aulas },
+    { id: 'guitar-mod-3', nome: 'Módulo 3 — Harmonia Tonal Básica e Tríades', instrumentId: 'guitarra', nivel: 2, moduloNumero: 3, objetivoAcademico: 'Formar tríades no braço.', competenciasDesenvolvidas: ['Tríades'], preRequisitos: ['Mod 2'], conteudos: ['Tríades'], exerciciosPraticos: [], criteriosDominio: ['Harmonia'], formaAvaliacao: 'Prática', aulas: mod3Aulas },
+    { id: 'guitar-mod-4', nome: 'Módulo 4 — Mecânica Solo e Palhetada Alternada', instrumentId: 'guitarra', nivel: 2, moduloNumero: 4, objetivoAcademico: 'Desenvolver palhetada estrita.', competenciasDesenvolvidas: ['Palhetada alternada'], preRequisitos: ['Mod 3'], conteudos: ['Mecânica solo'], exerciciosPraticos: [], criteriosDominio: ['Sincronismo'], formaAvaliacao: 'Prática', aulas: mod4Aulas },
+    { id: 'guitar-mod-5', nome: 'Módulo 5 — Legato, Semicolcheias e Velocidade', instrumentId: 'guitarra', nivel: 3, moduloNumero: 5, objetivoAcademico: 'Dominar hammer-on e pull-off.', competenciasDesenvolvidas: ['Legato'], preRequisitos: ['Mod 4'], conteudos: ['Ligados'], exerciciosPraticos: [], criteriosDominio: ['Fluidez'], formaAvaliacao: 'Prática', aulas: mod5Aulas },
+    { id: 'guitar-mod-6', nome: 'Módulo 6 — Pentatônicas e Fraseado Expressivo', instrumentId: 'guitarra', nivel: 3, moduloNumero: 6, objetivoAcademico: 'Dominar o sistema CAGED e pentatônicas.', competenciasDesenvolvidas: ['CAGED'], preRequisitos: ['Mod 5'], conteudos: ['Pentatônica'], exerciciosPraticos: [], criteriosDominio: ['Improvisação'], formaAvaliacao: 'Prática', aulas: mod6Aulas },
+    { id: 'guitar-mod-7', nome: 'Módulo 7 — Harmonia Avançada e Voicings Modernos', instrumentId: 'guitarra', nivel: 4, moduloNumero: 7, objetivoAcademico: 'Acordes com sétima e extensões.', competenciasDesenvolvidas: ['Voicings'], preRequisitos: ['Mod 6'], conteudos: ['Extensões'], exerciciosPraticos: [], criteriosDominio: ['Harmonia'], formaAvaliacao: 'Prática', aulas: mod7Aulas },
+    { id: 'guitar-mod-8', nome: 'Módulo 8 — Condução de Vozes e Rearmonização', instrumentId: 'guitarra', nivel: 4, moduloNumero: 8, objetivoAcademico: 'Voice leading e substituições.', competenciasDesenvolvidas: ['Voice leading'], preRequisitos: ['Mod 7'], conteudos: ['Rearmonização'], exerciciosPraticos: [], criteriosDominio: ['Condução'], formaAvaliacao: 'Prática', aulas: mod8Aulas },
+    { id: 'guitar-mod-9', nome: 'Módulo 9 — Improvisação Modal e Sweep Picking', instrumentId: 'guitarra', nivel: 5, moduloNumero: 9, objetivoAcademico: 'Modos avançados e varredura.', competenciasDesenvolvidas: ['Sweep picking'], preRequisitos: ['Mod 8'], conteudos: ['Modos menores'], exerciciosPraticos: [], criteriosDominio: ['Virtuosismo'], formaAvaliacao: 'Prática', aulas: mod9Aulas },
+    { id: 'guitar-mod-10', nome: 'Módulo 10 — Especialização e Recital Final', instrumentId: 'guitarra', nivel: 5, moduloNumero: 10, objetivoAcademico: 'Arranjo solo e performance.', competenciasDesenvolvidas: ['Performance'], preRequisitos: ['Mod 9'], conteudos: ['Recital'], exerciciosPraticos: [], criteriosDominio: ['Maestria'], formaAvaliacao: 'Prática', aulas: mod10Aulas }
+  ];
+}
+
+// -------------------------------------------------------------------------
+// 6. ACESSO AOS MÓDULOS CURRICULARES POR INSTRUMENTO
 // -------------------------------------------------------------------------
 export function getCurriculumModulesByInstrument(instrumentId: AcademicInstrumentId): CurriculumModuleDefinition[] {
   switch (instrumentId) {
+    case 'violao':
+      return VIOLAO_CURRICULUM_MODULES;
+    case 'guitarra':
+      return getGuitarCurriculumModules();
     case 'baixo':
       return BAIXO_CURRICULUM_MODULES;
     case 'teclado':
@@ -262,34 +312,24 @@ export function getCurriculumModulesByInstrument(instrumentId: AcademicInstrumen
   }
 }
 
-/**
- * Retorna todos os módulos dos 3 novos instrumentos da Matriz Central
- */
 export function getAllExpandedCurriculumModules(): CurriculumModuleDefinition[] {
   return [
+    ...VIOLAO_CURRICULUM_MODULES,
+    ...getGuitarCurriculumModules(),
     ...BAIXO_CURRICULUM_MODULES,
     ...TECLADO_CURRICULUM_MODULES,
     ...BATERIA_CURRICULUM_MODULES
   ];
 }
 
-/**
- * Retorna todos os instrumentos registrados no conservatório
- */
 export function getRegisteredInstruments(): AcademicInstrument[] {
   return OFFICIAL_INSTRUMENTS;
 }
 
-/**
- * Retorna os dados de um instrumento pelo ID
- */
 export function getInstrumentById(id: AcademicInstrumentId): AcademicInstrument | undefined {
   return OFFICIAL_INSTRUMENTS.find(inst => inst.id === id);
 }
 
-/**
- * Retorna a definição canônica de um nível acadêmico (0 a 5)
- */
 export function getLevelDefinition(level: AcademicLevelNumber): AcademicLevelDefinition {
   const def = OFFICIAL_LEVELS.find(lvl => lvl.level === level);
   if (!def) {
@@ -298,30 +338,21 @@ export function getLevelDefinition(level: AcademicLevelNumber): AcademicLevelDef
   return def;
 }
 
-/**
- * Retorna o catálogo oficial de cursos da Matriz Central
- */
 export function getOfficialCourses(): AcademicCourse[] {
   return OFFICIAL_COURSES;
 }
 
-/**
- * Retorna o curso pelo identificador único ('violao' | 'canonical' | 'solo' | 'baixo' | 'teclado' | 'bateria')
- */
 export function getCourseById(courseId: string): AcademicCourse | undefined {
   return OFFICIAL_COURSES.find(c => c.id === courseId);
 }
 
-/**
- * AUDITORIA E VALIDAÇÃO DE INTEGRIDADE CURRICULAR
- * Garante em tempo de execução que nenhuma das 98 aulas existentes
- * (60 Violão + 18 Guitarra Canônica + 20 Guitarra Solo) foi corrompida
- * e que os 3 novos instrumentos (Baixo: 18, Teclado: 18, Bateria: 18)
- * possuem identificadores únicos, 6 níveis e conformidade pedagógica total.
- */
+// -------------------------------------------------------------------------
+// 7. VALIDAÇÃO DE INTEGRIDADE CURRICULAR (MASTER CURRICULUM 300)
+// -------------------------------------------------------------------------
 export function verifyCurriculumIntegrity(): {
   isValid: boolean;
   violaoCount: number;
+  guitarraCount: number;
   canonicalCount: number;
   soloCount: number;
   baixoCount: number;
@@ -333,211 +364,111 @@ export function verifyCurriculumIntegrity(): {
 } {
   const errors: string[] = [];
 
-  const violaoCount = VIOLAO_LESSONS.length;
-  const canonicalCount = CURRICULUM_LEVELS.reduce((acc, lvl) => acc + lvl.lessons.length, 0);
-  const soloCount = SOLO_LESSONS.length;
+  const violaoLessons = VIOLAO_CURRICULUM_MODULES.flatMap(m => m.aulas);
+  const guitarraLessons = getGuitarCurriculumModules().flatMap(m => m.aulas);
+  const canonicalLessons = CURRICULUM_LEVELS.flatMap(lvl => lvl.lessons);
+  const soloLessons = SOLO_LESSONS;
 
   const baixoLessons = BAIXO_CURRICULUM_MODULES.flatMap(m => m.aulas);
   const tecladoLessons = TECLADO_CURRICULUM_MODULES.flatMap(m => m.aulas);
   const bateriaLessons = BATERIA_CURRICULUM_MODULES.flatMap(m => m.aulas);
 
+  const violaoCount = violaoLessons.length;
+  const guitarraCount = guitarraLessons.length;
+  const canonicalCount = canonicalLessons.length;
+  const soloCount = soloLessons.length;
   const baixoCount = baixoLessons.length;
   const tecladoCount = tecladoLessons.length;
   const bateriaCount = bateriaLessons.length;
 
-  const totalLessons = violaoCount + canonicalCount + soloCount + baixoCount + tecladoCount + bateriaCount;
+  const totalLessons = violaoCount + baixoCount + tecladoCount + bateriaCount + canonicalCount + soloCount; // Note: canonical and solo are part of guitarraLessons, but let's make totalLessons calculation correct: violao + guitarra + baixo + teclado + bateria
+  const exactTotal = violaoCount + guitarraCount + baixoCount + tecladoCount + bateriaCount;
 
-  // 1. Auditoria dos cursos legados (regras sagradas de preservação)
-  if (violaoCount !== 60) {
-    errors.push(`Inconsistência no curso de Violão: esperado 60 aulas, obtido ${violaoCount}`);
-  }
-  if (canonicalCount !== 18) {
-    errors.push(`Inconsistência no Conservatório de Guitarra: esperado 18 aulas, obtido ${canonicalCount}`);
-  }
-  if (soloCount !== 20) {
-    errors.push(`Inconsistência no curso de Guitarra Solo: esperado 20 aulas, obtido ${soloCount}`);
-  }
-  if (VIOLAO_MODULES.length !== 10) {
-    errors.push(`Inconsistência nos módulos de Violão: esperado 10 módulos, obtido ${VIOLAO_MODULES.length}`);
-  }
-  if (CURRICULUM_LEVELS.length !== 6) {
-    errors.push(`Inconsistência nos níveis canônicos: esperado 6 níveis, obtido ${CURRICULUM_LEVELS.length}`);
-  }
-  if (SOLO_COURSE_STAGES.length !== 5) {
-    errors.push(`Inconsistência nas etapas solo: esperado 5 etapas, obtido ${SOLO_COURSE_STAGES.length}`);
-  }
+  if (violaoCount !== 60) errors.push(`Violao count: expected 60, got ${violaoCount}`);
+  if (guitarraCount !== 60) errors.push(`Guitar count: expected 60, got ${guitarraCount}`);
+  if (canonicalCount !== 18) errors.push(`Canonical count: expected 18, got ${canonicalCount}`);
+  if (soloCount !== 20) errors.push(`Solo count: expected 20, got ${soloCount}`);
+  if (baixoCount !== 60) errors.push(`Bass count: expected 60, got ${baixoCount}`);
+  if (tecladoCount !== 60) errors.push(`Keyboard count: expected 60, got ${tecladoCount}`);
+  if (bateriaCount !== 60) errors.push(`Drums count: expected 60, got ${bateriaCount}`);
 
-  // 2. Auditoria dos novos instrumentos
-  if (baixoCount !== 18) {
-    errors.push(`Inconsistência no curso de Baixo: esperado 18 aulas (3 por nível), obtido ${baixoCount}`);
-  }
-  if (tecladoCount !== 18) {
-    errors.push(`Inconsistência no curso de Teclado: esperado 18 aulas (3 por nível), obtido ${tecladoCount}`);
-  }
-  if (bateriaCount !== 18) {
-    errors.push(`Inconsistência no curso de Bateria: esperado 18 aulas (3 por nível), obtido ${bateriaCount}`);
-  }
-  if (BAIXO_CURRICULUM_MODULES.length !== 6) {
-    errors.push(`Inconsistência nos módulos de Baixo: esperado 6 níveis, obtido ${BAIXO_CURRICULUM_MODULES.length}`);
-  }
-  if (TECLADO_CURRICULUM_MODULES.length !== 6) {
-    errors.push(`Inconsistência nos módulos de Teclado: esperado 6 níveis, obtido ${TECLADO_CURRICULUM_MODULES.length}`);
-  }
-  if (BATERIA_CURRICULUM_MODULES.length !== 6) {
-    errors.push(`Inconsistência nos módulos de Bateria: esperado 6 níveis, obtido ${BATERIA_CURRICULUM_MODULES.length}`);
-  }
+  if (VIOLAO_CURRICULUM_MODULES.length !== 10) errors.push(`Violao modules: expected 10, got ${VIOLAO_CURRICULUM_MODULES.length}`);
+  if (getGuitarCurriculumModules().length !== 10) errors.push(`Guitar modules: expected 10, got ${getGuitarCurriculumModules().length}`);
+  if (BAIXO_CURRICULUM_MODULES.length !== 10) errors.push(`Bass modules: expected 10, got ${BAIXO_CURRICULUM_MODULES.length}`);
+  if (TECLADO_CURRICULUM_MODULES.length !== 10) errors.push(`Keyboard modules: expected 10, got ${TECLADO_CURRICULUM_MODULES.length}`);
+  if (BATERIA_CURRICULUM_MODULES.length !== 10) errors.push(`Drums modules: expected 10, got ${BATERIA_CURRICULUM_MODULES.length}`);
 
-  // 3. Auditoria de unicidade de identificadores
   const allLessonIds = new Set<string>();
   let hasDuplicateId = false;
 
-  const collectLessonId = (id: string) => {
+  const collectId = (id: string) => {
     if (allLessonIds.has(id)) {
       hasDuplicateId = true;
-      errors.push(`Identificador duplicado encontrado: ${id}`);
+      errors.push(`Duplicate ID: ${id}`);
     } else {
       allLessonIds.add(id);
     }
   };
 
-  VIOLAO_LESSONS.forEach(l => collectLessonId(l.id));
-  CURRICULUM_LEVELS.forEach(lvl => lvl.lessons.forEach(l => collectLessonId(l.id)));
-  SOLO_LESSONS.forEach(l => collectLessonId(l.id));
-  baixoLessons.forEach(l => collectLessonId(l.id));
-  tecladoLessons.forEach(l => collectLessonId(l.id));
-  bateriaLessons.forEach(l => collectLessonId(l.id));
+  violaoLessons.forEach(l => collectId(l.id));
+  guitarraLessons.forEach(l => collectId(l.id));
+  baixoLessons.forEach(l => collectId(l.id));
+  tecladoLessons.forEach(l => collectId(l.id));
+  bateriaLessons.forEach(l => collectId(l.id));
 
   return {
     isValid: errors.length === 0,
     violaoCount,
+    guitarraCount,
     canonicalCount,
     soloCount,
     baixoCount,
     tecladoCount,
     bateriaCount,
-    totalLessons,
+    totalLessons: exactTotal,
     uniqueIdsValid: !hasDuplicateId,
     errors
   };
 }
 
-/**
- * Retorna o sumário unificado de todas as aulas de um curso no padrão da Matriz Central
- */
-export function getCourseLessonSummaries(courseId: 'violao' | 'canonical' | 'solo' | 'baixo' | 'teclado' | 'bateria'): AcademicLessonSummary[] {
+// -------------------------------------------------------------------------
+// 8. SUMÁRIO DE AULAS POR CURSO
+// -------------------------------------------------------------------------
+export function getCourseLessonSummaries(courseId: string): AcademicLessonSummary[] {
+  let modules: CurriculumModuleDefinition[] = [];
+  let instId: AcademicInstrumentId = 'violao';
+
   if (courseId === 'violao') {
-    return VIOLAO_LESSONS.map(l => ({
-      id: l.id,
-      courseId: 'violao',
-      instrumentId: 'violao',
-      moduleNumber: l.moduleNumber,
-      lessonNumber: l.lessonNumber,
-      level: (l.level as AcademicLevelNumber) || 0,
-      title: l.title,
-      subtitle: l.subtitle,
-      estimatedMinutes: l.estimatedMinutes,
-      hasAudioDemonstration: Boolean(l.demonstrationAudioNotes && l.demonstrationAudioNotes.length > 0),
-      hasQuiz: Boolean(l.quiz && l.quiz.questions.length > 0),
-      hasPracticalExercise: Boolean(l.practicalExercise)
-    }));
+    modules = VIOLAO_CURRICULUM_MODULES;
+    instId = 'violao';
+  } else if (courseId === 'guitarra' || courseId === 'canonical' || courseId === 'solo') {
+    modules = getGuitarCurriculumModules();
+    instId = 'guitarra';
+  } else if (courseId === 'baixo') {
+    modules = BAIXO_CURRICULUM_MODULES;
+    instId = 'baixo';
+  } else if (courseId === 'teclado') {
+    modules = TECLADO_CURRICULUM_MODULES;
+    instId = 'teclado';
+  } else if (courseId === 'bateria') {
+    modules = BATERIA_CURRICULUM_MODULES;
+    instId = 'bateria';
   }
 
-  if (courseId === 'canonical') {
-    const list: AcademicLessonSummary[] = [];
-    CURRICULUM_LEVELS.forEach(lvl => {
-      lvl.lessons.forEach(l => {
-        list.push({
-          id: l.id,
-          courseId: 'canonical',
-          instrumentId: 'guitarra',
-          moduleNumber: l.level + 1,
-          lessonNumber: l.lessonNumber,
-          level: (l.level as AcademicLevelNumber) || 0,
-          title: l.title,
-          subtitle: l.subtitle,
-          estimatedMinutes: l.estimatedMinutes,
-          hasAudioDemonstration: false,
-          hasQuiz: Boolean(l.quiz && l.quiz.questions.length > 0),
-          hasPracticalExercise: Boolean(l.practicalExercise)
-        });
-      });
-    });
-    return list;
-  }
-
-  if (courseId === 'solo') {
-    return SOLO_LESSONS.map(l => ({
-      id: l.id,
-      courseId: 'solo',
-      instrumentId: 'guitarra',
-      moduleNumber: l.stage,
-      lessonNumber: l.lessonNumber,
-      level: (l.level as AcademicLevelNumber) || 1,
-      title: l.title,
-      subtitle: l.subtitle,
-      estimatedMinutes: l.estimatedMinutes,
-      hasAudioDemonstration: Boolean(l.demonstrationAudioNotes && l.demonstrationAudioNotes.length > 0),
-      hasQuiz: Boolean(l.quiz && l.quiz.questions.length > 0),
-      hasPracticalExercise: Boolean(l.practicalExercise)
-    }));
-  }
-
-  if (courseId === 'baixo') {
-    return BAIXO_CURRICULUM_MODULES.flatMap(m => 
-      m.aulas.map(a => ({
-        id: a.id,
-        courseId: 'baixo',
-        instrumentId: 'baixo',
-        moduleNumber: m.moduloNumero,
-        lessonNumber: a.numero,
-        level: m.nivel,
-        title: a.titulo,
-        subtitle: a.subtitulo,
-        estimatedMinutes: a.duracaoMinutos,
-        hasAudioDemonstration: false,
-        hasQuiz: false,
-        hasPracticalExercise: true
-      }))
-    );
-  }
-
-  if (courseId === 'teclado') {
-    return TECLADO_CURRICULUM_MODULES.flatMap(m => 
-      m.aulas.map(a => ({
-        id: a.id,
-        courseId: 'teclado',
-        instrumentId: 'teclado',
-        moduleNumber: m.moduloNumero,
-        lessonNumber: a.numero,
-        level: m.nivel,
-        title: a.titulo,
-        subtitle: a.subtitulo,
-        estimatedMinutes: a.duracaoMinutos,
-        hasAudioDemonstration: false,
-        hasQuiz: false,
-        hasPracticalExercise: true
-      }))
-    );
-  }
-
-  if (courseId === 'bateria') {
-    return BATERIA_CURRICULUM_MODULES.flatMap(m => 
-      m.aulas.map(a => ({
-        id: a.id,
-        courseId: 'bateria',
-        instrumentId: 'bateria',
-        moduleNumber: m.moduloNumero,
-        lessonNumber: a.numero,
-        level: m.nivel,
-        title: a.titulo,
-        subtitle: a.subtitulo,
-        estimatedMinutes: a.duracaoMinutos,
-        hasAudioDemonstration: false,
-        hasQuiz: false,
-        hasPracticalExercise: true
-      }))
-    );
-  }
-
-  return [];
+  return modules.flatMap(m =>
+    m.aulas.map(a => ({
+      id: a.id,
+      courseId,
+      instrumentId: instId,
+      moduleNumber: m.moduloNumero,
+      lessonNumber: a.numero,
+      level: m.nivel,
+      title: a.titulo,
+      subtitle: a.subtitulo || '',
+      estimatedMinutes: a.duracaoMinutos || 25,
+      hasAudioDemonstration: false,
+      hasQuiz: false,
+      hasPracticalExercise: true
+    }))
+  );
 }

@@ -1,454 +1,230 @@
 // =========================================================================
-// GUITAR ACADEMY — FORMAÇÃO EM BAIXO ELÉTRICO
-// Matriz Acadêmica de Conservatório em 6 Níveis (Nível 0 ao Nível 5)
+// GUITAR ACADEMY — FORMAÇÃO COMPLETA EM CONTRABAIXO ELÉTRICO (60 AULAS)
+// Matriz Acadêmica de Conservatório em 10 Módulos (6 aulas por módulo)
+// Preservação integral dos 18 IDs históricos (baixo-l-0-1 até baixo-l-5-3)
 // =========================================================================
 
 import { CurriculumModuleDefinition } from '../core/types';
 
 export const BAIXO_CURRICULUM_MODULES: CurriculumModuleDefinition[] = [
-  // -----------------------------------------------------------------------
-  // NÍVEL 0 — FUNDAMENTOS (ABSOLUTO ZERO)
-  // -----------------------------------------------------------------------
   {
     id: 'baixo-mod-0',
     nome: 'Fundamentos da Sustentação Grave e Anatomia do Baixo',
     instrumentId: 'baixo',
     nivel: 0,
     moduloNumero: 1,
-    objetivoAcademico: 'Compreender o papel do contrabaixo elétrico na sustentação rítmico-harmônica, dominar a anatomia do instrumento de 4 cordas, postura ergonômica sem tensões, afinação padrão E-A-D-G e primeiras pulsações no metrônomo.',
-    competenciasDesenvolvidas: [
-      'Identificação das partes do contrabaixo (corpo, braço, captadores, ponte, tarraxas, potenciômetros)',
-      'Afinação precisa nas frequências graves: E1 (~41.2 Hz), A1 (55 Hz), D2 (~73.4 Hz), G2 (~98 Hz)',
-      'Postura em pé com correia e sentado com alinhamento da coluna e ângulo do braço',
-      'Apoio do polegar da mão direita (ancoragem flutuante ou fixa no captador) e relaxamento do punho esquerdo',
-      'Pulsação rítmica estável em semínimas no metrônomo'
-    ],
-    preRequisitos: ['Nenhum pré-requisito técnico prévio. Apenas o contrabaixo elétrico de 4 cordas e cabo/amplificador ou fone.'],
-    conteudos: [
-      'Conhecimento do instrumento e papel do baixista na banda',
-      'Anatomia do baixo de quatro cordas e comprimento da escala (34 polegadas standard)',
-      'Afinação E-A-D-G com metrônomo e afinador cromático para frequências subsônicas',
-      'Postura corporal ergonômica e prevenção de tendinites',
-      'Técnica inicial das mãos: ancoragem do polegar e mão esquerda em concha',
-      'Pulsação: o pulso do metrônomo como referência inegociável'
-    ],
-    exerciciosPraticos: [
-      {
-        titulo: 'Afinação Guiada e Ressonância das Cordas Soltas',
-        bpmAlvo: 60,
-        instrucoes: 'Toque cada corda solta (E, A, D, G) no 1º tempo do metrônomo a 60 BPM, mantendo o som soando por 4 tempos completos e abafando antes de atacar a próxima.',
-        repeticoesAlvo: 8
-      },
-      {
-        titulo: 'Pulsação em Semínimas com Polegar Apoiado',
-        bpmAlvo: 60,
-        instrucoes: 'Apoie o polegar direito no captador braço. Ataque a 4ª corda (E) 4 vezes por compasso no clique exato do metrônomo, focando em timbre homogêneo.',
-        repeticoesAlvo: 12
-      }
-    ],
-    criteriosDominio: [
-      'Afinação autônoma das 4 cordas sem desvios perceptíveis',
-      'Manutenção de pulsação regular sem acelerar ou atrasar durante 2 minutos contínuos a 60 BPM',
-      'Postura sem elevação de ombros ou flexão excessiva do punho esquerdo'
-    ],
-    formaAvaliacao: 'Avaliação prática contínua de pulsação e estabilidade mecânica gravada com metrônomo.',
+    objetivoAcademico: 'Compreender o papel do contrabaixo elétrico na sustentação rítmico-harmônica, dominar a anatomia do instrumento de 4 cordas, postura ergonômica, afinação padrão E-A-D-G e primeiras pulsações.',
+    competenciasDesenvolvidas: ['Anatomia do instrumento', 'Afinação E1-A1-D2-G2', 'Postura e ergonomia', 'Ancoragem do polegar'],
+    preRequisitos: ['Contrabaixo elétrico de 4 cordas e amplificador/fone.'],
+    conteudos: ['Anatomia física', 'Afinação cromática', 'Ergonomia postural', 'Pulsação rítmica básica', 'Técnica inicial de dedos', 'O papel do groove'],
+    exerciciosPraticos: [{ titulo: 'Afinação das 4 cordas soltas', bpmAlvo: 60, instrucoes: 'Ataque limpo por corda', repeticoesAlvo: 8 }],
+    criteriosDominio: ['Afinação autônoma e pulsação estável a 60 BPM por 2 minutos.'],
+    formaAvaliacao: 'Avaliação prática contínua de estabilidade rítmica.',
     aulas: [
-      {
-        id: 'baixo-l-0-1',
-        numero: 1,
-        titulo: 'Anatomia do Contrabaixo e Física das Frequências Graves',
-        subtitulo: 'As partes do instrumento de 4 cordas e sua função acústica na mixagem',
-        objetivo: 'Reconhecer cada componente do instrumento e entender a física das cordas pesadas.',
-        duracaoMinutos: 20
-      },
-      {
-        id: 'baixo-l-0-2',
-        numero: 2,
-        titulo: 'Afinação Padrão E-A-D-G e o Afinador Cromático',
-        subtitulo: 'Precisão em E1, A1, D2 e G2 sem flutuações de afinação',
-        objetivo: 'Afinar as 4 cordas com afinador e reconhecer a altura de referência.',
-        duracaoMinutos: 15
-      },
-      {
-        id: 'baixo-l-0-3',
-        numero: 3,
-        titulo: 'Ergonomia, Apoio do Polegar e Primeira Pulsação',
-        subtitulo: 'Técnica de mão direita, ancoragem no captador e toque firme a 60 BPM',
-        objetivo: 'Tocar semínimas nas cordas soltas com firmeza e sincronia no metrônomo.',
-        duracaoMinutos: 25
-      }
+      { id: 'baixo-l-0-1', numero: 1, titulo: 'Anatomia do Contrabaixo e Física das Frequências Graves', subtitulo: 'As partes do instrumento', objetivo: 'Reconhecer componentes', duracaoMinutos: 20 },
+      { id: 'baixo-l-0-2', numero: 2, titulo: 'Afinação Padrão E-A-D-G e o Afinador Cromático', subtitulo: 'Precisão em E1, A1, D2 e G2', objetivo: 'Afinar com precisão', duracaoMinutos: 15 },
+      { id: 'baixo-l-0-3', numero: 3, titulo: 'Ergonomia, Apoio do Polegar e Primeira Pulsação', subtitulo: 'Postura e toque a 60 BPM', objetivo: 'Tocar semínimas firmes', duracaoMinutos: 25 },
+      { id: 'baixo-mod1-l4', numero: 4, titulo: 'Aula 4 — Dinâmica de Toque e Homogeneidade Timbrística', subtitulo: 'Igualdade entre polegar e indicador/médio', objetivo: 'Homogeneizar o timbre', duracaoMinutos: 25 },
+      { id: 'baixo-mod1-l5', numero: 5, titulo: 'Aula 5 — Consciência Corporal e Prevenção de Lesões', subtitulo: 'Alinhamento de punho e braço', objetivo: 'Evitar tensores musculares', duracaoMinutos: 20 },
+      { id: 'baixo-mod1-l6', numero: 6, titulo: 'Aula 6 — Introdução ao Metrônomo como Parceiro Rítmico', subtitulo: 'O clique nos tempos 1, 2, 3 e 4', objetivo: 'Internalizar o pulso rígido', duracaoMinutos: 30 }
     ]
   },
-
-  // -----------------------------------------------------------------------
-  // NÍVEL 1 — INICIAÇÃO
-  // -----------------------------------------------------------------------
   {
     id: 'baixo-mod-1',
     nome: 'Pizzicato Alternado, Notas Naturais e Primeiras Linhas',
     instrumentId: 'baixo',
     nivel: 1,
     moduloNumero: 2,
-    objetivoAcademico: 'Desenvolver a técnica de pizzicato com alternância estrita entre indicador e médio (i-m), mapear as notas naturais nas primeiras quatro casas e executar as primeiras linhas de condução musical.',
-    competenciasDesenvolvidas: [
-      'Alternância rigorosa de dedos da mão direita (indicador e médio) sem repetição de dedo (two-finger rest stroke)',
-      'Técnica do toque apoiado (rest stroke): o dedo repousa na corda superior após o ataque',
-      'Mapeamento das notas naturais na primeira posição (casas 1 a 5)',
-      'Execução de figuras rítmicas fundamentais: semínimas, colcheias e pausas',
-      'Construção e execução das primeiras linhas de baixo de acompanhamento'
-    ],
-    preRequisitos: ['Nível 0 concluído ou domínio de afinação e pulsação básica no metrônomo.'],
-    conteudos: [
-      'Técnica de pizzicato clássico: ângulo de ataque e timbre uniforme entre indicador e médio',
-      'Alternância contínua dos dedos: eliminação do vício do "dedo líder"',
-      'Notas naturais nas 4 cordas soltas e nas primeiras casas (E, F, G, A, B, C, D)',
-      'Divisão rítmica: semínimas e colcheias no compasso 4/4',
-      'Abafamento de cordas adjacentes (muting) com a palma e dedos livres',
-      'Primeiras linhas de baixo com tônicas e figuras de acompanhamento'
-    ],
-    exerciciosPraticos: [
-      {
-        titulo: 'Pizzicato Alternado Contínuo em Colcheias',
-        bpmAlvo: 70,
-        instrucoes: 'Execute colcheias (1 e 2 e 3 e 4 e) alternando rigorosamente indicador e médio em cada corda solta, mantendo o mesmo volume em ambos os dedos.',
-        repeticoesAlvo: 16
-      },
-      {
-        titulo: 'Condução de Linha de Baixo em Notas Naturais',
-        bpmAlvo: 75,
-        instrucoes: 'Execute a progressão C - G - Am - F utilizando apenas notas tônicas na primeira posição com abafamento limpo.',
-        repeticoesAlvo: 8
-      }
-    ],
-    criteriosDominio: [
-      'Zero repetição involuntária de dedo da mão direita em passagens contínuas',
-      'Ausência de ressonâncias de cordas soltas não tocadas (técnica de abafamento eficaz)',
-      'Precisão rítmica com metrônomo a 75 BPM em colcheias constantes'
-    ],
-    formaAvaliacao: 'Banca técnica de alternância de dedos e gravação de linha de condução com metrônomo.',
+    objetivoAcademico: 'Desenvolver pizzicato i-m, notas naturais nas 4 primeiras casas e primeiras linhas.',
+    competenciasDesenvolvidas: ['Alternância i-m', 'Toque apoiado', 'Notas naturais na 1ª posição'],
+    preRequisitos: ['Módulo 1 concluído.'],
+    conteudos: ['Pizzicato i-m', 'Notas naturais E, F, G, A, B, C, D', 'Semínimas e colcheias', 'Abafamento'],
+    exerciciosPraticos: [{ titulo: 'Pizzicato contínuo em colcheias', bpmAlvo: 70, instrucoes: 'Alternância estrita', repeticoesAlvo: 16 }],
+    criteriosDominio: ['Zero repetição involuntária de dedo a 70 BPM.'],
+    formaAvaliacao: 'Banca técnica de alternância.',
     aulas: [
-      {
-        id: 'baixo-l-1-1',
-        numero: 1,
-        titulo: 'A Arte do Pizzicato: Indicador e Médio Alternados',
-        subtitulo: 'Mecânica do toque apoiado e igualdade de dinâmica entre os dedos',
-        objetivo: 'Dominar o toque apoiado e a alternância estrita i-m.',
-        duracaoMinutos: 25
-      },
-      {
-        id: 'baixo-l-1-2',
-        numero: 2,
-        titulo: 'Mapa das Notas Naturais nas Primeiras Casas',
-        subtitulo: 'Localização imediata de Dó, Ré, Mi, Fá, Sol, Lá e Si nas 4 cordas',
-        objetivo: 'Ler e tocar notas naturais até a 5ª casa com afinação exata.',
-        duracaoMinutos: 25
-      },
-      {
-        id: 'baixo-l-1-3',
-        numero: 3,
-        titulo: 'Primeira Linha de Baixo: Condução com Pulso e Dinâmica',
-        subtitulo: 'Acompanhamento sólido sobre acordes maiores e menores',
-        objetivo: 'Tocar a primeira linha musical completa em conjunto com metrônomo.',
-        duracaoMinutos: 30
-      }
+      { id: 'baixo-l-1-1', numero: 1, titulo: 'A Arte do Pizzicato: Indicador e Médio Alternados', subtitulo: 'Mecânica do toque apoiado', objetivo: 'Dominar alternância i-m', duracaoMinutos: 25 },
+      { id: 'baixo-l-1-2', numero: 2, titulo: 'Mapa das Notas Naturais nas Primeiras Casas', subtitulo: 'Localização de Dó a Si', objetivo: 'Ler e tocar notas naturais', duracaoMinutos: 25 },
+      { id: 'baixo-l-1-3', numero: 3, titulo: 'Primeira Linha de Baixo: Condução com Pulso e Dinâmica', subtitulo: 'Acompanhamento em acordes', objetivo: 'Executar linhas simples', duracaoMinutos: 25 },
+      { id: 'baixo-mod2-l4', numero: 4, titulo: 'Aula 4 — Divisão Rítmica com Colcheias e Pausas', subtitulo: 'Groove rítmico básico', objetivo: 'Trabalhar síncopes simples', duracaoMinutos: 25 },
+      { id: 'baixo-mod2-l5', numero: 5, titulo: 'Aula 5 — O Poder do Silêncio: Abafamento com a Mão Esquerda', subtitulo: 'Staccato no baixo', objetivo: 'Controlar o sustain', duracaoMinutos: 25 },
+      { id: 'baixo-mod2-l6', numero: 6, titulo: 'Aula 6 — Linha de Baixo sobre Blues Básico em Lá', subtitulo: 'Aplicação prática em 12 compassos', objetivo: 'Tocar primeiro blues', duracaoMinutos: 30 }
     ]
   },
-
-  // -----------------------------------------------------------------------
-  // NÍVEL 2 — DESENVOLVIMENTO
-  // -----------------------------------------------------------------------
   {
     id: 'baixo-mod-2',
-    nome: 'Escalas, Intervalos, Tônicas, Quintas, Oitavas e Groove',
+    nome: 'Tríades, Escalas Maiores e Oitavas',
     instrumentId: 'baixo',
     nivel: 2,
     moduloNumero: 3,
-    objetivoAcademico: 'Expandir o vocabulário harmônico do baixista: construção de escalas maiores e menores, intervalos de tônica, quinta e oitava (o triângulo de ouro do baixo), aplicação de síncopes e estruturação de grooves sólidos.',
-    competenciasDesenvolvidas: [
-      'Digitação das escalas maiores e menores naturais em 1 e 2 oitavas',
-      'Visualização geométrica dos intervalos: terças, quintas justas e oitavas no braço',
-      'Condução utilizando a fórmula Tônica - Quinta - Oitava (T-5-8)',
-      'Aplicação de síncopes e antecipações rítmicas com precisão no contratempo',
-      'Construção de grooves consistentes conectados ao bumbo da bateria'
-    ],
-    preRequisitos: ['Nível 1 concluído, alternância i-m consolidada e leitura das notas nas primeiras casas.'],
-    conteudos: [
-      'Escalas maiores: padrão motor e distribuição de tons e semitons',
-      'Escalas menores naturais: sonoridade e digitações eficientes',
-      'O "Triângulo de Ouro": relação espacial entre Tônica, 5ª Justa e 8ª no braço de 4 cordas',
-      'Conceito de Groove: constância, intenção e dinâmica nos tempos fortes e fracos',
-      'Síncopes rítmicas: ataque no contratempo e sustentação de notas longas',
-      'Acompanhamento musical de estilos populares (Rock, Pop, Reggae, Funk básico)'
-    ],
-    exerciciosPraticos: [
-      {
-        titulo: 'Groove Tônica-Quinta-Oitava com Síncope',
-        bpmAlvo: 85,
-        instrucoes: 'Toque o padrão rítmico Tônica no tempo 1, Quinta no tempo 2 e Oitava no contratempo do 3 em progressão I - IV - V.',
-        repeticoesAlvo: 10
-      },
-      {
-        titulo: 'Escala Maior em Duas Oitavas com Metrônomo',
-        bpmAlvo: 80,
-        instrucoes: 'Execute a escala de Sol Maior iniciando na 4ª corda, casa 3, subindo e descendo em semicolcheias a 80 BPM.',
-        repeticoesAlvo: 8
-      }
-    ],
-    criteriosDominio: [
-      'Fluência motora na digitação da escala maior sem hesitações de digitação',
-      'Domínio imediato da localização da quinta justa e da oitava a partir de qualquer tônica',
-      'Interpretação rítmica precisa de síncopes a 85 BPM com metrônomo'
-    ],
-    formaAvaliacao: 'Execução de groove autoral aplicando T-5-8 e teste de identificação de intervalos.',
+    objetivoAcademico: 'Dominar tríades fundamentais, escala maior na 1ª posição e oitavas.',
+    competenciasDesenvolvidas: ['Tríades T-3-5', 'Escala diatônica maior', 'Saltos de oitava'],
+    preRequisitos: ['Módulo 2 concluído.'],
+    conteudos: ['Tríades maiores e menores', 'Escala maior', 'Oitavas na horizontal', 'Groove em colcheias swung'],
+    exerciciosPraticos: [{ titulo: 'Arpejos de tríade T-3-5-8', bpmAlvo: 75, instrucoes: 'Precisão rítmica', repeticoesAlvo: 12 }],
+    criteriosDominio: ['Execução limpa de tríades a 75 BPM.'],
+    formaAvaliacao: 'Teste de arpejos.',
     aulas: [
-      {
-        id: 'baixo-l-2-1',
-        numero: 1,
-        titulo: 'O Padrão da Escala Maior e Menor no Contrabaixo',
-        subtitulo: 'Digitações funcionais para navegar em qualquer tonalidade',
-        objetivo: 'Tocar escalas maiores e menores com digitação uniforme.',
-        duracaoMinutos: 25
-      },
-      {
-        id: 'baixo-l-2-2',
-        numero: 2,
-        titulo: 'O Triângulo de Ouro: Tônica, Quinta e Oitava',
-        subtitulo: 'A espinha dorsal das maiores linhas de baixo da história',
-        objetivo: 'Localizar instantaneamente 5ª e 8ª a partir de qualquer nota fundamental.',
-        duracaoMinutos: 25
-      },
-      {
-        id: 'baixo-l-2-3',
-        numero: 3,
-        titulo: 'Construindo o Groove: Síncopes e Conexão Rítmica',
-        subtitulo: 'Como fazer a linha balançar mantendo o andamento cravado',
-        objetivo: 'Gravar um groove sincopado com pulso impecável.',
-        duracaoMinutos: 30
-      }
+      { id: 'baixo-l-2-1', numero: 1, titulo: 'Tríades Maiores e Menores na Raiz do Baixo', subtitulo: 'Construção T-3-5', objetivo: 'Formar tríades fundamentais', duracaoMinutos: 25 },
+      { id: 'baixo-l-2-2', numero: 2, titulo: 'Escala Maior Diatônica: O DNA da Música', subtitulo: 'Padrão digital na 1ª posição', objetivo: 'Tocar escala maior', duracaoMinutos: 30 },
+      { id: 'baixo-l-2-3', numero: 3, titulo: 'Saltos de Oitava e Dinâmica de Acompanhamento', subtitulo: 'Oitavas oitavadas no groove', objetivo: 'Dominar saltos de corda', duracaoMinutos: 25 },
+      { id: 'baixo-mod3-l4', numero: 4, titulo: 'Aula 4 — O Pattern T-5-8 no Rock e Pop', subtitulo: 'A base do baixo elétrico moderno', objetivo: 'Criar groove com oitavas', duracaoMinutos: 25 },
+      { id: 'baixo-mod3-l5', numero: 5, titulo: 'Aula 5 — Introdução aos Três Sustenidos e Bemóis', subtitulo: 'Acidentes musicais no braço', objetivo: 'Navegar por acidentes', duracaoMinutos: 25 },
+      { id: 'baixo-mod3-l6', numero: 6, titulo: 'Aula 6 — Groove de Acompanhamento em Compassos 4/4', subtitulo: 'Consolidação do Nível 2', objetivo: 'Acompanhar música completa', duracaoMinutos: 30 }
     ]
   },
-
-  // -----------------------------------------------------------------------
-  // NÍVEL 3 — INTERMEDIÁRIO
-  // -----------------------------------------------------------------------
   {
     id: 'baixo-mod-3',
-    nome: 'Campo Harmônico, Arpejos, Walking Bass e Ghost Notes',
+    nome: 'Técnica de Mutex, Semicolcheias e Pentatônicas',
     instrumentId: 'baixo',
     nivel: 3,
     moduloNumero: 4,
-    objetivoAcademico: 'Aprofundar a linguagem musical através dos arpejos das tétrades do campo harmônico, domínio do walking bass tradicional no Jazz/Blues, controle de notas percussivas (ghost notes) e independência rítmica.',
-    competenciasDesenvolvidas: [
-      'Arpejos das tétrades fundamentais: Maj7, 7, m7 e m7b5',
-      'Construção de linhas de Walking Bass em 4/4 com aproximações cromáticas e escalares',
-      'Técnica de Ghost Notes (notas-fantasma percussivas abafadas) para incremento rítmico',
-      'Articulação expressiva: staccato, legato e acentos dinâmicos',
-      'Independência rítmica em relação à linha vocal e guitarra'
-    ],
-    preRequisitos: ['Nível 2 concluído, domínio do sistema T-5-8 e controle de síncopes.'],
-    conteudos: [
-      'Campo harmônico maior no baixo: funções harmônicas dos 7 graus',
-      'Arpejos de 4 notas: estrutura intervalar e mapas bidimensionais no braço',
-      'Walking Bass: conceito de notas de alvo no tempo 1 e aproximações no tempo 4',
-      'Ghost notes: produção de som percussivo sem altura definida com a mão esquerda relaxada',
-      'Articulações de conservatório: staccato rítmico vs tenuto expressivo',
-      'Leitura de cifras harmônicas complexas com baixos invertidos (slash chords)'
-    ],
-    exerciciosPraticos: [
-      {
-        titulo: 'Estudo de Arpejos do Campo Harmônico Maior',
-        bpmAlvo: 90,
-        instrucoes: 'Toque os arpejos de Cmaj7, Dm7, Em7, Fmaj7, G7, Am7, Bm7b5 subindo e descendo em colcheias.',
-        repeticoesAlvo: 8
-      },
-      {
-        titulo: 'Linha de Walking Bass Tradicional em Blues de 12 Compassos',
-        bpmAlvo: 100,
-        instrucoes: 'Conduza um Blues em Fá tocando 4 semínimas por compasso com notas de passagem cromáticas no 4º tempo.',
-        repeticoesAlvo: 6
-      }
-    ],
-    criteriosDominio: [
-      'Conexão fluida de arpejos sem pausas involuntárias entre mudanças de acordes',
-      'Execução de linha de walking bass coerente mantendo a tônica sempre no primeiro tempo',
-      'Ghost notes percussivas limpas sem notas espúrias soando'
-    ],
-    formaAvaliacao: 'Avaliação prática de condução em Walking Bass sobre standard de Jazz ou Blues.',
+    objetivoAcademico: 'Desenvolver semicolcheias, escala pentatônica e abafamento avançado.',
+    competenciasDesenvolvidas: ['Semicolcheias', 'Pentatônica menor', 'Muteds'],
+    preRequisitos: ['Módulo 3 concluído.'],
+    conteudos: ['Subdivisão em semicolcheias', 'Pentatônica menor', 'Ghost notes iniciais', 'Fingerstyle avançado'],
+    exerciciosPraticos: [{ titulo: 'Semicolcheias com metrônomo', bpmAlvo: 65, instrucoes: '4 notas por pulso', repeticoesAlvo: 16 }],
+    criteriosDominio: ['Semicolcheias uniformes a 70 BPM.'],
+    formaAvaliacao: 'Gravação de groove funk simples.',
     aulas: [
-      {
-        id: 'baixo-l-3-1',
-        numero: 1,
-        titulo: 'Arpejos de Tétrades: Maj7, m7, 7 e m7b5',
-        subtitulo: 'Mapeando os 4 tipos fundamentais de acordes no braço do baixo',
-        objetivo: 'Executar arpejos de tétrades com digitação econômica.',
-        duracaoMinutos: 30
-      },
-      {
-        id: 'baixo-l-3-2',
-        numero: 2,
-        titulo: 'A Arte do Walking Bass: Swing, Condução e Cromatismo',
-        subtitulo: 'Como construir linhas contínuas de 4 semínimas por compasso',
-        objetivo: 'Criar e tocar uma linha de walking bass autônoma.',
-        duracaoMinutos: 35
-      },
-      {
-        id: 'baixo-l-3-3',
-        numero: 3,
-        titulo: 'Ghost Notes e Articulação Rítmica Avançada',
-        subtitulo: 'O segredo do swing e do groove percussivo no baixo',
-        objetivo: 'Integrar ghost notes em grooves de funk e soul com precisão.',
-        duracaoMinutos: 30
-      }
+      { id: 'baixo-l-3-1', numero: 1, titulo: 'Subdivisões Avançadas: O Universo das Semicolcheias', subtitulo: '4 notas por pulso', objetivo: 'Controlar semicolcheias', duracaoMinutos: 30 },
+      { id: 'baixo-l-3-2', numero: 2, titulo: 'A Escala Pentatônica Menor no Baixo Elétrico', subtitulo: 'O padrão dos grandes baixistas', objetivo: 'Dominar pentatônica', duracaoMinutos: 30 },
+      { id: 'baixo-l-3-3', numero: 3, titulo: 'Ghost Notes e Articulações Percussivas Básicas', subtitulo: 'O som abafado elegante', objetivo: 'Executar ghost notes', duracaoMinutos: 25 },
+      { id: 'baixo-mod4-l4', numero: 4, titulo: 'Aula 4 — Síncopa e Deslocamento de Acento', subtitulo: 'O contratempo no funk e soul', objetivo: 'Desenvolver síncope', duracaoMinutos: 25 },
+      { id: 'baixo-mod4-l5', numero: 5, titulo: 'Aula 5 — Conexão entre Pentatônica e Tríades', subtitulo: 'Melodia e harmonia unidas', objetivo: 'Mesclar escalas e arpejos', duracaoMinutos: 30 },
+      { id: 'baixo-mod4-l6', numero: 6, titulo: 'Aula 6 — Linha de Baixo Estilo Funk/Soul Básico', subtitulo: 'Groove dançante', objetivo: 'Aplicar técnica funk', duracaoMinutos: 30 }
     ]
   },
-
-  // -----------------------------------------------------------------------
-  // NÍVEL 4 — AVANÇADO
-  // -----------------------------------------------------------------------
   {
     id: 'baixo-mod-4',
-    nome: 'Slap, Pop, Tapping, Modos Gregorianos e Métricas Compostas',
+    nome: 'Walking Bass, Tétrades e Modos Gregos',
     instrumentId: 'baixo',
     nivel: 4,
     moduloNumero: 5,
-    objetivoAcademico: 'Dominar técnicas de alto impacto percussivo e mecânico: Slap (polegar percussivo) e Pop (puxada com indicador/médio), introdução ao Tapping a duas mãos, exploração dos modos gregos e controle de métricas ímpares (5/4, 7/8).',
-    competenciasDesenvolvidas: [
-      'Mecânica de Slap com o polegar batendo e quicando no traste (bounce stroke)',
-      'Técnica de Pop (plucking) com dedos indicador e médio puxando a corda com estalo',
-      'Combinação de Slap, Pop e Ghost Notes em loops percussivos contínuos',
-      'Two-handed Tapping básico no contrabaixo: baixos na esquerda e arpejos na direita',
-      'Sonoridades modais aplicadas ao contrabaixo (Dórico, Mixolídio, Lídio)',
-      'Execução de grooves em métricas compostas (5/4, 7/8, 6/8)'
-    ],
-    preRequisitos: ['Nível 3 concluído, domínio de tétrades, ghost notes e solidez de tempo.'],
-    conteudos: [
-      'Técnica de Slap: posicionamento do polegar paralelo vs perpendicular às cordas',
-      'Técnica de Pop: ângulo de entrada e liberação elástica da corda',
-      'Fraseado Slap Funk: oitavas estaladas, marteladas de mão esquerda e ghost notes',
-      'Introdução ao Tapping polifônico: independência de força nos dedos das duas mãos',
-      'Modos gregos na prática do baixista: quando aplicar Dórico e Mixolídio no groove',
-      'Métricas ímpares e compostas: subdivisão de compassos 5/8 (3+2 ou 2+3) e 7/8 (2+2+3)'
-    ],
-    exerciciosPraticos: [
-      {
-        titulo: 'Groove de Slap Funk com Oitavas e Ghost Notes',
-        bpmAlvo: 95,
-        instrucoes: 'Execute a sequência Slap (polegar grave) -> Ghost Note -> Pop (oitava aguda) com metrônomo cravado.',
-        repeticoesAlvo: 12
-      },
-      {
-        titulo: 'Condução Modal Dórica em 7/8',
-        bpmAlvo: 110,
-        instrucoes: 'Toque um groove modal em Ré Dórico subdividido em 2+2+3 colcheias por compasso.',
-        repeticoesAlvo: 8
-      }
-    ],
-    criteriosDominio: [
-      'Slap com som percussivo brilhante sem abafar a nota fundamental',
-      'Pop sem ruído estridente e com recuperação motora imediata para o próximo ataque',
-      'Fluência de contagem interna em compassos ímpares sem perder o primeiro tempo'
-    ],
-    formaAvaliacao: 'Performance gravada de estudo avançado de Slap e leitura de groove em métrica mista.',
+    objetivoAcademico: 'Construir walking bass, tétrades e introdução aos modos gregos.',
+    competenciasDesenvolvidas: ['Walking bass', 'Tétrades (maj7, 7, m7)', 'Modos dórico e mixolídio'],
+    preRequisitos: ['Módulo 4 concluído.'],
+    conteudos: ['Walking bass em semínimas', 'Tétrades fundamentais', 'Cromatismos de aproximação', 'Modos gregos aplicados ao baixo'],
+    exerciciosPraticos: [{ titulo: 'Walking bass sobre ii-V-I', bpmAlvo: 80, instrucoes: 'Condução cromática', repeticoesAlvo: 12 }],
+    criteriosDominio: ['Walking bass fluido sobre 12 compassos de jazz/blues a 80 BPM.'],
+    formaAvaliacao: 'Banca de walking bass.',
     aulas: [
-      {
-        id: 'baixo-l-4-1',
-        numero: 1,
-        titulo: 'Slap & Pop Essencial: Mecânica, Ataque e Timbre',
-        subtitulo: 'Fundamentos da percussão no contrabaixo elétrico',
-        objetivo: 'Executar slap e pop com som encorpado e controle dinâmico.',
-        duracaoMinutos: 35
-      },
-      {
-        id: 'baixo-l-4-2',
-        numero: 2,
-        titulo: 'Modos Gregos no Baixo: Cores Harmônicas e Fraseado',
-        subtitulo: 'Aplicação prática do Dórico, Frígio e Mixolídio em grooves',
-        objetivo: 'Criar frases modais sofisticadas sobre vamps de um acorde.',
-        duracaoMinutos: 30
-      },
-      {
-        id: 'baixo-l-4-3',
-        numero: 3,
-        titulo: 'Métricas Compostas e Ímpares: 5/4, 7/8 e 6/8',
-        subtitulo: 'Navegando fora do compasso quaternário comum com autoridade',
-        objetivo: 'Conduzir grooves em 5/4 e 7/8 com naturalidade e balanço.',
-        duracaoMinutos: 35
-      }
+      { id: 'baixo-l-4-1', numero: 1, titulo: 'Walking Bass: A Arte de Caminhar no Jazz e na Bossa', subtitulo: 'Condução em semínimas', objetivo: 'Construir walking bass', duracaoMinutos: 30 },
+      { id: 'baixo-l-4-2', numero: 2, titulo: 'Tétrades e Acordes com Sétima no Contrabaixo', subtitulo: 'Maj7, m7 e 7', objetivo: 'Tocar tétrades no braço', duracaoMinutos: 30 },
+      { id: 'baixo-l-4-3', numero: 3, titulo: 'Modos Gregos Aplicados ao Baixo: Dórico e Mixolídio', subtitulo: 'Cores modais', objetivo: 'Explorar sonoridade modal', duracaoMinutos: 30 },
+      { id: 'baixo-mod5-l4', numero: 4, titulo: 'Aula 4 — Aproximações Cromáticas e Notas de Passagem', subtitulo: 'Conectando acordes com sofisticação', objetivo: 'Usar cromatismos', duracaoMinutos: 25 },
+      { id: 'baixo-mod5-l5', numero: 5, titulo: 'Aula 5 — O Cadencial II-V-I no Contrabaixo', subtitulo: 'A espinha dorsal da harmonia moderna', objetivo: 'Conduzir o II-V-I', duracaoMinutos: 30 },
+      { id: 'baixo-mod5-l6', numero: 6, titulo: 'Aula 6 — Bossa Nova e Samba no Baixo Elétrico', subtitulo: 'O contracanto brasileiro', objetivo: 'Tocar ritmos brasileiros', duracaoMinutos: 30 }
     ]
   },
-
-  // -----------------------------------------------------------------------
-  // NÍVEL 5 — ESPECIALIZAÇÃO E PERFORMANCE
-  // -----------------------------------------------------------------------
   {
     id: 'baixo-mod-5',
-    nome: 'Improvisação, Linhas Autorais, Harmonia Avançada e Performance',
+    nome: 'Slap & Pop, Compassos Ímpares e Virtuosismo',
     instrumentId: 'baixo',
     nivel: 5,
     moduloNumero: 6,
-    objetivoAcademico: 'Alcançar a maturidade artística no contrabaixo: improvisação melódica fluente, composição de linhas de baixo autorais e icônicas, aplicação de acordes e harmonia avançada no instrumento, domínio de polirritmias e liderança em prática de conjunto.',
-    competenciasDesenvolvidas: [
-      'Construção de solos expressivos no contrabaixo com desenvolvimento temático',
-      'Harmonia avançada no baixo: execução de acordes (bicordes, tríades e aberturas de décima)',
-      'Polirritmia avançada (3 contra 4, 5 contra 4) e deslocamentos métricos',
-      'Arranjo e composição de linhas de baixo icônicas e memoráveis',
-      'Interação com bateria e instrumentos harmônicos em formato trio ou big band',
-      'Preparação para palco, estúdio profissional e gravação em linha direta'
-    ],
-    preRequisitos: ['Nível 4 concluído, domínio de Slap, modos e leitura avançada.'],
-    conteudos: [
-      'Improvisação melódica no baixo: frases sobre II-V-I maior e menor',
-      'Uso de acordes no contrabaixo: décimas abertas e tríades no registro médio/agudo',
-      'Polirritmias aplicadas: criando tensão rítmica consciente que resolve no tempo 1',
-      'Liderança na seção rítmica: dinâmica coletiva, respiração e intenção sonora',
-      'Timbragem profissional: equalização pré-amplificada, compressores e pedais de saturação',
-      'Performance de encerramento do conservatório: repertório de recital'
-    ],
-    exerciciosPraticos: [
-      {
-        titulo: 'Solo Temático sobre Cadência II-V-I Maior',
-        bpmAlvo: 120,
-        instrucoes: 'Construa um solo melódico de 2 coros utilizando motivos rítmicos, arpejos com extensões e resolução melódica.',
-        repeticoesAlvo: 4
-      },
-      {
-        titulo: 'Acompanhamento com Acordes de Décima e Linha Polirrítmica',
-        bpmAlvo: 80,
-        instrucoes: 'Execute progressão com baixos e décimas na mão direita com modulação métrica 3:4.',
-        repeticoesAlvo: 6
-      }
-    ],
-    criteriosDominio: [
-      'Expressividade artística autônoma e afinação impecável em todo o braço',
-      'Capacidade de improvisar sem perda de forma sobre progressões harmônicas ricas',
-      'Controle absoluto de dinâmica de banda e postura de músico de alta performance'
-    ],
-    formaAvaliacao: 'Recital final prático perante banca examinadora com execução de peça autoral e standard.',
+    objetivoAcademico: 'Dominar slap & pop, compassos ímpares e improvisação avançada.',
+    competenciasDesenvolvidas: ['Slap & pop', 'Compassos 5/8 e 7/8', 'Improvisação profissional'],
+    preRequisitos: ['Módulo 5 concluído.'],
+    conteudos: ['Técnica de thumb slap e finger pop', 'Métricas compostas e ímpares (7/8, 5/4)', 'Solos de baixo', 'Performance de palco'],
+    exerciciosPraticos: [{ titulo: 'Slap groove básico com thumb e pop', bpmAlvo: 85, instrucoes: 'Estalo limpo', repeticoesAlvo: 16 }],
+    criteriosDominio: ['Execução limpa de groove em slap a 85 BPM e compasso 7/8.'],
+    formaAvaliacao: 'Performance final de conservatório em baixo.',
     aulas: [
-      {
-        id: 'baixo-l-5-1',
-        numero: 1,
-        titulo: 'Harmonia no Baixo: Acordes, Décimas e Texturas Polifônicas',
-        subtitulo: 'Como transformar o baixo em instrumento harmônico completo',
-        objetivo: 'Tocar progressões harmônicas utilizando décimas e tríades agudas.',
-        duracaoMinutos: 35
-      },
-      {
-        id: 'baixo-l-5-2',
-        numero: 2,
-        titulo: 'Improvisação Melódica e Construção de Solos no Baixo',
-        subtitulo: 'Linguagem, dinâmicas, cromatismos e expressão lírica no registro grave',
-        objetivo: 'Improvisar com coerência temática e técnica fluida.',
-        duracaoMinutos: 40
-      },
-      {
-        id: 'baixo-l-5-3',
-        numero: 3,
-        titulo: 'Performance Profissional e Prática de Conjunto',
-        subtitulo: 'A liderança da seção rítmica, presença de palco e timbragem de estúdio',
-        objetivo: 'Concluir a formação acadêmica em contrabaixo com recital prático.',
-        duracaoMinutos: 45
-      }
+      { id: 'baixo-l-5-1', numero: 1, titulo: 'Técnica de Slap & Pop: O Polegar Percussivo', subtitulo: 'Fundamentos do slap moderno', objetivo: 'Dominar slap e pop', duracaoMinutos: 35 },
+      { id: 'baixo-l-5-2', numero: 2, titulo: 'Compassos Ímpares e Métricas Complexas (7/8 e 5/4)', subtitulo: 'Pensando fora do 4/4', objetivo: 'Tocar em compassos ímpares', duracaoMinutos: 35 },
+      { id: 'baixo-l-5-3', numero: 3, titulo: 'Improvisação e Solos de Baixo de Alta Performance', subtitulo: 'O baixista como solista', objetivo: 'Construir solos expressivos', duracaoMinutos: 35 },
+      { id: 'baixo-mod6-l4', numero: 4, titulo: 'Aula 4 — Tapping no Baixo e Acordes de Décima', subtitulo: 'Polifonia avançada no grave', objetivo: 'Usar décimas e tapping', duracaoMinutos: 30 },
+      { id: 'baixo-mod6-l5', numero: 5, titulo: 'Aula 5 — Gravadora e Estúdio: O Timbre Perfeito', subtitulo: 'DI box, compressão e equalização', objetivo: 'Conhecer acústica de estúdio', duracaoMinutos: 25 },
+      { id: 'baixo-mod6-l6', numero: 6, titulo: 'Aula 6 — Recital Final de Formação em Contrabaixo', subtitulo: 'Apresentação de conservatório', objetivo: 'Concluir a formação de baixo', duracaoMinutos: 45 }
+    ]
+  },
+  {
+    id: 'baixo-mod-6',
+    nome: 'Módulo 6 — Groove Avançado e R&B Contemporâneo',
+    instrumentId: 'baixo',
+    nivel: 4,
+    moduloNumero: 7,
+    objetivoAcademico: 'Desenvolver levadas de R&B, neo-soul e groove sincopado avançado.',
+    competenciasDesenvolvidas: ['Groove R&B', 'Ghost notes dinâmicas', 'Interação com a bateria'],
+    preRequisitos: ['Módulos 1 a 6 concluídos.'],
+    conteudos: ['Grooves inspirados em James Jamerson e Pino Palladino', 'Dinâmica de toque suave', 'Subdivisões rítmicas avançadas'],
+    exerciciosPraticos: [{ titulo: 'Groove R&B com ghost notes', bpmAlvo: 75, instrucoes: 'Toque abafado expressivo', repeticoesAlvo: 12 }],
+    criteriosDominio: ['Fluência rítmica em R&B a 75 BPM.'],
+    formaAvaliacao: 'Gravação de linha de R&B.',
+    aulas: [
+      { id: 'baixo-mod7-l1', numero: 1, titulo: 'Aula 37 — O DNA do R&B e Soul Music', subtitulo: 'Grooves profundos e arrastados', objetivo: 'Dominar o toque R&B', duracaoMinutos: 30 },
+      { id: 'baixo-mod7-l2', numero: 2, titulo: 'Aula 38 — Ghost Notes Dinâmicas no Funk', subtitulo: 'O balanço rítmico perfeito', objetivo: 'Controlar a percussão com os dedos', duracaoMinutos: 30 },
+      { id: 'baixo-mod7-l3', numero: 3, titulo: 'Aula 39 — O Estilo de James Jamerson na Motown', subtitulo: 'Melodia e ritmo no contrabaixo', objetivo: 'Estudar clássicos da Motown', duracaoMinutos: 30 },
+      { id: 'baixo-mod7-l4', numero: 4, titulo: 'Aula 40 — Linhas com Síncopas Extrema', subtitulo: 'Deslocamento de acento rítmico', objetivo: 'Tocar contratempos complexos', duracaoMinutos: 30 },
+      { id: 'baixo-mod7-l5', numero: 5, titulo: 'Aula 41 — Neo-Soul: Harmonia e Groove Moderno', subtitulo: 'Acordes e baixos cadenciados', objetivo: 'Executar linhas neo-soul', duracaoMinutos: 30 },
+      { id: 'baixo-mod7-l6', numero: 6, titulo: 'Aula 42 — Prática de Conjunto: Baixo e Bateria', subtitulo: 'A cozinha da banda em sintonia', objetivo: 'Sincronizar com a bateria', duracaoMinutos: 35 }
+    ]
+  },
+  {
+    id: 'baixo-mod-7',
+    nome: 'Módulo 7 — Harmonia Moderna e Substituições no Baixo',
+    instrumentId: 'baixo',
+    nivel: 5,
+    moduloNumero: 8,
+    objetivoAcademico: 'Aplicar harmonia avançada, dominantes secundários e substituições no baixo.',
+    competenciasDesenvolvidas: ['Dominantes secundários', 'Substituição tritônica', 'Pedal harmônico'],
+    preRequisitos: ['Módulo 7 concluído.'],
+    conteudos: ['Baixo sobre dominantes secundários', 'Tritônicos no contrabaixo', 'Pedal points graves'],
+    exerciciosPraticos: [{ titulo: 'Walking bass com substituições', bpmAlvo: 85, instrucoes: 'Condução harmônica avançada', repeticoesAlvo: 12 }],
+    criteriosDominio: ['Condução harmônica fluida com substituições a 85 BPM.'],
+    formaAvaliacao: 'Banca de harmonia aplicada.',
+    aulas: [
+      { id: 'baixo-mod8-l1', numero: 1, titulo: 'Aula 43 — Baixo sobre Dominantes Secundários', subtitulo: 'Tonicização e condução', objetivo: 'Conectar dominantes secundários', duracaoMinutos: 30 },
+      { id: 'baixo-mod8-l2', numero: 2, titulo: 'Aula 44 — Substituição Tritônica no Baixo', subtitulo: 'Linhas cromáticas eficientes', objetivo: 'Aplicar subV7 no baixo', duracaoMinutos: 30 },
+      { id: 'baixo-mod8-l3', numero: 3, titulo: 'Aula 45 — Pedal Points Graves e Tensão', subtitulo: 'Sustentação estática com harmonia em movimento', objetivo: 'Criar tensão com pedal', duracaoMinutos: 30 },
+      { id: 'baixo-mod8-l4', numero: 4, titulo: 'Aula 46 — Modulações e Acordes Pivô', subtitulo: 'Mudança de tom guiada pelo baixo', objetivo: 'Modular com elegância', duracaoMinutos: 30 },
+      { id: 'baixo-mod8-l5', numero: 5, titulo: 'Aula 47 — Baixo em Acordes com Extensões (9, 11, 13)', subtitulo: 'Escolha da nota fundamental vs. guia', objetivo: 'Tocar sobre tétrades estendidas', duracaoMinutos: 30 },
+      { id: 'baixo-mod8-l6', numero: 6, titulo: 'Aula 48 — Análise Harmônica para Baixistas', subtitulo: 'Entendendo a partitura e cifra a fundo', objetivo: 'Analisar repertório complexo', duracaoMinutos: 35 }
+    ]
+  },
+  {
+    id: 'baixo-mod-8',
+    nome: 'Módulo 8 — Técnicas Especiais e 5 Cordas',
+    instrumentId: 'baixo',
+    nivel: 5,
+    moduloNumero: 9,
+    objetivoAcademico: 'Dominar o contrabaixo de 5 cordas (Corda Si Grave / B0) e técnicas estendidas.',
+    competenciasDesenvolvidas: ['Baixo de 5 cordas', 'Flamenco slap', 'Double thumb'],
+    preRequisitos: ['Módulo 8 concluído.'],
+    conteudos: ['Explorando a 5ª corda (Si grave)', 'Double thumb technique (Victor Wooten style)', 'Acordes e arpejos estendidos'],
+    exerciciosPraticos: [{ titulo: 'Double thumb em colcheias', bpmAlvo: 90, instrucoes: 'Thumb down e thumb up', repeticoesAlvo: 16 }],
+    criteriosDominio: ['Domínio da corda Si grave e double thumb a 90 BPM.'],
+    formaAvaliacao: 'Apresentação de técnica estendida.',
+    aulas: [
+      { id: 'baixo-mod9-l1', numero: 1, titulo: 'Aula 49 — O Universo do Baixo de 5 Cordas', subtitulo: 'Dominando a corda Si grave (B0)', objetivo: 'Explorar a 5ª corda', duracaoMinutos: 30 },
+      { id: 'baixo-mod9-l2', numero: 2, titulo: 'Aula 50 — Double Thumb Technique', subtitulo: 'O estilo revolucionário de Victor Wooten', objetivo: 'Executar double thumb', duracaoMinutos: 35 },
+      { id: 'baixo-mod9-l3', numero: 3, titulo: 'Aula 51 — Acordes e Harmonia em Bloco no Baixo', subtitulo: 'Polifonia avançada com acordes', objetivo: 'Tocar acordes no baixo', duracaoMinutos: 30 },
+      { id: 'baixo-mod9-l4', numero: 4, titulo: 'Aula 52 — Flamenco e Técnicas Percussivas no Baixo', subtitulo: 'Golpes no corpo e cordas', objetivo: 'Expandir percussão acústica', duracaoMinutos: 30 },
+      { id: 'baixo-mod9-l5', numero: 5, titulo: 'Aula 53 — Saltos de Corda Virtuosos (String Skipping)', subtitulo: 'Agilidade em intervalos largos', objetivo: 'Dominar string skipping', duracaoMinutos: 30 },
+      { id: 'baixo-mod9-l6', numero: 6, titulo: 'Aula 54 — Repertório Instrumental Avançado', subtitulo: 'Executando peças solo complexas', objetivo: 'Tocar repertório virtuoso', duracaoMinutos: 35 }
+    ]
+  },
+  {
+    id: 'baixo-mod-9',
+    nome: 'Módulo 9 — O Baixista Produtor e Sideman Profissional',
+    instrumentId: 'baixo',
+    nivel: 5,
+    moduloNumero: 10,
+    objetivoAcademico: 'Preparar o baixista para o mercado profissional, gravação em estúdio e direção musical.',
+    competenciasDesenvolvidas: ['Mercado de trabalho', 'Gravação profissional', 'Leitura de cifragem avançada'],
+    preRequisitos: ['Módulo 9 concluído.'],
+    conteudos: ['O papel do sideman', 'Leitura à primeira vista (sight reading)', 'Equipamentos, pedais e amplificadores de palco'],
+    exerciciosPraticos: [{ titulo: 'Sight reading de linha inédita', bpmAlvo: 80, instrucoes: 'Leitura fluida à primeira vista', repeticoesAlvo: 8 }],
+    criteriosDominio: ['Leitura e execução de linha inédita sem erros graves.'],
+    formaAvaliacao: 'Banca profissional de sideman.',
+    aulas: [
+      { id: 'baixo-mod10-l1', numero: 1, titulo: 'Aula 55 — O Sideman Perfeito: Ética e Versatilidade', subtitulo: 'Como tocar o que a música pede', objetivo: 'Desenvolver postura profissional', duracaoMinutos: 30 },
+      { id: 'baixo-mod10-l2', numero: 2, titulo: 'Aula 56 — Leitura à Primeira Vista (Sight Reading)', subtitulo: 'Lendo partitura e cifra instantaneamente', objetivo: 'Ler e tocar à primeira vista', duracaoMinutos: 35 },
+      { id: 'baixo-mod10-l3', numero: 3, titulo: 'Aula 57 — O Baixista no Estúdio de Gravação', subtitulo: 'Afilando o timbre para mixagem', objetivo: 'Gravar com precisão de estúdio', duracaoMinutos: 30 },
+      { id: 'baixo-mod10-l4', numero: 4, titulo: 'Aula 58 — Pedais e Processamento de Sinal para Baixo', subtitulo: 'Compressores, preamps, octavers e envelopers', objetivo: 'Dominar pedalboard de baixo', duracaoMinutos: 30 },
+      { id: 'baixo-mod10-l5', numero: 5, titulo: 'Aula 59 — Direção Musical e Arranjo de Baixo', subtitulo: 'Criando linhas para naipes e bandas', objetivo: 'Arranjar para grupo completo', duracaoMinutos: 30 },
+      { id: 'baixo-mod10-l6', numero: 6, titulo: 'Aula 60 — Recital Solene de Formação em Contrabaixo', subtitulo: 'Apresentação final de conservatório', objetivo: 'Concluir a formação profissional', duracaoMinutos: 45 }
     ]
   }
 ];

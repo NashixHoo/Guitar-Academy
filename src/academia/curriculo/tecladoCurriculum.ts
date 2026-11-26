@@ -1,453 +1,230 @@
 // =========================================================================
-// GUITAR ACADEMY — FORMAÇÃO EM TECLADO E PIANO COMPLEMENTAR
-// Matriz Acadêmica de Conservatório em 6 Níveis (Nível 0 ao Nível 5)
+// GUITAR ACADEMY — FORMAÇÃO COMPLETA EM TECLADO E PIANO (60 AULAS)
+// Matriz Acadêmica de Conservatório em 10 Módulos (6 aulas por módulo)
+// Preservação integral dos 18 IDs históricos (teclado-l-0-1 até teclado-l-5-3)
 // =========================================================================
 
 import { CurriculumModuleDefinition } from '../core/types';
 
 export const TECLADO_CURRICULUM_MODULES: CurriculumModuleDefinition[] = [
-  // -----------------------------------------------------------------------
-  // NÍVEL 0 — FUNDAMENTOS (ABSOLUTO ZERO)
-  // -----------------------------------------------------------------------
   {
     id: 'teclado-mod-0',
-    nome: 'Geografia das Teclas, Postura e Coordenação Inicial',
+    nome: 'Geografia do Teclado, Postura e Mão Direita',
     instrumentId: 'teclado',
     nivel: 0,
     moduloNumero: 1,
-    objetivoAcademico: 'Compreender a disposição visual do teclado (grupos de 2 e 3 teclas pretas), mapear todas as notas naturais e acidentes, adotar postura anatômica de punho e dedos redondos, memorizar a numeração dos dedos (1 a 5) e executar as primeiras pulsações com metrônomo.',
-    competenciasDesenvolvidas: [
-      'Reconhecimento visual imediato das teclas a partir dos grupos de 2 e 3 teclas pretas',
-      'Localização do Dó Central (C4) e mapeamento das 7 notas naturais (Dó a Si)',
-      'Postura correta: altura do banco, alinhamento dos antebraços e dedos curvados ("mão segurando uma maçã")',
-      'Numeração universal dos dedos: 1 (polegar) a 5 (mínimo) em ambas as mãos',
-      'Pulsação rítmica inicial com metrônomo a 60 BPM'
-    ],
-    preRequisitos: ['Nenhum conhecimento prévio. Apenas teclado musical (61 ou 88 teclas) com sensibilidade ao toque.'],
-    conteudos: [
-      'Geografia das teclas: grupos de 2 e 3 teclas pretas como mapa de navegação',
-      'Notas musicais brancas (naturais) e pretas (sustenidos e bemóis)',
-      'Postura ergonômica: peso do braço sobre os dedos sem tensões musculares',
-      'Numeração dos dedos da mão direita e esquerda (1, 2, 3, 4, 5)',
-      'Coordenação motora inicial: toque relaxado sem pressionar com força excessiva',
-      'Ritmo básico: semínimas e semibreves no metrônomo'
-    ],
-    exerciciosPraticos: [
-      {
-        titulo: 'Mapeamento do Dó Central e Notas Vizinhas',
-        bpmAlvo: 60,
-        instrucoes: 'Toque com a mão direita as notas C - D - E - F - G usando dedos 1-2-3-4-5 em semínimas a 60 BPM, mantendo o punho solto.',
-        repeticoesAlvo: 8
-      },
-      {
-        titulo: 'Espelhamento com a Mão Esquerda',
-        bpmAlvo: 60,
-        instrucoes: 'Toque com a mão esquerda as notas C - B - A - G - F usando dedos 1-2-3-4-5 em semínimas mantendo curva natural dos dedos.',
-        repeticoesAlvo: 8
-      }
-    ],
-    criteriosDominio: [
-      'Localização do Dó Central e de qualquer nota solicitada em menos de 2 segundos',
-      'Postura de punho sem cair abaixo da linha do teclado nem rigidez nos ombros',
-      'Precisão rítmica com metrônomo a 60 BPM sem tropeços motores'
-    ],
-    formaAvaliacao: 'Avaliação prática de postura, identificação de teclas e pulsação no metrônomo.',
+    objetivoAcademico: 'Compreender a geografia das teclas brancas e pretas, postura ergonômica de punho, dedilhado canônico e primeiras notas naturais.',
+    competenciasDesenvolvidas: ['Geografia de oitavas', 'Postura de punho arqueado', 'Dedilhado 1-2-3-4-5'],
+    preRequisitos: ['Teclado ou piano digital de 61+ teclas.'],
+    conteudos: ['Teclas brancas e pretas', 'Grupos de 2 e 3 pretas', 'Postura correta', 'Dedilhado básico', 'Pulsação rítmica', 'Primeira escala em dó maior'],
+    exerciciosPraticos: [{ titulo: 'Dedilhado de 5 dedos em Dó Maior', bpmAlvo: 60, instrucoes: 'Articulação limpa', repeticoesAlvo: 8 }],
+    criteriosDominio: ['Execução fluida da escala de Dó com 5 dedos a 60 BPM.'],
+    formaAvaliacao: 'Avaliação prática de postura e toque.',
     aulas: [
-      {
-        id: 'teclado-l-0-1',
-        numero: 1,
-        titulo: 'A Geografia do Teclado: Grupos de 2 e 3 Teclas Pretas',
-        subtitulo: 'Como se orientar instantaneamente em qualquer oitava do instrumento',
-        objetivo: 'Identificar Dó, Fá e todas as notas naturais com referência visual.',
-        duracaoMinutos: 20
-      },
-      {
-        id: 'teclado-l-0-2',
-        numero: 2,
-        titulo: 'Postura, Peso do Braço e Numeração dos Dedos',
-        subtitulo: 'Ergonomia de conservatório: dedos 1 a 5 e punho elástico',
-        objetivo: 'Posicionar mãos e punhos com técnica relaxada e anatômica.',
-        duracaoMinutos: 20
-      },
-      {
-        id: 'teclado-l-0-3',
-        numero: 3,
-        titulo: 'Primeira Coordenação e Pulsação com Metrônomo',
-        subtitulo: 'Exercício de cinco dedos independentes a 60 BPM',
-        objetivo: 'Tocar notas consecutivas com articulação uniforme no tempo.',
-        duracaoMinutos: 25
-      }
+      { id: 'teclado-l-0-1', numero: 1, titulo: 'Anatomia do Teclado e Geografia das Teclas', subtitulo: 'O padrão de 2 e 3 teclas pretas', objetivo: 'Reconhecer o teclado', duracaoMinutos: 20 },
+      { id: 'teclado-l-0-2', numero: 2, titulo: 'Postura, Altura do Banco e Curvatura dos Dedos', subtitulo: 'Ergonomia ao piano', objetivo: 'Posicionar mãos sem tensão', duracaoMinutos: 15 },
+      { id: 'teclado-l-0-3', numero: 3, titulo: 'Dedilhado Funcional e as Primeiras Notas Naturais', subtitulo: 'Os dedos de 1 a 5', objetivo: 'Acionar notas com independência', duracaoMinutos: 25 },
+      { id: 'teclado-mod1-l4', numero: 4, titulo: 'Aula 4 — Toque Legato vs. Staccato ao Teclado', subtitulo: 'Articulação das notas', objetivo: 'Controlar legato e staccato', duracaoMinutos: 25 },
+      { id: 'teclado-mod1-l5', numero: 5, titulo: 'Aula 5 — Dinâmica Básica: Piano e Forte', subtitulo: 'Controle de volume pelo toque', objetivo: 'Variar dinâmica de toque', duracaoMinutos: 20 },
+      { id: 'teclado-mod1-l6', numero: 6, titulo: 'Aula 6 — O Metrônomo no Teclado: Pulsação Estável', subtitulo: 'Sincronia com o clique', objetivo: 'Manter andamento rígido', duracaoMinutos: 30 }
     ]
   },
-
-  // -----------------------------------------------------------------------
-  // NÍVEL 1 — INICIAÇÃO
-  // -----------------------------------------------------------------------
   {
     id: 'teclado-mod-1',
-    nome: 'Escalas Maiores, Dedilhado, Tríades e Primeiros Acompanhamentos',
+    nome: 'Tríades Fundamentais e Duas Mãos',
     instrumentId: 'teclado',
     nivel: 1,
     moduloNumero: 2,
-    objetivoAcademico: 'Desenvolver a técnica de passagem do polegar na escala de Dó Maior, coordenar exercícios com ambas as mãos, compreender os intervalos musicais, construir tríades maiores e menores e executar os primeiros acompanhamentos harmônicos.',
-    competenciasDesenvolvidas: [
-      'Execução da escala de Dó Maior com dedilhado canônico (1-2-3-passagem do polegar-1-2-3-4-5)',
-      'Exercícios de coordenação bimanual simples (mão esquerda no baixo e direita na melodia)',
-      'Compreensão dos intervalos de terça maior, terça menor e quinta justa',
-      'Formação de tríades fundamentais: Dó Maior, Sol Maior, Fá Maior e Lá Menor',
-      'Acompanhamento básico em blocos com mudança no 1º tempo de cada compasso'
-    ],
-    preRequisitos: ['Nível 0 concluído ou domínio da geografia das teclas e postura de dedos.'],
-    conteudos: [
-      'Escalas maiores: a passagem do polegar (thumb-under) sem rotação abrupta do cotovelo',
-      'Dedilhado canônico da escala de C maior para mão direita e mão esquerda',
-      'Exercícios elementares de duas mãos em movimento paralelo e contrário',
-      'Intervalos no teclado: semitom diatônico, tom inteiro, terça e quinta',
-      'Formação de tríades: estado fundamental com dedos 1-3-5',
-      'Primeiros acompanhamentos: baixo simples na mão esquerda e tríade na direita'
-    ],
-    exerciciosPraticos: [
-      {
-        titulo: 'Escala de Dó Maior com Passagem de Polegar',
-        bpmAlvo: 70,
-        instrucoes: 'Execute a escala de C maior em uma oitava subindo e descendo com dedilhado 1-2-3-1-2-3-4-5 e 5-4-3-2-1-3-2-1.',
-        repeticoesAlvo: 10
-      },
-      {
-        titulo: 'Progressão I - IV - V - vi em Tríades Fundamentais',
-        bpmAlvo: 65,
-        instrucoes: 'Toque C - F - G - Am com a mão direita em semibreves enquanto a mão esquerda toca a tônica em oitava.',
-        repeticoesAlvo: 8
-      }
-    ],
-    criteriosDominio: [
-      'Passagem de polegar suave sem sotaque de volume na nota seguinte',
-      'Formação precisa de tríades sem notas intermediárias tocadas involuntariamente',
-      'Mudança fluente de acordes no primeiro tempo do metrônomo a 65 BPM'
-    ],
-    formaAvaliacao: 'Execução da escala de C maior e acompanhamento gravado de progressão harmônica.',
+    objetivoAcademico: 'Formar tríades maiores e menores e coordenar o acompanhamento com a mão esquerda.',
+    competenciasDesenvolvidas: ['Tríades fundamentais', 'Coordenação bimanual', 'Acordes em bloco'],
+    preRequisitos: ['Módulo 1 concluído.'],
+    conteudos: ['Tríades maiores e menores', 'Acompanhamento com a mão esquerda', 'Inversões básicas', 'Ritmos simples'],
+    exerciciosPraticos: [{ titulo: 'Tríades em bloco com as duas mãos', bpmAlvo: 65, instrucoes: 'Ataque simultâneo', repeticoesAlvo: 12 }],
+    criteriosDominio: ['Troca limpa de tríades a 65 BPM sem atrasos bimanual.'],
+    formaAvaliacao: 'Banca de tríades.',
     aulas: [
-      {
-        id: 'teclado-l-1-1',
-        numero: 1,
-        titulo: 'A Escala de Dó Maior e a Passagem do Polegar',
-        subtitulo: 'A mecânica do thumb-under para tocar melodias contínuas',
-        objetivo: 'Dominar a técnica da passagem de polegar sem tropeços.',
-        duracaoMinutos: 25
-      },
-      {
-        id: 'teclado-l-1-2',
-        numero: 2,
-        titulo: 'Intervalos e Formação das Primeiras Tríades',
-        subtitulo: 'Terças maiores, menores e a estrutura dos acordes de C, G, F e Am',
-        objetivo: 'Montar acordes perfeitos com dedos 1-3-5 em qualquer tecla fundamental.',
-        duracaoMinutos: 30
-      },
-      {
-        id: 'teclado-l-1-3',
-        numero: 3,
-        titulo: 'Primeiro Acompanhamento Bimanual',
-        subtitulo: 'Mão esquerda no baixo + mão direita nos acordes em 4/4',
-        objetivo: 'Coordenar as duas mãos tocando uma música completa.',
-        duracaoMinutos: 30
-      }
+      { id: 'teclado-l-1-1', numero: 1, titulo: 'Construção de Tríades Maiores e Menores', subtitulo: 'A base da harmonia em blocos', objetivo: 'Formar tríades corretas', duracaoMinutos: 25 },
+      { id: 'teclado-l-1-2', numero: 2, titulo: 'Coordenação Bimanual: Mão Esquerda nos Acordes', subtitulo: 'Independência entre as mãos', objetivo: 'Tocar com duas mãos', duracaoMinutos: 30 },
+      { id: 'teclado-l-1-3', numero: 3, titulo: 'Inversões de Tríades: Condução Suave de Vozes', subtitulo: '1ª e 2ª inversões', objetivo: 'Inverter tríades fluentemente', duracaoMinutos: 25 },
+      { id: 'teclado-mod2-l4', numero: 4, titulo: 'Aula 4 — O Campo Harmônico Maior em Tríades', subtitulo: 'Os acordes de uma tonalidade', objetivo: 'Mapear o campo harmônico', duracaoMinutos: 25 },
+      { id: 'teclado-mod2-l5', numero: 5, titulo: 'Aula 5 — Progressões Comuns I–IV–V–I', subtitulo: 'A base da música ocidental', objetivo: 'Executar cadências clássicas', duracaoMinutos: 25 },
+      { id: 'teclado-mod2-l6', numero: 6, titulo: 'Aula 6 — Acompanhamento Estilo Pop/Ballad', subtitulo: 'Arpejos simples na mão esquerda', objetivo: 'Acompanhar canção pop', duracaoMinutos: 30 }
     ]
   },
-
-  // -----------------------------------------------------------------------
-  // NÍVEL 2 — DESENVOLVIMENTO
-  // -----------------------------------------------------------------------
   {
     id: 'teclado-mod-2',
-    nome: 'Inversões de Acordes, Escalas Menores e Independência das Mãos',
+    nome: 'Escalas Maiores, Menores e Arpejos',
     instrumentId: 'teclado',
     nivel: 2,
     moduloNumero: 3,
-    objetivoAcademico: 'Dominar as inversões de tríades (estado fundamental, 1ª e 2ª inversão) para condução suave de acordes com economia de movimento, aprender as escalas menores relativas, campo harmônico maior e desenvolver independência rítmica entre mãos.',
-    competenciasDesenvolvidas: [
-      'Inversões de acordes: 1ª inversão (baixo na terça, dedos 1-2-5) e 2ª inversão (baixo na quinta, dedos 1-3-5)',
-      'Condução de acordes com movimento mínimo (Voice Leading elementar)',
-      'Escalas menores naturais e harmônicas (Lá menor e Ré menor)',
-      'Compreensão do campo harmônico maior completo (graus I a vii°)',
-      'Independência rítmica: mão esquerda marcando colcheias enquanto direita sustenta acordes'
-    ],
-    preRequisitos: ['Nível 1 concluído, escala de Dó Maior memorizada e tríades em estado fundamental.'],
-    conteudos: [
-      'O princípio das inversões de tríades: como mudar de acorde movendo os dedos o mínimo possível',
-      'Dedilhados específicos para 1ª inversão (1-2-5 na direita) e 2ª inversão (1-3-5 na direita)',
-      'Escala menor natural e a nota sensível na escala menor harmônica',
-      'O campo harmônico de C Maior: C, Dm, Em, F, G, Am, Bdim',
-      'Acompanhamentos rítmicos: arpejos de mão esquerda (padrão Alberti e padrão balada 1-5-8)',
-      'Exercícios de independência bimanual com subdivisões contrastantes'
-    ],
-    exerciciosPraticos: [
-      {
-        titulo: 'Ciclo de Inversões da Tríade de Dó Maior',
-        bpmAlvo: 75,
-        instrucoes: 'Toque C fundamental -> C 1ª inversão -> C 2ª inversão subindo e descendo com dedos corretos.',
-        repeticoesAlvo: 12
-      },
-      {
-        titulo: 'Progressão I - vi - IV - V com Voice Leading Otimizado',
-        bpmAlvo: 80,
-        instrucoes: 'Toque C (fundamental) -> Am (1ª inv) -> F (2ª inv) -> G (fundamental) mantendo notas comuns paradas.',
-        repeticoesAlvo: 8
-      }
-    ],
-    criteriosDominio: [
-      'Conexão de acordes sem saltos bruscos da mão pelo teclado',
-      'Execução independente da mão esquerda mantendo o andamento enquanto a direita varia ritmicamente',
-      'Domínio dos graus do campo harmônico maior sem hesitação'
-    ],
-    formaAvaliacao: 'Execução de estudo de inversões e acompanhamento de balada com padrão 1-5-8.',
+    objetivoAcademico: 'Dominar escalas de 2 oitavas e arpejos fundamentais.',
+    competenciasDesenvolvidas: ['Escalas em duas oitavas', 'Passagem do polegar', 'Arpejos em bloco'],
+    preRequisitos: ['Módulo 2 concluído.'],
+    conteudos: ['Passagem do polegar (thumb under)', 'Escalas maiores com acidentes', 'Arpejos triadicos', 'Ritmo de colcheias'],
+    exerciciosPraticos: [{ titulo: 'Escala de Sol Maior em duas oitavas', bpmAlvo: 70, instrucoes: 'Fluidez na passagem do polegar', repeticoesAlvo: 8 }],
+    criteriosDominio: ['Escala limpa em duas oitavas a 70 BPM.'],
+    formaAvaliacao: 'Teste de escalas.',
     aulas: [
-      {
-        id: 'teclado-l-2-1',
-        numero: 1,
-        titulo: 'Inversões de Acordes: Economia de Movimento no Teclado',
-        subtitulo: 'Como tocar progressões inteiras sem tirar a mão do mesmo lugar',
-        objetivo: 'Dominar 1ª e 2ª inversões com dedilhados anatômicos.',
-        duracaoMinutos: 30
-      },
-      {
-        id: 'teclado-l-2-2',
-        numero: 2,
-        titulo: 'Escalas Menores e o Campo Harmônico Maior',
-        subtitulo: 'Os 7 acordes da tonalidade maior e as escalas de Am e Dm',
-        objetivo: 'Identificar as funções tônica, subdominante e dominante no teclado.',
-        duracaoMinutos: 30
-      },
-      {
-        id: 'teclado-l-2-3',
-        numero: 3,
-        titulo: 'Independência Bimanual: O Padrão Balada 1-5-8',
-        subtitulo: 'Arpejando o baixo na esquerda enquanto a direita expressa harmonia',
-        objetivo: 'Coordenar ritmos diferentes entre mão esquerda e direita.',
-        duracaoMinutos: 35
-      }
+      { id: 'teclado-l-2-1', numero: 1, titulo: 'A Técnica de Passagem do Polegar (Thumb Under)', subtitulo: 'Escalas fluidas em oitavas', objetivo: 'Dominar passagem do polegar', duracaoMinutos: 30 },
+      { id: 'teclado-l-2-2', numero: 2, titulo: 'Escalas Maiores com Acidentes (Sol, Ré e Fá Maior)', subtitulo: 'Navegando pelas armaduras', objetivo: 'Tocar escalas com sustenidos e bemóis', duracaoMinutos: 30 },
+      { id: 'teclado-l-2-3', numero: 3, titulo: 'Arpejos Triádicos Expandidos', subtitulo: 'Abertura de acordes em arpejo', objetivo: 'Executar arpejos', duracaoMinutos: 25 },
+      { id: 'teclado-mod3-l4', numero: 4, titulo: 'Aula 4 — A Escala Menor Natural no Teclado', subtitulo: 'Sonoridade melancólica e menor', objetivo: 'Tocar menor natural', duracaoMinutos: 25 },
+      { id: 'teclado-mod3-l5', numero: 5, titulo: 'Aula 5 — Acompanhamento com Acordes Arpejados', subtitulo: 'Padrão Alberti e variações', objetivo: 'Criar textura arpejada', duracaoMinutos: 30 },
+      { id: 'teclado-mod3-l6', numero: 6, titulo: 'Aula 6 — Repertório Clássico Elementar', subtitulo: 'Pequena peça de estudo', objetivo: 'Executar peça estruturada', duracaoMinutos: 30 }
     ]
   },
-
-  // -----------------------------------------------------------------------
-  // NÍVEL 3 — INTERMEDIÁRIO
-  // -----------------------------------------------------------------------
   {
     id: 'teclado-mod-3',
-    nome: 'Tétrades, Dominantes, Cadências, Condução de Vozes e Arpejos',
+    nome: 'Tétrades, Campo Harmônico e Voicings',
     instrumentId: 'teclado',
     nivel: 3,
     moduloNumero: 4,
-    objetivoAcademico: 'Expandir a harmonia para acordes de 4 notas (tétrades), dominar a tensão e resolução dos acordes dominantes (V7 -> I), aplicar cadências clássicas (II-V-I), conduzir vozes com elegância e ler partitura/cifra intermediária.',
-    competenciasDesenvolvidas: [
-      'Construção e inversão de tétrades: Maj7, m7, 7 e m7b5',
-      'Resolução da sensível e do trítono no acorde dominante para a tônica',
-      'Execução da cadência II-V-I maior e menor com voicings funcionais',
-      'Condução de vozes (Voice Leading): notas de guia (terças e sétimas)',
-      'Arpejos fluidos com as duas mãos cruzando o teclado'
-    ],
-    preRequisitos: ['Nível 2 concluído, inversões de tríades assimiladas e independência motora.'],
-    conteudos: [
-      'Tétrades fundamentais no teclado: adicionando a 7ª maior e menor',
-      'O acorde dominante e o trítono: tensão máxima e resolução na tônica',
-      'A cadência mestra da música ocidental: Dm7 - G7 - Cmaj7 (II-V-I)',
-      'Voicings sem fundamental (Rootless): a mão esquerda toca o baixo e a direita as notas de guia (3 e 7)',
-      'Arpejos estendidos: cruzamento de mãos no teclado em 2 oitavas',
-      'Leitura musical funcional de partitura e cifras complexas'
-    ],
-    exerciciosPraticos: [
-      {
-        titulo: 'Cadência II-V-I com Voicings A e B',
-        bpmAlvo: 85,
-        instrucoes: 'Toque Dm7 -> G7 -> Cmaj7 utilizando notas de guia 3ª e 7ª na mão direita e baixos na mão esquerda.',
-        repeticoesAlvo: 10
-      },
-      {
-        titulo: 'Arpejo Cruzado de Tétrades em Duas Oitavas',
-        bpmAlvo: 90,
-        instrucoes: 'Execute arpejo ascendente de Cmaj7 iniciando na esquerda e completando com cruzamento da direita.',
-        repeticoesAlvo: 8
-      }
-    ],
-    criteriosDominio: [
-      'Resolução imediata do trítono nas notas de guia (3ª e 7ª descendo e subindo)',
-      'Clareza na transição entre acordes sem notas emboladas ou sustentadas por pedal excessivo',
-      'Fluência de arpejos sem interrupção de pulso a 90 BPM'
-    ],
-    formaAvaliacao: 'Banca de execução da cadência II-V-I em 3 tonalidades diferentes e arpejos de tétrades.',
+    objetivoAcademico: 'Dominar tétrades (maj7, m7, 7) e voicings de mão esquerda.',
+    competenciasDesenvolvidas: ['Tétrades', 'Voicings reduzidos', 'Campo harmônico completo'],
+    preRequisitos: ['Módulo 3 concluído.'],
+    conteudos: ['Acordes com sétima', 'Voicings com fundamental na esquerda', 'Cadência II-V-I', 'Inversões de tétrades'],
+    exerciciosPraticos: [{ titulo: 'Cadência II-V-I com tétrades', bpmAlvo: 75, instrucoes: 'Voice leading suave', repeticoesAlvo: 10 }],
+    criteriosDominio: ['Condução fluida de tétrades em II-V-I a 75 BPM.'],
+    formaAvaliacao: 'Banca de harmonia ao teclado.',
     aulas: [
-      {
-        id: 'teclado-l-3-1',
-        numero: 1,
-        titulo: 'Tétrades no Teclado: Maj7, m7, 7 e m7b5',
-        subtitulo: 'A sonoridade encorpada dos acordes de quatro notas',
-        objetivo: 'Montar e inverter tétrades com dedilhados corretos.',
-        duracaoMinutos: 35
-      },
-      {
-        id: 'teclado-l-3-2',
-        numero: 2,
-        titulo: 'A Cadência II-V-I e as Notas de Guia (3ª e 7ª)',
-        subtitulo: 'O segredo da harmonia do Jazz, Bossa Nova e Pop sofisticado',
-        objetivo: 'Conduzir a cadência II-V-I com voicings econômicos e profissionais.',
-        duracaoMinutos: 35
-      },
-      {
-        id: 'teclado-l-3-3',
-        numero: 3,
-        titulo: 'Arpejos Estendidos e Cruzamento de Mãos',
-        subtitulo: 'Percorrendo a extensão do piano com técnica elegante',
-        objetivo: 'Executar arpejos de duas oitavas com cruzamento fluido de mãos.',
-        duracaoMinutos: 30
-      }
+      { id: 'teclado-l-3-1', numero: 1, titulo: 'Tétrades e Acordes com Sétima ao Teclado', subtitulo: 'Maj7, m7, 7 e m7b5', objetivo: 'Formar tétrades no teclado', duracaoMinutos: 30 },
+      { id: 'teclado-l-3-2', numero: 2, titulo: 'Voicings Essenciais: A Mão Esquerda no Jazz e Pop', subtitulo: 'Redução de acordes', objetivo: 'Aplicar voicings funcionais', duracaoMinutos: 30 },
+      { id: 'teclado-l-3-3', numero: 3, titulo: 'A Cadência Definitiva: II–V–I Maior', subtitulo: 'O ciclo harmônico fundamental', objetivo: 'Dominar II-V-I', duracaoMinutos: 30 },
+      { id: 'teclado-mod4-l4', numero: 4, titulo: 'Aula 4 — O Campo Harmônico Menor', subtitulo: 'Menor harmônica e melódica aplicada', objetivo: 'Explorar campo menor', duracaoMinutos: 25 },
+      { id: 'teclado-mod4-l5', numero: 5, titulo: 'Aula 5 — Acordes Diminutos e Meio-Diminutos', subtitulo: 'Sutilezas harmônicas', objetivo: 'Dominar acordes diminutos', duracaoMinutos: 25 },
+      { id: 'teclado-mod4-l6', numero: 6, titulo: 'Aula 6 — Acompanhamento Estilo Piano Bar', subtitulo: 'Arranjo com balanço e espressivo', objetivo: 'Tocar estilo piano bar', duracaoMinutos: 35 }
     ]
   },
-
-  // -----------------------------------------------------------------------
-  // NÍVEL 4 — AVANÇADO
-  // -----------------------------------------------------------------------
   {
     id: 'teclado-mod-4',
-    nome: 'Tensões Harmônicas, Voicings Abertos, Rearmonização e Modos',
+    nome: 'Extensões Superiores, Drop 2 e Modos',
     instrumentId: 'teclado',
     nivel: 4,
     moduloNumero: 5,
-    objetivoAcademico: 'Dominar extensões e tensões disponíveis (9, 11, 13), aberturas avançadas (Drop 2, Quartais, Bill Evans voicings), técnicas de rearmonização com acordes de empréstimo modal e dominantes secundários, modos e introdução à improvisação melódica no piano.',
-    competenciasDesenvolvidas: [
-      'Aplicação de extensões harmônicas: 9ª maior, 11ª aumentada (#11) e 13ª maior',
-      'Harmonia quartal (acordes construídos por intervalos de quarta)',
-      'Técnica Drop 2 para arranjo e acompanhamento de melodias',
-      'Rearmonização: dominantes secundários, substituição trítono (SubV7) e empréstimo modal',
-      'Improvisação modal sobre escalas Dórica, Lídia e Mixolídia no teclado'
-    ],
-    preRequisitos: ['Nível 3 concluído, domínio de tétrades, cadências II-V-I e notas de guia.'],
-    conteudos: [
-      'Tensões disponíveis nos acordes maiores, menores e dominantes: evitando notas a evitar (avoid notes)',
-      'Voicings abertos: distribuição de vozes entre as duas mãos no teclado',
-      'Voicings quartais (estilo McCoy Tyner e Herbie Hancock): modernidade e abertura acústica',
-      'Rearmonização de melodias simples: substituindo acordes diatônicos por variantes ricas',
-      'Escalas modais no teclado: dedilhados para solar com a mão direita mantendo harmonia na esquerda',
-      'Pedal de sustentação (Sustain): técnica de troca sincopada sem deixar o som turvo'
-    ],
-    exerciciosPraticos: [
-      {
-        titulo: 'Voicings com 9ª e 13ª na Cadência II-V-I',
-        bpmAlvo: 90,
-        instrucoes: 'Execute Dm9 -> G13 -> Cmaj9 com voicings rootless na mão direita e baixos na esquerda.',
-        repeticoesAlvo: 10
-      },
-      {
-        titulo: 'Rearmonização de Melodia com Dominantes Secundários e SubV7',
-        bpmAlvo: 80,
-        instrucoes: 'Toque arranjo rearmonizado inserindo A7(b13) antes de Dm7 e Db7(9) antes de Cmaj7.',
-        repeticoesAlvo: 6
-      }
-    ],
-    criteriosDominio: [
-      'Uso impecável do pedal de sustain sem embolamento harmônico',
-      'Identificação instantânea de tensões válidas para cada função harmônica',
-      'Fraseado melódico sobre escalas modais com articulação legato e staccato consciente'
-    ],
-    formaAvaliacao: 'Gravação de arranjo com voicings abertos e improvisação modal de 2 coros.',
+    objetivoAcademico: 'Aplicar extensões (9, 11, 13), acordes Drop 2 e sonoridades modais.',
+    competenciasDesenvolvidas: ['Extensões superiores', 'Voicings Drop 2', 'Modos gregos ao teclado'],
+    preRequisitos: ['Módulo 4 concluído.'],
+    conteudos: ['Acordes estendidos (9, 13)', 'Técnica de Drop 2', 'Modos gregos aplicados', 'Re-harmonização básica'],
+    exerciciosPraticos: [{ titulo: 'Drop 2 em cadência maior', bpmAlvo: 80, instrucoes: 'Abertura elegante de vozes', repeticoesAlvo: 12 }],
+    criteriosDominio: ['Execução correta de Drop 2 nas 4 inversões a 80 BPM.'],
+    formaAvaliacao: 'Teste de Drop 2 e extensões.',
     aulas: [
-      {
-        id: 'teclado-l-4-1',
-        numero: 1,
-        titulo: 'Tensões Harmônicas no Teclado: 9ª, 11ª e 13ª',
-        subtitulo: 'Colorindo a harmonia com extensões sem conflito de frequências',
-        objetivo: 'Aplicar 9ª, 11ª e 13ª em acordes maiores, menores e dominantes.',
-        duracaoMinutos: 35
-      },
-      {
-        id: 'teclado-l-4-2',
-        numero: 2,
-        titulo: 'Voicings Quartais e Aberturas Drop 2',
-        subtitulo: 'A sonoridade moderna dos mestres do piano jazz e gospel',
-        objetivo: 'Construir aberturas elegantes distribuídas entre as duas mãos.',
-        duracaoMinutos: 40
-      },
-      {
-        id: 'teclado-l-4-3',
-        numero: 3,
-        titulo: 'Rearmonização Prática e Improvisação Modal',
-        subtitulo: 'Transformando progressões comuns em arranjos extraordinários',
-        objetivo: 'Rearmonizar uma música popular e improvisar frases modais fluidas.',
-        duracaoMinutos: 40
-      }
+      { id: 'teclado-l-4-1', numero: 1, titulo: 'Extensões Superiores: Nonas, Décimas Oitavas e Trezenas', subtitulo: 'Colorindo a harmonia', objetivo: 'Adicionar extensões aos acordes', duracaoMinutos: 30 },
+      { id: 'teclado-l-4-2', numero: 2, titulo: 'Aberturas Avançadas: A Técnica de Drop 2', subtitulo: 'Voicings abertos profissionais', objetivo: 'Dominar acordes Drop 2', duracaoMinutos: 35 },
+      { id: 'teclado-l-4-3', numero: 3, titulo: 'Modos Gregos no Teclado: Cores e Texturas', subtitulo: 'Lídio, Frígio, Dórico e Mixolídio', objetivo: 'Explorar cores modais', duracaoMinutos: 30 },
+      { id: 'teclado-mod5-l4', numero: 4, titulo: 'Aula 4 — Dominantes Secundários e Substituição', subtitulo: 'Harmonia avançada ao piano', objetivo: 'Aplicar dominantes secundários', duracaoMinutos: 30 },
+      { id: 'teclado-mod5-l5', numero: 5, titulo: 'Aula 5 — Acordes Quartais e Modern Jazz Voicings', subtitulo: 'Aberturas por quartas', objetivo: 'Construir voicings quartais', duracaoMinutos: 30 },
+      { id: 'teclado-mod5-l6', numero: 6, titulo: 'Aula 6 — Arranjo Pop Moderno com Sintetizadores', subtitulo: 'Pads, leads e texturas eletrônicas', objetivo: 'Trabalhar com timbres de teclado', duracaoMinutos: 30 }
     ]
   },
-
-  // -----------------------------------------------------------------------
-  // NÍVEL 5 — ESPECIALIZAÇÃO E PERFORMANCE
-  // -----------------------------------------------------------------------
   {
     id: 'teclado-mod-5',
-    nome: 'Harmonia Avançada, Arranjos Completos, Improvisação e Performance',
+    nome: 'Improvisação, Polifonia e Performance',
     instrumentId: 'teclado',
     nivel: 5,
     moduloNumero: 6,
-    objetivoAcademico: 'Consolidação artística do pianista/tecladista: harmonia cromática avançada (acordes diminutos de passagem, dominantes alterados), arranjos polifônicos completos solo (piano solo), improvisação sofisticada, acompanhamento profissional de cantores e bandas, e performance de concerto.',
-    competenciasDesenvolvidas: [
-      'Escala alterada e dominação de tensões alteradas (b9, #9, b5, #5)',
-      'Arranjos completos de piano solo: linha melódica, baixo e preenchimento harmônico simultâneos',
-      'Improvisação fluente com linguagem bop, blues e lírica em andamentos médios e rápidos',
-      'Acompanhamento profissional: adequação de registro para não conflitar com voz, guitarra ou baixo',
-      'Uso de sintetizadores, timbres elétricos (Rhodes/Wurlitzer, pads, leads) e controladores MIDI',
-      'Performance pública de encerramento do conservatório'
-    ],
-    preRequisitos: ['Nível 4 concluído, voicings abertos assimilados e improvisação modal intermediária.'],
-    conteudos: [
-      'A escala alterada (7º modo da menor melódica) e acordes 7(alt)',
-      'Acordes diminutos: função dominante vs função de passagem auxiliar',
-      'Construção de arranjos de Piano Solo: a melodia no topo com dedos 4 e 5 da mão direita',
-      'Acompanhamento dinâmico: quando tocar menos (o valor das pausas e texturas sutis)',
-      'Teclados modernos e sintetizadores: filtros (Cutoff/Resonance), camadas (layers) e splits',
-      'Performance de encerramento de conservatório e repertório acadêmico'
-    ],
-    exerciciosPraticos: [
-      {
-        titulo: 'Piano Solo Completo com Melodia e Harmonia Integradas',
-        bpmAlvo: 75,
-        instrucoes: 'Execute arranjo solo de standard em que a mão direita toca a melodia em relevo dinâmico com dedos 4 e 5 e a harmonia com dedos 1, 2 e 3.',
-        repeticoesAlvo: 4
-      },
-      {
-        titulo: 'Improvisação sobre Acordes Alterados',
-        bpmAlvo: 110,
-        instrucoes: 'Improvise linhas melódicas conectando G7(alt) para Cmaj7 utilizando arpejos e escala alterada.',
-        repeticoesAlvo: 6
-      }
-    ],
-    criteriosDominio: [
-      'Independência polifônica onde a melodia é ouvida com clareza acima do acompanhamento',
-      'Domínio da escala alterada em qualquer tonalidade sem erros de notas de repouso',
-      'Maturidade musical demonstrada em performance completa de conservatório'
-    ],
-    formaAvaliacao: 'Recital prático final perante banca com execução de peça solo e acompanhamento.',
+    objetivoAcademico: 'Executar arranjos solo completos, polifonia avançada e improvisação profissional.',
+    competenciasDesenvolvidas: ['Arranjo solo bimanual', 'Improvisação avançada', 'Performance de palco'],
+    preRequisitos: ['Módulo 5 concluído.'],
+    conteudos: ['Melodia na mão direita e acordes na esquerda', 'Improvisação modal', 'Pedal de sustentação (sustain pedal)', 'Recital final'],
+    exerciciosPraticos: [{ titulo: 'Arranjo solo com melodia superior e baixo', bpmAlvo: 85, instrucoes: 'Independência expressiva', repeticoesAlvo: 10 }],
+    criteriosDominio: ['Performance de peça solo completa com uso correto do pedal de sustain.'],
+    formaAvaliacao: 'Recital final de conservatório em teclado.',
     aulas: [
-      {
-        id: 'teclado-l-5-1',
-        numero: 1,
-        titulo: 'Dominantes Alterados e a Escala Superlócria',
-        subtitulo: 'A sofisticação máxima da tensão harmônica no teclado',
-        objetivo: 'Dominar o acorde 7(alt) e suas resoluções melódicas.',
-        duracaoMinutos: 40
-      },
-      {
-        id: 'teclado-l-5-2',
-        numero: 2,
-        titulo: 'A Arte do Piano Solo: Melodia, Harmonia e Baixo',
-        subtitulo: 'Como soar como uma orquestra inteira com as próprias mãos',
-        objetivo: 'Construir e interpretar um arranjo solo completo.',
-        duracaoMinutos: 45
-      },
-      {
-        id: 'teclado-l-5-3',
-        numero: 3,
-        titulo: 'Performance de Concerto e Prática de Conjunto',
-        subtitulo: 'Teclados eletrônicos, síntese, presença de palco e recital final',
-        objetivo: 'Concluir a formação acadêmica em teclado com performance de gala.',
-        duracaoMinutos: 50
-      }
+      { id: 'teclado-l-5-1', numero: 1, titulo: 'Independência Polifônica: Melodia e Acompanhamento', subtitulo: 'Mão direita cantando sobre a esquerda', objetivo: 'Executar polifonia ao teclado', duracaoMinutos: 35 },
+      { id: 'teclado-l-5-2', numero: 2, titulo: 'Uso Artístico do Pedal de Sustentação (Sustain Pedal)', subtitulo: 'Limpeza e ambiência sonora', objetivo: 'Dominar o pedal de sustain', duracaoMinutos: 25 },
+      { id: 'teclado-l-5-3', numero: 3, titulo: 'Improvisação e Solos de Teclado de Alta Performance', subtitulo: 'Fluência e fraseado pianístico', objetivo: 'Improvisar com fluência', duracaoMinutos: 35 },
+      { id: 'teclado-mod6-l4', numero: 4, titulo: 'Aula 4 — Glissandos, Trinados e Efeitos Acústicos', subtitulo: 'Técnicas de expressão avançada', objetivo: 'Executar trinados e glissandos', duracaoMinutos: 25 },
+      { id: 'teclado-mod6-l5', numero: 5, titulo: 'Aula 5 — O Tecladista na Banda: MIDI, VSTs e Setup', subtitulo: 'Equipamentos e controladores modernos', objetivo: 'Configurar rig de palco', duracaoMinutos: 30 },
+      { id: 'teclado-mod6-l6', numero: 6, titulo: 'Aula 6 — Recital Solene de Formação em Teclado', subtitulo: 'Apresentação final de conservatório', objetivo: 'Concluir a formação pianística', duracaoMinutos: 45 }
+    ]
+  },
+  {
+    id: 'teclado-mod-6',
+    nome: 'Módulo 6 — R&B, Gospel Chops e Voicings Contemporâneos',
+    instrumentId: 'teclado',
+    nivel: 4,
+    moduloNumero: 7,
+    objetivoAcademico: 'Dominar acordes gospel, passagens rápidas (chops) e voicings densos de R&B.',
+    competenciasDesenvolvidas: ['Gospel chops', 'Voicings densos', 'Pentatônicas no teclado'],
+    preRequisitos: ['Módulos 1 a 6 concluídos.'],
+    conteudos: ['Acordes gospel e extensões alteradas', 'Glissandos rítmicos', 'Acompanhamento em igrejas e bandas de R&B'],
+    exerciciosPraticos: [{ titulo: 'Progressão gospel com extensões', bpmAlvo: 75, instrucoes: 'Voicings abertos expressivos', repeticoesAlvo: 12 }],
+    criteriosDominio: ['Fluência em progressões gospel e R&B a 75 BPM.'],
+    formaAvaliacao: 'Gravação de faixa estilo gospel/R&B.',
+    aulas: [
+      { id: 'teclado-mod7-l1', numero: 1, titulo: 'Aula 37 — O Som do Gospel: Voicings Abertos', subtitulo: 'Aberturas densas e emotivas', objetivo: 'Criar sonoridade gospel', duracaoMinutos: 30 },
+      { id: 'teclado-mod7-l2', numero: 2, titulo: 'Aula 38 — Gospel Chops: Passagens Rápidas', subtitulo: 'Velocidade e limpeza em acordes', objetivo: 'Executar chops pianísticos', duracaoMinutos: 35 },
+      { id: 'teclado-mod7-l3', numero: 3, titulo: 'Aula 39 — Neossoul Chords e Clustered Voicings', subtitulo: 'Clusters e acordes clusterizados', objetivo: 'Dominar clusters modernos', duracaoMinutos: 30 },
+      { id: 'teclado-mod7-l4', numero: 4, titulo: 'Aula 40 — O Estilo de Teclado de R&B dos Anos 90', subtitulo: 'Rhodes, Wurlitzer e Clavinet', objetivo: 'Simular pianos eletromecânicos', duracaoMinutos: 30 },
+      { id: 'teclado-mod7-l5', numero: 5, titulo: 'Aula 41 — Pentatônicas e Blues no Piano', subtitulo: 'Licks idiomáticos de teclado blues', objetivo: 'Improvisar com blues e pentatônicas', duracaoMinutos: 30 },
+      { id: 'teclado-mod7-l6', numero: 6, titulo: 'Aula 42 — Acompanhamento Rítmico Sincopado', subtitulo: 'Groove de teclado na mão esquerda', objetivo: 'Manter groove sincopado', duracaoMinutos: 35 }
+    ]
+  },
+  {
+    id: 'teclado-mod-7',
+    nome: 'Módulo 7 — Harmonia Funcional Avançada e Rearmonização',
+    instrumentId: 'teclado',
+    nivel: 5,
+    moduloNumero: 8,
+    objetivoAcademico: 'Aplicar técnicas avançadas de rearmonização, modulações e acordes de empréstimo modal.',
+    competenciasDesenvolvidas: ['Rearmonização funcional', 'Empréstimo modal', 'Modulação por acordes de troca'],
+    preRequisitos: ['Módulo 7 concluído.'],
+    conteudos: ['Técnicas de rearmonização de melodias', 'Acordes de empréstimo modal', 'Substituições avançadas de acordes'],
+    exerciciosPraticos: [{ titulo: 'Rearmonização de standard de jazz', bpmAlvo: 80, instrucoes: 'Aplicação de subV7 e diminutos', repeticoesAlvo: 10 }],
+    criteriosDominio: ['Rearmonização fluida de música popular a 80 BPM.'],
+    formaAvaliacao: 'Banca de rearmonização.',
+    aulas: [
+      { id: 'teclado-mod8-l1', numero: 1, titulo: 'Aula 43 — Rearmonização por Acordes Passantes', subtitulo: 'Preenchendo vazios harmônicos', objetivo: 'Aplicar acordes passantes', duracaoMinutos: 30 },
+      { id: 'teclado-mod8-l2', numero: 2, titulo: 'Aula 44 — Empréstimo Modal no Piano', subtitulo: 'Cores do modo menor no tom maior', objetivo: 'Usar empréstimo modal', duracaoMinutos: 30 },
+      { id: 'teclado-mod8-l3', numero: 3, titulo: 'Aula 45 — Substituição Tritônica ao Teclado', subtitulo: 'Trítonos e condução cromática', objetivo: 'Aplicar substituição tritônica', duracaoMinutos: 30 },
+      { id: 'teclado-mod8-l4', numero: 4, titulo: 'Aula 46 — Modulações por Acorde Pivô e Direta', subtitulo: 'Mudança de tom pianística', objetivo: 'Modular com fluência', duracaoMinutos: 30 },
+      { id: 'teclado-mod8-l5', numero: 5, titulo: 'Aula 47 — O Acorde Napolitano e Sextas Aumentadas', subtitulo: 'Harmonia clássica aplicada ao teclado moderno', objetivo: 'Dominar harmonia avançada', duracaoMinutos: 30 },
+      { id: 'teclado-mod8-l6', numero: 6, titulo: 'Aula 48 — Análise Completa de Partituras e Cifras', subtitulo: 'Decodificando arranjos complexos', objetivo: 'Analisar partituras avançadas', duracaoMinutos: 35 }
+    ]
+  },
+  {
+    id: 'teclado-mod-8',
+    nome: 'Módulo 8 — Estilos e Arranjos para Teclado Solo',
+    instrumentId: 'teclado',
+    nivel: 5,
+    moduloNumero: 9,
+    objetivoAcademico: 'Criar arranjos solo completos em diferentes estilos (Bossa, Jazz, Pop, Clássico).',
+    competenciasDesenvolvidas: ['Arranjo solo', 'Estilo Bossa Nova', 'Estilo Ballad'],
+    preRequisitos: ['Módulo 8 concluído.'],
+    conteudos: ['Técnicas de arranjo solo para piano', 'Balanço de Bossa Nova ao teclado', 'Polifonia e contraponto elementar'],
+    exerciciosPraticos: [{ titulo: 'Arranjo solo estilo Bossa Nova', bpmAlvo: 75, instrucoes: 'Baixo na esquerda e síncopa na direita', repeticoesAlvo: 10 }],
+    criteriosDominio: ['Arranjo solo executado com limpeza e precisão rítmica.'],
+    formaAvaliacao: 'Apresentação de arranjo solo.',
+    aulas: [
+      { id: 'teclado-mod9-l1', numero: 1, titulo: 'Aula 49 — Arranjo Solo: O Conceito de Piano Bar', subtitulo: 'Preenchendo todo o espectro sonoro', objetivo: 'Fazer arranjo solo completo', duracaoMinutos: 30 },
+      { id: 'teclado-mod9-l2', numero: 2, titulo: 'Aula 50 — Bossa Nova ao Teclado: O Violão no Piano', subtitulo: 'Adaptação do violão bossa nova para as teclas', objetivo: 'Tocar bossa nova no teclado', duracaoMinutos: 35 },
+      { id: 'teclado-mod9-l3', numero: 3, titulo: 'Aula 51 — Contraponto Elementar e Vozes Independentes', subtitulo: 'Imitação e linhas contrapontísticas', objetivo: 'Desenvolver contraponto', duracaoMinutos: 30 },
+      { id: 'teclado-mod9-l4', numero: 4, titulo: 'Aula 52 — Baladas Pop Épicas ao Piano', subtitulo: 'Dinamismo e emoção em arranjos pop', objetivo: 'Executar balada épica', duracaoMinutos: 30 },
+      { id: 'teclado-mod9-l5', numero: 5, titulo: 'Aula 53 — Introduções, Viradas e Finais (Intros & Outros)', subtitulo: 'Enfeites pianísticos profissionais', objetivo: 'Criar intros e finais marcantes', duracaoMinutos: 30 },
+      { id: 'teclado-mod9-l6', numero: 6, titulo: 'Aula 54 — Repertório Avançado de Conservatório', subtitulo: 'Estudo de peça de concerto', objetivo: 'Tocar peça avançada', duracaoMinutos: 35 }
+    ]
+  },
+  {
+    id: 'teclado-mod-9',
+    nome: 'Módulo 9 — O Tecladista Profissional e Arranjador',
+    instrumentId: 'teclado',
+    nivel: 5,
+    moduloNumero: 10,
+    objetivoAcademico: 'Dominar o mercado profissional de tecladista, arranjos para banda e tecnologia musical.',
+    competenciasDesenvolvidas: ['Mercado profissional', 'Trabalho com sintetizadores', 'Leitura à primeira vista'],
+    preRequisitos: ['Módulo 9 concluído.'],
+    conteudos: ['Setup de palco com múltiplos teclados', 'Programação de patches e MIDI', 'Trabalho como arranjador e produtor'],
+    exerciciosPraticos: [{ titulo: 'Leitura rápida de lead sheet complexo', bpmAlvo: 80, instrucoes: 'Execução instantânea de cifra com extensões', repeticoesAlvo: 8 }],
+    criteriosDominio: ['Leitura e execução de lead sheet à primeira vista sem falhas.'],
+    formaAvaliacao: 'Banca profissional de tecladista.',
+    aulas: [
+      { id: 'teclado-mod10-l1', numero: 1, titulo: 'Aula 55 — O Tecladista na Banda: Papel e Equipamentos', subtitulo: 'Sintetizadores, workstations e pianos de palco', objetivo: 'Dominar rig de teclados', duracaoMinutos: 30 },
+      { id: 'teclado-mod10-l2', numero: 2, titulo: 'Aula 56 — Programação de Timbres e Camadas (Layers)', subtitulo: 'Combinando piano com strings e pads', objetivo: 'Criar layers e splits profissionais', duracaoMinutos: 35 },
+      { id: 'teclado-mod10-l3', numero: 3, titulo: 'Aula 57 — Leitura à Primeira Vista no Teclado', subtitulo: 'Decodificando partituras e cifras rapidamente', objetivo: 'Ler e tocar instantaneamente', duracaoMinutos: 30 },
+      { id: 'teclado-mod10-l4', numero: 4, titulo: 'Aula 58 — Trilha Sonora e Arranjo Virtual (MIDI & VST)', subtitulo: 'Produção musical no computador', objetivo: 'Produzir com instrumentos virtuais', duracaoMinutos: 30 },
+      { id: 'teclado-mod10-l5', numero: 5, titulo: 'Aula 59 — Direção Musical ao Teclado', subtitulo: 'Comandando ensaios e arranjos de banda', objetivo: 'Atuar como diretor musical', duracaoMinutos: 30 },
+      { id: 'teclado-mod10-l6', numero: 6, titulo: 'Aula 60 — Recital Solene de Formação em Teclado', subtitulo: 'Apresentação final de conservatório', objetivo: 'Concluir a formação pianística profissional', duracaoMinutos: 45 }
     ]
   }
 ];
