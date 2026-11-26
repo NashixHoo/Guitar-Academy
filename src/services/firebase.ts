@@ -653,6 +653,9 @@ export async function updateStudentRegistration(
     const payload = {
       displayName: `${data.firstName.trim()} ${data.lastName.trim()}`.slice(0, 120),
       email: data.email.trim().slice(0, 254),
+      firstName: data.firstName.trim().slice(0, 60),
+      lastName: data.lastName.trim().slice(0, 60),
+      phone: data.phone.trim().slice(0, 32),
       preferences: updatedPrefs,
       updatedAt: serverTimestamp(),
     };
