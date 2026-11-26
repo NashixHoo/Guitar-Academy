@@ -62,7 +62,7 @@ import { isProfileComplete } from './types';
 import type { CourseAccessGrant, StudentAcademicPlacement } from './types/accessControl';
 
 function MainAppContent() {
-  const { user, loading, isAdmin, isTeacher, adminPreviewMode, showLegacyModal, studentProfile, refreshUserProfile } = useAuth();
+  const { user, loading, isRoleChecking, isAdmin, isTeacher, adminPreviewMode, showLegacyModal, studentProfile, refreshUserProfile } = useAuth();
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showJoinClassModal, setShowJoinClassModal] = useState(false);
@@ -800,7 +800,7 @@ function MainAppContent() {
       />
 
       <StudentRegistrationModal
-        isOpen={Boolean(user && !isProfileComplete(studentProfile))}
+        isOpen={Boolean(user && !loading && !isRoleChecking && !isAdmin && !isProfileComplete(studentProfile))}
         user={user}
         studentProfile={studentProfile}
         onSuccess={async () => {
