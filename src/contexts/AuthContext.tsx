@@ -65,7 +65,33 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [role, setRole] = useState<UserRole>('student');
   const [roleResolution, setRoleResolution] = useState<SystemRoleResolution | null>(null);
   const [isRoleChecking, setIsRoleChecking] = useState<boolean>(false);
-  const [adminPreviewMode, setAdminPreviewMode] = useState<boolean>(false);
+  const [adminPreviewMode, setAdminPreviewModeState] = useState<boolean>(() => {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        return localStorage.getItem('ga_admin_preview_mode') === 'true';
+      }
+    } catch {}
+    return false;
+  });
+
+  const setAdminPreviewMode = useCallback((preview: boolean) => {
+    if (role === 'admin') {
+      setAdminPreviewModeState(preview);
+      try {
+        if (typeof window !== 'undefined' && window.localStorage) {
+          localStorage.setItem('ga_admin_preview_mode', preview ? 'true' : 'false');
+        }
+      } catch {}
+    } else {
+      setAdminPreviewModeState(false);
+      try {
+        if (typeof window !== 'undefined' && window.localStorage) {
+          localStorage.removeItem('ga_admin_preview_mode');
+        }
+      } catch {}
+    }
+  }, [role]);
+
   const [loading, setLoading] = useState<boolean>(true);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('synced');
   const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
@@ -90,7 +116,19 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setRoleResolution(resolution);
       setRole(resolution.role);
       if (resolution.role !== 'admin') {
-        setAdminPreviewMode(false);
+        setAdminPreviewModeState(false);
+        try {
+          if (typeof window !== 'undefined' && window.localStorage) {
+            localStorage.removeItem('ga_admin_preview_mode');
+          }
+        } catch {}
+      } else {
+        try {
+          if (typeof window !== 'undefined' && window.localStorage) {
+            const saved = localStorage.getItem('ga_admin_preview_mode') === 'true';
+            setAdminPreviewModeState(saved);
+          }
+        } catch {}
       }
       return resolution;
     } catch (err: any) {
@@ -99,7 +137,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
       console.error('[AuthContext] Erro inesperado ao consultar papel em system_roles:', err);
       setRole('student');
-      setAdminPreviewMode(false);
+      setAdminPreviewModeState(false);
+      try {
+        if (typeof window !== 'undefined' && window.localStorage) {
+          localStorage.removeItem('ga_admin_preview_mode');
+        }
+      } catch {}
       return null;
     } finally {
       if (roleSeqRef.current === roleSeq) {
@@ -232,6 +275,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setRoleResolution(null);
         setIsRoleChecking(false);
         setAdminPreviewMode(false);
+        try {
+          if (typeof window !== 'undefined' && window.localStorage) {
+            localStorage.removeItem('ga_admin_preview_mode');
+          }
+        } catch {}
         storageService.setCurrentUser(null);
         setShowLegacyModal(false);
         setSyncStatus('synced');
@@ -409,6 +457,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setRoleResolution(null);
       setIsRoleChecking(false);
       setAdminPreviewMode(false);
+      try {
+        if (typeof window !== 'undefined' && window.localStorage) {
+          localStorage.removeItem('ga_admin_preview_mode');
+        }
+      } catch {}
       setAuthError(null);
       setAuthSuccessMessage(null);
     }
