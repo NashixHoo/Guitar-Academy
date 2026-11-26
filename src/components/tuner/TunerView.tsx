@@ -135,6 +135,10 @@ export const TunerView: React.FC<TunerViewProps> = ({ onOpenLessonTuning }) => {
   });
 
   const animLoopRef = useRef<number | null>(null);
+  const visualAngleRef = useRef(0);
+  const visualCentsRef = useRef(0);
+  const [smoothVisualAngle, setSmoothVisualAngle] = useState(0);
+  const [smoothVisualCents, setSmoothVisualCents] = useState(0);
 
   // Carrega afinações personalizadas no carregamento
   useEffect(() => {
@@ -239,6 +243,17 @@ export const TunerView: React.FC<TunerViewProps> = ({ onOpenLessonTuning }) => {
         const renderFrame = () => {
           const smoothed = smootherRef.current.step(performance.now());
           setDisplayState(smoothed);
+
+          const targetAngle = Math.max(-45, Math.min(45, smoothed.displayedAngle));
+          visualAngleRef.current += (targetAngle - visualAngleRef.current) * 0.22;
+
+          const targetCents = smoothed.displayedCents;
+          const dampedCents = Math.abs(targetCents) <= 1.2 && smoothed.stability >= 60 ? 0 : targetCents;
+          visualCentsRef.current += (dampedCents - visualCentsRef.current) * 0.20;
+
+          setSmoothVisualAngle(parseFloat(visualAngleRef.current.toFixed(2)));
+          setSmoothVisualCents(parseFloat(visualCentsRef.current.toFixed(1)));
+
           animLoopRef.current = requestAnimationFrame(renderFrame);
         };
         animLoopRef.current = requestAnimationFrame(renderFrame);

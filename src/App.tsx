@@ -386,11 +386,13 @@ function MainAppContent() {
     });
   };
 
+  const isFullscreenTool = ['guitar-coach', 'tuner', 'ear-training'].includes(currentTab);
+
   // Gestos laterais entre as abas principais (Estudar ↔ Praticar ↔ Evoluir)
   const { touchHandlers } = useSwipeNavigation({
     currentPrimaryTab: primaryTab,
     onNavigatePrimaryTab: handleSelectPrimaryTab,
-    enabled: true,
+    enabled: !isFullscreenTool,
   });
 
   const canGoBack = navigationService.canGoBack(selectedLessonId, currentTab);
@@ -507,6 +509,22 @@ function MainAppContent() {
             {...touchHandlers}
             className="flex-1 min-w-0 w-full h-full px-3.5 pt-4 pb-28 sm:pb-32 pb-[calc(6rem+env(safe-area-inset-bottom,16px))] sm:pb-[calc(7rem+env(safe-area-inset-bottom,16px))] lg:px-8 lg:pt-6 overflow-y-auto overflow-x-hidden overscroll-contain"
           >
+            {isFullscreenTool && (
+              <div className="bg-[#1A1A20] text-white px-4 py-3 flex items-center justify-between border-b border-[#33333D] shadow-md sticky top-0 z-50 mb-4 rounded-2xl">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+                  <span className="text-xs font-bold uppercase tracking-wider text-emerald-400">Modo de Tela Exclusiva</span>
+                </div>
+                <button
+                  onClick={() => navigateToTab('home', null)}
+                  className="px-3.5 py-1.5 rounded-xl bg-[#7B1E2B] hover:bg-[#9E2638] text-white text-xs font-bold transition flex items-center gap-1.5 shadow-xs"
+                  aria-label="Sair da Tela Exclusiva"
+                >
+                  <X className="w-4 h-4" />
+                  <span>Sair da Tela Exclusiva</span>
+                </button>
+              </div>
+            )}
             {accessDeniedNotice && (
               <div
                 role="alert"
@@ -710,10 +728,12 @@ function MainAppContent() {
         </div>
 
         {/* 3. Barra de Navegação Inferior Fixa com as 3 Abas Principais (Estudar, Praticar, Evoluir) */}
-        <BottomNavigation
-          activePrimaryTab={primaryTab}
-          onSelectPrimaryTab={handleSelectPrimaryTab}
-        />
+        {!isFullscreenTool && (
+          <BottomNavigation
+            activePrimaryTab={primaryTab}
+            onSelectPrimaryTab={handleSelectPrimaryTab}
+          />
+        )}
 
         {/* Floating Offline Notification Status */}
         <OfflineIndicator />
