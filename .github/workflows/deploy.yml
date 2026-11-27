@@ -55,9 +55,9 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - run: npm run test:security:unit
 
-    # O teste continua sendo executado e sua falha permanece visível no relatório do GitHub Actions.
-    # Por decisão do projeto, esta falha isolada não é um critério bloqueador do deploy.
-    firestore-emulator-tests:
+  # O teste continua sendo executado e sua falha permanece visível no relatório do GitHub Actions.
+  # Por decisão do projeto, esta falha isolada não é um critério bloqueador do deploy.
+  firestore-emulator-tests:
     name: 4. Testes Firestore com Emulator
     runs-on: ubuntu-latest
     steps:
