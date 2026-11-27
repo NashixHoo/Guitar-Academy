@@ -172,8 +172,7 @@ export const INSTRUMENT_THUMBNAILS_LIST: Array<{
   visual: VisualArtworkMeta;
 }> = [
   { courseId: 'violao', visual: COURSE_TRACK_VISUALS.violao },
-  { courseId: 'canonical', visual: COURSE_TRACK_VISUALS.canonical },
-  { courseId: 'solo', visual: COURSE_TRACK_VISUALS.solo },
+  { courseId: 'guitarra', visual: COURSE_TRACK_VISUALS.guitarra },
   { courseId: 'baixo', visual: COURSE_TRACK_VISUALS.baixo },
   { courseId: 'teclado', visual: COURSE_TRACK_VISUALS.teclado },
   { courseId: 'bateria', visual: COURSE_TRACK_VISUALS.bateria },

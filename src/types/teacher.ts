@@ -97,7 +97,7 @@ export interface EducationalEvent {
   studentName: string;
   studentEmail: string;
   classId: string;
-  courseId: 'violao' | 'canonical' | 'solo' | 'baixo' | 'teclado' | 'bateria';
+  courseId: 'violao' | 'guitarra' | 'canonical' | 'solo' | 'baixo' | 'teclado' | 'bateria';
   moduleId?: string;
   lessonId?: string;
   exerciseId?: string;
@@ -114,7 +114,7 @@ export interface TeacherFilterState {
   startDate?: string;
   endDate?: string;
   classId: string; // 'all' ou ID específico
-  courseId: 'all' | 'violao' | 'canonical' | 'solo';
+  courseId: 'all' | 'violao' | 'guitarra' | 'canonical' | 'solo' | 'baixo' | 'teclado' | 'bateria';
   category: 'all' | ActivityCategory;
   studentId?: string;
   searchQuery?: string;

@@ -243,6 +243,35 @@ export const INITIAL_METRONOME: MetronomeConfig = {
   },
 };
 
+export function migrateProgressToMaster300(progress: UserProgress): UserProgress {
+  const p = { ...progress };
+  if (p.primaryCourseId === 'canonical' || p.primaryCourseId === 'solo') {
+    p.primaryCourseId = 'guitarra';
+  }
+  if (p.lastAccessedCourseId === 'canonical' || p.lastAccessedCourseId === 'solo') {
+    p.lastAccessedCourseId = 'guitarra';
+  }
+  const cLast = { ...(p.courseLastLesson || {}) };
+  const canonicalLesson = cLast.canonical;
+  const soloLesson = cLast.solo;
+  delete cLast.canonical;
+  delete cLast.solo;
+
+  let chosenGuitarLesson = cLast.guitarra;
+  if (!chosenGuitarLesson) {
+    if (soloLesson) {
+      chosenGuitarLesson = soloLesson;
+    } else if (canonicalLesson) {
+      chosenGuitarLesson = canonicalLesson;
+    } else {
+      chosenGuitarLesson = 'lesson-1';
+    }
+  }
+  cLast.guitarra = chosenGuitarLesson;
+  p.courseLastLesson = cLast;
+  return p;
+}
+
 export function validateBackupData(data: unknown): BackupValidationResult {
   if (!data || typeof data !== 'object' || Array.isArray(data)) {
     return {
@@ -305,7 +334,7 @@ export function validateBackupData(data: unknown): BackupValidationResult {
   }
 
   // Sanitização e migração segura preservando a integridade pedagógica
-  const sanitizedProgress: UserProgress = {
+  let sanitizedProgress: UserProgress = {
     ...INITIAL_PROGRESS,
     ...progressCandidate,
     currentLessonId: typeof progressCandidate.currentLessonId === 'string' && progressCandidate.currentLessonId
@@ -361,9 +390,11 @@ export function validateBackupData(data: unknown): BackupValidationResult {
     manualPracticeLogs: Array.isArray(progressCandidate.manualPracticeLogs)
       ? progressCandidate.manualPracticeLogs
       : [],
-    lastAccessedCourseId: progressCandidate.lastAccessedCourseId || 'canonical',
+    lastAccessedCourseId: progressCandidate.lastAccessedCourseId || 'guitarra',
     courseLastLesson: progressCandidate.courseLastLesson || INITIAL_PROGRESS.courseLastLesson,
   };
+
+  sanitizedProgress = migrateProgressToMaster300(sanitizedProgress);
 
   // Garante integridade do Perfil Pedagógico Adaptativo
   sanitizedProgress.pedagogicalProfile = migrateLegacyProgressToPedagogical(sanitizedProgress);
@@ -522,7 +553,7 @@ export const storageService = {
       const isElectivesUnlocked = Boolean(
         parsed.unlockedElectives || isCourseUnlocked('canonical', { ...parsed, primaryCourseId: resolvedPrimary })
       );
-      const migrated: UserProgress = {
+      let migrated: UserProgress = {
         ...createDefaultProgress(),
         ...parsed,
         primaryCourseId: resolvedPrimary,
@@ -541,6 +572,8 @@ export const storageService = {
           startDate: parsed.studyPlan?.startDate || INITIAL_PROGRESS.studyPlan.startDate,
         },
       };
+
+      migrated = migrateProgressToMaster300(migrated);
 
       // Migração automática e compatível do Perfil Pedagógico Adaptativo
       migrated.pedagogicalProfile = migrateLegacyProgressToPedagogical(migrated);

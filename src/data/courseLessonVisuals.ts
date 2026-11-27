@@ -254,49 +254,34 @@ export function getLessonVisual(lesson: Lesson): CourseVisualInfo {
     return VIOLAO_VISUALS.postura;
   }
 
-  if (id.startsWith('solo-')) {
+  if (id.startsWith('guitar-') || id.startsWith('lesson-') || id.startsWith('solo-')) {
     if (
       text.includes('bend') ||
       text.includes('vibrato') ||
-      text.includes('ligado') ||
-      text.includes('fraseado') ||
+      text.includes('solo') ||
       text.includes('improvis') ||
+      text.includes('pentat') ||
       text.includes('blues') ||
       text.includes('sweep') ||
-      text.includes('tapping')
+      text.includes('modo') ||
+      text.includes('recital')
     ) {
       return GUITARRA_VISUALS.solo;
     }
     if (
-      text.includes('anatomia') ||
-      text.includes('afinação') ||
-      text.includes('cordas')
+      text.includes('palhet') ||
+      text.includes('1-2-3-4') ||
+      text.includes('caged') ||
+      text.includes('acorde') ||
+      text.includes('escala') ||
+      text.includes('semitom') ||
+      text.includes('tríade') ||
+      text.includes('voz')
     ) {
-      return GUITARRA_VISUALS.hss;
+      return GUITARRA_VISUALS.palhetada;
     }
-    return GUITARRA_VISUALS.palhetada;
+    return GUITARRA_VISUALS.hss;
   }
 
-  // Canonical guitar curriculum (lesson-1 .. lesson-18)
-  if (
-    text.includes('bend') ||
-    text.includes('vibrato') ||
-    text.includes('solo') ||
-    text.includes('improvis') ||
-    text.includes('pentat') ||
-    text.includes('blues')
-  ) {
-    return GUITARRA_VISUALS.solo;
-  }
-  if (
-    text.includes('palhet') ||
-    text.includes('1-2-3-4') ||
-    text.includes('caged') ||
-    text.includes('acorde') ||
-    text.includes('escala') ||
-    text.includes('semitom')
-  ) {
-    return GUITARRA_VISUALS.palhetada;
-  }
   return GUITARRA_VISUALS.hss;
 }
