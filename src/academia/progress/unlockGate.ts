@@ -1,15 +1,18 @@
 // =========================================================================
-// GUITAR ACADEMY — MASTER CORE V1.0 (FASE 4)
+// GUITAR ACADEMY — MASTER CORE V1.0 (MASTER CURRICULUM 300)
 // MOTOR DE MATRÍCULA, PROGRESSÃO E DESBLOQUEIO AUTOMÁTICO DE CURSOS (50%)
 // =========================================================================
 
 import { UserProgress } from '../../types';
-import { VIOLAO_LESSONS } from '../../data/violaoCourse';
+import { 
+  VIOLAO_CURRICULUM_MODULES, 
+  getGuitarCurriculumModules, 
+  BAIXO_CURRICULUM_MODULES, 
+  TECLADO_CURRICULUM_MODULES, 
+  BATERIA_CURRICULUM_MODULES 
+} from '../curriculo/mestreCurriculumRegistry';
 import { CURRICULUM_LEVELS } from '../../data/curriculum';
 import { SOLO_LESSONS } from '../../data/soloCourse';
-import { BASS_LESSONS } from '../../data/bassCourse';
-import { KEYBOARD_LESSONS } from '../../data/keyboardCourse';
-import { DRUMS_LESSONS } from '../../data/drumsCourse';
 
 export type OfficialCourseId = 
   | 'violao' 
@@ -54,41 +57,41 @@ export const COURSE_METADATA_MAP: Record<OfficialCourseId, CourseMetadata> = {
     name: 'Formação em Contrabaixo Elétrico',
     instrumentName: 'Contrabaixo',
     iconName: 'Disc',
-    totalLessons: 18
+    totalLessons: 60
   },
   teclado: {
     id: 'teclado',
     name: 'Formação em Teclado e Piano',
     instrumentName: 'Teclado / Piano',
     iconName: 'Grid',
-    totalLessons: 18
+    totalLessons: 60
   },
   bateria: {
     id: 'bateria',
     name: 'Formação em Bateria e Prática Rítmica',
     instrumentName: 'Bateria',
     iconName: 'Activity',
-    totalLessons: 18
+    totalLessons: 60
   }
 };
 
 /**
- * Retorna todos os IDs canônicos das aulas obrigatórias de um curso
+ * Retorna todos os IDs canônicos das aulas obrigatórias de um curso (Master Curriculum 300)
  */
 export function getMandatoryLessonIdsForCourse(courseId: OfficialCourseId): string[] {
   switch (courseId) {
     case 'violao':
-      return VIOLAO_LESSONS.map((l) => l.id);
+      return VIOLAO_CURRICULUM_MODULES.flatMap((m) => m.aulas.map((l) => l.id));
     case 'canonical':
       return CURRICULUM_LEVELS.flatMap((lvl) => lvl.lessons.map((l) => l.id));
     case 'solo':
       return SOLO_LESSONS.map((l) => l.id);
     case 'baixo':
-      return BASS_LESSONS.map((l) => l.id);
+      return BAIXO_CURRICULUM_MODULES.flatMap((m) => m.aulas.map((l) => l.id));
     case 'teclado':
-      return KEYBOARD_LESSONS.map((l) => l.id);
+      return TECLADO_CURRICULUM_MODULES.flatMap((m) => m.aulas.map((l) => l.id));
     case 'bateria':
-      return DRUMS_LESSONS.map((l) => l.id);
+      return BATERIA_CURRICULUM_MODULES.flatMap((m) => m.aulas.map((l) => l.id));
     default:
       return [];
   }
@@ -107,15 +110,7 @@ export interface CourseProgressDetail {
 }
 
 /**
- * CÁLCULO OFICIAL DE PROGRESSO VÁLIDO (Regra da Matriz Central)
- * progresso = atividades obrigatórias concluídas / total de atividades obrigatórias aplicáveis * 100
- *
- * REGRAS INEGOCIÁVEIS:
- * - Apenas aulas na lista de completedLessons do aluno SÃO contabilizadas.
- * - Aulas meramente visualizadas (status 'viewed' em practiceLogs) NÃO são contabilizadas.
- * - Tempo de estudo ou permanência no app NÃO é contabilizado no percentual de conclusão.
- * - Cursos sem atividades obrigatórias válidas (total = 0) retornam 0% e canUnlockElectives = false.
- * - O desbloqueio ocorre ao atingir exatamente 50.0% (inclusive).
+ * CÁLCULO OFICIAL DE PROGRESSO VÁLIDO (Regra da Matriz Central 300)
  */
 export function calculateCourseProgress(
   courseId: OfficialCourseId,
@@ -144,9 +139,7 @@ export function calculateCourseProgress(
   const completedIds = mandatoryLessonIds.filter((id) => completedSet.has(id));
   const completedMandatory = completedIds.length;
 
-  // Cálculo matemático exato com precisão de 2 casas decimais
   const rawPercentage = (completedMandatory / totalMandatory) * 100;
-  // Arredonda para 2 casas decimais para comparações numéricas confiáveis
   const progressPercentage = Math.round(rawPercentage * 100) / 100;
 
   const isFiftyPercentReached = progressPercentage >= 50.0;
@@ -172,19 +165,13 @@ export function calculateCourseProgress(
   };
 }
 
-/**
- * Resolve o curso principal oficial do aluno com isolamento e preservação de dados
- */
 export function getPrimaryCourseId(progress: UserProgress | null | undefined): OfficialCourseId {
   if (!progress) return 'violao';
 
-  // Se o aluno já tem o curso principal explicitamente gravado, preserva
   if (progress.primaryCourseId && COURSE_METADATA_MAP[progress.primaryCourseId as OfficialCourseId]) {
     return progress.primaryCourseId as OfficialCourseId;
   }
 
-  // Fallback inteligente para dados legados:
-  // Se o aluno já tem progresso registrado em aulas de violão, seu curso principal é 'violao'
   const completed = progress.completedLessons || [];
   if (completed.some((id) => id.startsWith('violao-'))) {
     return 'violao';
@@ -205,7 +192,6 @@ export function getPrimaryCourseId(progress: UserProgress | null | undefined): O
     return 'bateria';
   }
 
-  // Se o aluno acessou um curso anteriormente e ele é válido
   if (progress.lastAccessedCourseId && COURSE_METADATA_MAP[progress.lastAccessedCourseId as OfficialCourseId]) {
     return progress.lastAccessedCourseId as OfficialCourseId;
   }
@@ -213,16 +199,12 @@ export function getPrimaryCourseId(progress: UserProgress | null | undefined): O
   return 'violao';
 }
 
-/**
- * Matrícula no curso principal com proteção contra duplicidade e contorno
- */
 export function enrollPrimaryCourse(
   progress: UserProgress,
   targetCourseId: OfficialCourseId
 ): { success: boolean; progress: UserProgress; message: string } {
   const currentPrimary = getPrimaryCourseId(progress);
 
-  // Se já está matriculado neste mesmo curso principal
   if (currentPrimary === targetCourseId) {
     return {
       success: true,
@@ -234,15 +216,9 @@ export function enrollPrimaryCourse(
     };
   }
 
-  // REGRA DE PROTEÇÃO CONTRA CONTORNO DE DESBLOQUEIO:
-  // Se o aluno já possui um curso principal e tenta trocar para um curso secundário que ainda está bloqueado (< 50% no principal atual),
-  // a troca só é permitida se o novo curso for legítimo, mas NÃO desbloqueará os demais instrumentos magicamente!
-  const currentPrimaryProgress = calculateCourseProgress(currentPrimary, progress);
-
   const updated: UserProgress = {
     ...progress,
     primaryCourseId: targetCourseId,
-    // Se ainda não tiver inicializado as últimas aulas acessadas
     courseLastLesson: {
       ...(progress.courseLastLesson || {}),
       [targetCourseId]: progress.courseLastLesson?.[targetCourseId] || getMandatoryLessonIdsForCourse(targetCourseId)[0]
@@ -256,15 +232,6 @@ export function enrollPrimaryCourse(
   };
 }
 
-/**
- * VERIFICAÇÃO CONFIÁVEL DE DESBLOQUEIO (Backend / Service Layer)
- * Não confia exclusivamente em estados de frontend.
- *
- * REGRA:
- * 1. O curso principal do aluno está SEMPRE liberado para estudo.
- * 2. Cursos secundários só estão liberados se o aluno tiver alcançado pelo menos 50% de conclusão válida em seu curso principal oficial.
- * 3. Proteção contra troca de curso: o desbloqueio só é verdadeiro se o curso principal do aluno tiver >= 50% de conclusão.
- */
 export function isCourseUnlocked(
   courseId: OfficialCourseId,
   progress: UserProgress | null | undefined
@@ -273,19 +240,15 @@ export function isCourseUnlocked(
 
   const primaryCourseId = getPrimaryCourseId(progress);
 
-  // O curso principal sempre está acessível ao aluno
   if (courseId === primaryCourseId) {
     return true;
   }
 
-  // Verifica se o curso principal do aluno atingiu pelo menos 50%
   const primaryProgress = calculateCourseProgress(primaryCourseId, progress);
   if (primaryProgress.isFiftyPercentReached) {
     return true;
   }
 
-  // Também verifica se o aluno porventura concluiu >= 50% em algum outro curso em que tenha estudado legitimamente
-  // (caso já tenha sido graduado ou avançado em outro curso)
   const allCourses: OfficialCourseId[] = ['violao', 'canonical', 'solo', 'baixo', 'teclado', 'bateria'];
   for (const cId of allCourses) {
     if (cId !== courseId) {
@@ -299,9 +262,6 @@ export function isCourseUnlocked(
   return false;
 }
 
-/**
- * Validação rigorosa de autorização de acesso ao curso
- */
 export function canAccessCourse(
   courseId: OfficialCourseId,
   progress: UserProgress | null | undefined
@@ -311,7 +271,6 @@ export function canAccessCourse(
   const targetMeta = COURSE_METADATA_MAP[courseId];
   const primaryMeta = COURSE_METADATA_MAP[primaryCourseId];
 
-  // Curso principal é livre
   if (courseId === primaryCourseId) {
     return {
       allowed: true,
@@ -319,7 +278,6 @@ export function canAccessCourse(
     };
   }
 
-  // Curso secundário: verifica a regra dos 50%
   const unlocked = isCourseUnlocked(courseId, progress);
   if (unlocked) {
     return {
@@ -349,9 +307,6 @@ export interface CatalogCourseStatus {
   lockReason?: string;
 }
 
-/**
- * Retorna o status de todo o catálogo para a interface
- */
 export function getCatalogCoursesStatus(
   progress: UserProgress | null | undefined
 ): Record<OfficialCourseId, CatalogCourseStatus> {

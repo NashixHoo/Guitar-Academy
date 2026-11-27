@@ -168,6 +168,7 @@ export function getCourseModuleVisual(
       return indexOrNumber % 2 === 0 ? BATERIA_VISUALS.kit : BATERIA_VISUALS.pegada;
     }
   }
+  return VIOLAO_VISUALS.postura;
 }
 
 /**

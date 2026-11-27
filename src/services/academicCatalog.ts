@@ -379,7 +379,7 @@ export function validateGrantTarget(input: GrantTargetValidationInput): Validate
     };
   }
 
-  if (!isValidCourseId(input.courseId)) {
+  if (!input.courseId || !isValidCourseId(input.courseId)) {
     return { valid: false, error: 'Curso oficial inválido ou não encontrado no catálogo.' };
   }
   const course = getCatalogCourse(input.courseId)!;
