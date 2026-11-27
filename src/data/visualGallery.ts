@@ -36,6 +36,13 @@ export const COURSE_TRACK_VISUALS: Record<OfficialCourseId, VisualArtworkMeta> =
     title: 'Academia do Violão',
     caption: 'Ergonomia, dedilhado PIMA, pestanas limpas e arranjos solo em cordas de nylon e aço.',
   },
+  guitarra: {
+    src: guitarraHssImg,
+    alt: 'Guitarra elétrica HSS creme com escudo tortoiseshell ao lado de amplificador de estúdio',
+    eyebrow: 'Guitarra Elétrica',
+    title: 'Conservatório Completo de Guitarra',
+    caption: 'Formação unificada em 60 aulas: grade canônica, guitarra solo e expansão harmônica avançada.',
+  },
   canonical: {
     src: guitarraHssImg,
     alt: 'Guitarra elétrica HSS creme com escudo tortoiseshell ao lado de amplificador de estúdio',

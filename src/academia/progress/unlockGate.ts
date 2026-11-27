@@ -16,6 +16,7 @@ import { SOLO_LESSONS } from '../../data/soloCourse';
 
 export type OfficialCourseId = 
   | 'violao' 
+  | 'guitarra'
   | 'canonical' 
   | 'solo' 
   | 'baixo' 
@@ -38,16 +39,23 @@ export const COURSE_METADATA_MAP: Record<OfficialCourseId, CourseMetadata> = {
     iconName: 'Guitar',
     totalLessons: 60
   },
+  guitarra: {
+    id: 'guitarra',
+    name: 'Conservatório Completo de Guitarra Elétrica',
+    instrumentName: 'Guitarra Elétrica',
+    iconName: 'Zap',
+    totalLessons: 60
+  },
   canonical: {
     id: 'canonical',
-    name: 'Conservatório de Guitarra — Grade Canônica',
+    name: 'Conservatório de Guitarra — Grade Canônica (Legado)',
     instrumentName: 'Guitarra Elétrica',
     iconName: 'GraduationCap',
     totalLessons: 18
   },
   solo: {
     id: 'solo',
-    name: 'Formação em Guitarra Solo',
+    name: 'Formação em Guitarra Solo (Legado)',
     instrumentName: 'Guitarra Elétrica',
     iconName: 'Zap',
     totalLessons: 20
@@ -76,12 +84,14 @@ export const COURSE_METADATA_MAP: Record<OfficialCourseId, CourseMetadata> = {
 };
 
 /**
- * Retorna todos os IDs canônicos das aulas obrigatórias de um curso (Master Curriculum 300)
+ * Retorna todos os IDs obrigatórios das aulas de um curso (Master Curriculum 300)
  */
 export function getMandatoryLessonIdsForCourse(courseId: OfficialCourseId): string[] {
   switch (courseId) {
     case 'violao':
       return VIOLAO_CURRICULUM_MODULES.flatMap((m) => m.aulas.map((l) => l.id));
+    case 'guitarra':
+      return getGuitarCurriculumModules().flatMap((m) => m.aulas.map((l) => l.id));
     case 'canonical':
       return CURRICULUM_LEVELS.flatMap((lvl) => lvl.lessons.map((l) => l.id));
     case 'solo':
@@ -176,11 +186,8 @@ export function getPrimaryCourseId(progress: UserProgress | null | undefined): O
   if (completed.some((id) => id.startsWith('violao-'))) {
     return 'violao';
   }
-  if (completed.some((id) => id.startsWith('solo-'))) {
-    return 'solo';
-  }
-  if (completed.some((id) => id.startsWith('lesson-'))) {
-    return 'canonical';
+  if (completed.some((id) => id.startsWith('solo-') || id.startsWith('lesson-') || id.startsWith('guitar-'))) {
+    return 'guitarra';
   }
   if (completed.some((id) => id.startsWith('baixo-'))) {
     return 'baixo';
@@ -249,7 +256,7 @@ export function isCourseUnlocked(
     return true;
   }
 
-  const allCourses: OfficialCourseId[] = ['violao', 'canonical', 'solo', 'baixo', 'teclado', 'bateria'];
+  const allCourses: OfficialCourseId[] = ['violao', 'guitarra', 'baixo', 'teclado', 'bateria'];
   for (const cId of allCourses) {
     if (cId !== courseId) {
       const p = calculateCourseProgress(cId, progress);
@@ -312,7 +319,8 @@ export function getCatalogCoursesStatus(
 ): Record<OfficialCourseId, CatalogCourseStatus> {
   const primaryId = getPrimaryCourseId(progress);
   const primaryProg = calculateCourseProgress(primaryId, progress);
-  const courseIds: OfficialCourseId[] = ['violao', 'canonical', 'solo', 'baixo', 'teclado', 'bateria'];
+  // Exibimos no catálogo principal os 5 instrumentos unificados: violao, guitarra, baixo, teclado, bateria
+  const courseIds: OfficialCourseId[] = ['violao', 'guitarra', 'baixo', 'teclado', 'bateria'];
 
   const result = {} as Record<OfficialCourseId, CatalogCourseStatus>;
 

@@ -290,7 +290,7 @@ export type PracticeActivityType =
   | 'escalas'
   | 'teoria'
   | 'livre';
-export type PracticeCourseRelation = 'violao' | 'canonical' | 'solo' | 'baixo' | 'teclado' | 'bateria' | 'pratica_livre' | 'livre';
+export type PracticeCourseRelation = 'violao' | 'guitarra' | 'canonical' | 'solo' | 'baixo' | 'teclado' | 'bateria' | 'pratica_livre' | 'livre';
 export type PerceivedDifficulty = 'facil' | 'adequado' | 'confortavel' | 'desafiador' | 'dificil';
 
 export interface ManualPracticeLogEntry {
@@ -329,9 +329,9 @@ export interface UserProgress {
   pedagogicalProfile?: PedagogicalProfile;
   practiceSessions?: PracticeSessionRecord[];
   manualPracticeLogs?: ManualPracticeLogEntry[];
-  lastAccessedCourseId?: 'violao' | 'canonical' | 'solo' | 'baixo' | 'teclado' | 'bateria';
+  lastAccessedCourseId?: 'violao' | 'guitarra' | 'canonical' | 'solo' | 'baixo' | 'teclado' | 'bateria';
   courseLastLesson?: Record<string, string>;
-  primaryCourseId?: 'violao' | 'canonical' | 'solo' | 'baixo' | 'teclado' | 'bateria';
+  primaryCourseId?: 'violao' | 'guitarra' | 'canonical' | 'solo' | 'baixo' | 'teclado' | 'bateria';
   unlockedElectives?: boolean;
 }
 

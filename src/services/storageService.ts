@@ -141,11 +141,11 @@ export function mergeProgressStates(local: UserProgress, cloud: UserProgress): U
  */
 export function getCourseIdFromLessonId(lessonId: string): OfficialCourseId {
   if (lessonId.startsWith('violao-')) return 'violao';
-  if (lessonId.startsWith('solo-')) return 'solo';
   if (lessonId.startsWith('baixo-')) return 'baixo';
   if (lessonId.startsWith('teclado-')) return 'teclado';
   if (lessonId.startsWith('bateria-')) return 'bateria';
-  return 'canonical';
+  if (lessonId.startsWith('solo-') || lessonId.startsWith('lesson-') || lessonId.startsWith('guitar-')) return 'guitarra';
+  return 'guitarra';
 }
 
 /**
