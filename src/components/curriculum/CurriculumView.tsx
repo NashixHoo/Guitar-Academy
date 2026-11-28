@@ -107,10 +107,10 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({
   const activeStage = SOLO_COURSE_STAGES.find((s) => s.stageNumber === activeSoloStage) || SOLO_COURSE_STAGES[0];
   const activeViolaoMod = VIOLAO_MODULES.find((m) => m.moduleNumber === activeViolaoModule) || VIOLAO_MODULES[0];
 
-  const currentCourseStatus = catalogStatus[activeTrack];
-  const primaryStatus = catalogStatus[primaryCourseId];
+  const currentCourseStatus = catalogStatus[activeTrack] || { name: 'Curso', totalLessons: 60, progressPercentage: 0, isUnlocked: true };
+  const primaryStatus = catalogStatus[primaryCourseId] || { name: 'Curso Base', totalLessons: 60, progressPercentage: 0, isUnlocked: true, completedLessons: 0, remainingLessonsToFifty: 0, remainingPercentageToFifty: 0 };
   const activeTrackAccess = canStudentAccessCourse(effectiveSnapshot, activeTrack);
-  const activeCourseEff = effectiveSnapshot.courses[activeTrack];
+  const activeCourseEff = effectiveSnapshot.courses[activeTrack] || { origins: [], unlockedLessonIds: [], fullCourseUnlocked: true, hasAnyAccess: true };
   const isTrackUnlocked = activeTrackAccess.allowed;
 
   // Violão metrics

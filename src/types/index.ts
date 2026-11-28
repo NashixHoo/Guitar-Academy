@@ -368,6 +368,7 @@ export type NavigationTab =
   | 'progress'
   | 'settings'
   | 'diagnostics'
+  | 'courses'
   | 'teacher-dashboard';
 
 export interface ProfessorMessage {

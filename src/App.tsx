@@ -33,6 +33,8 @@ import { EarTrainingView } from './components/eartraining/EarTrainingView';
 import { TechniqueView } from './components/technique/TechniqueView';
 import { TunerView } from './components/tuner/TunerView';
 import { GuitarCoachView } from './components/coach/GuitarCoachView';
+import { CoursesView } from './components/curriculum/CoursesView';
+import { CourseSelectionModal } from './components/curriculum/CourseSelectionModal';
 import { StudyLibraryView } from './components/library/StudyLibraryView';
 import { ProgressView } from './components/progress/ProgressView';
 import { SettingsView } from './components/settings/SettingsView';
@@ -80,6 +82,13 @@ function MainAppContent() {
   const [searchTargetChord, setSearchTargetChord] = useState<{ symbol: string; id?: string } | null>(null);
   const [searchTargetTheoryKey, setSearchTargetTheoryKey] = useState<string | null>(null);
   const [focusSearchTrigger, setFocusSearchTrigger] = useState(0);
+  const [showCourseSelectionModal, setShowCourseSelectionModal] = useState(false);
+
+  useEffect(() => {
+    if (user && !loading && !isRoleChecking && isProfileComplete(studentProfile) && !progress.primaryCourseId) {
+      setShowCourseSelectionModal(true);
+    }
+  }, [user, loading, isRoleChecking, studentProfile, progress.primaryCourseId]);
 
   const mainScrollRef = useRef<HTMLElement>(null);
 
@@ -549,6 +558,23 @@ function MainAppContent() {
             )}
 
             <div key={currentTab} className="page-enter">
+              {/* TAB: Meus Cursos */}
+              {currentTab === 'courses' && (
+                <CoursesView
+                  progress={progress}
+                  onUpdateProgress={setProgress}
+                  onSelectInstrument={(instId) => {
+                    const updated = {
+                      ...progress,
+                      primaryCourseId: instId
+                    };
+                    storageService.saveProgress(updated);
+                    setProgress(updated);
+                    navigateToTab('curriculum', null);
+                  }}
+                />
+              )}
+
               {/* TAB 1: Início (Estudar) */}
               {currentTab === 'home' && (
                 <DashboardView
@@ -806,6 +832,14 @@ function MainAppContent() {
         onSuccess={async () => {
           await refreshUserProfile();
         }}
+      />
+
+      <CourseSelectionModal
+        isOpen={showCourseSelectionModal}
+        onSelectCourse={() => setShowCourseSelectionModal(false)}
+        progress={progress}
+        onUpdateProgress={setProgress}
+        isMandatory={false}
       />
 
       {/* Modal Central Ampliado de Acordes (acessível de qualquer seção com nome de acorde) */}

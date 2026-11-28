@@ -43,6 +43,7 @@ export const Navigation: React.FC<NavigationProps> = ({
       title: '1. Estudar',
       items: [
         { id: 'home', label: 'Início', icon: InicioIcon },
+        { id: 'courses', label: 'Meus Cursos', icon: AulasIcon, badge: '5 Cursos' },
         { id: 'curriculum', label: 'Formação & Aulas', icon: AulasIcon, badge: '6 Níveis' },
         { id: 'theory', label: 'Teoria Musical', icon: TeoriaIcon },
         { id: 'library', label: 'Biblioteca de Estudos', icon: BibliotecaIcon },

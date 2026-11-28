@@ -22,6 +22,7 @@ export interface HistoryEntry {
 export const TAB_TO_PRIMARY_MAP: Record<NavigationTab, PrimaryTab> = {
   // 1. Estudar: dashboard, trilha dos níveis 0–5, aulas, currículo, teoria e biblioteca
   home: 'estudar',
+  courses: 'estudar',
   curriculum: 'estudar',
   theory: 'estudar',
   library: 'estudar',
@@ -48,6 +49,7 @@ export const TAB_TO_PRIMARY_MAP: Record<NavigationTab, PrimaryTab> = {
 // Rótulos legíveis para o histórico e botão voltar
 export const SCREEN_TITLES: Record<NavigationTab, string> = {
   home: 'Início',
+  courses: 'Meus Cursos',
   curriculum: 'Currículo & Aulas',
   'practice-routine': 'Central de Prática',
   'guitar-coach': 'Guitar Coach',
