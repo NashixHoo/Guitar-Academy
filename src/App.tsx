@@ -835,11 +835,11 @@ function MainAppContent() {
       />
 
       <CourseSelectionModal
-        isOpen={showCourseSelectionModal}
+        isOpen={showCourseSelectionModal || !progress.primaryCourseId}
         onSelectCourse={() => setShowCourseSelectionModal(false)}
         progress={progress}
         onUpdateProgress={setProgress}
-        isMandatory={false}
+        isMandatory={!progress.primaryCourseId}
       />
 
       {/* Modal Central Ampliado de Acordes (acessível de qualquer seção com nome de acorde) */}

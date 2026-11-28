@@ -160,6 +160,7 @@ async function loadStudentAccessServerless(
       .sort((a, b) => Date.parse(b.createdAt || '') - Date.parse(a.createdAt || ''));
   } catch (err) {
     handleFirestoreError(err, OperationType.LIST, grantsPath);
+    grants = [];
   }
 
   try {

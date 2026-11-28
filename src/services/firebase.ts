@@ -474,7 +474,7 @@ export async function fetchSystemRoleWithDiagnostics(
   } catch (err) {
     const classified = classifySystemRoleReadError(err);
     console.error(
-      `[RBAC] Falha ao consultar "${docPath}" no banco "${FIRESTORE_DATABASE_ID}" (${classified.status} / ${classified.code}): ${classified.message}`
+      `[RBAC] Falha real ao consultar "${docPath}" no banco "${FIRESTORE_DATABASE_ID}" (${classified.status} / ${classified.code}): ${classified.message}`
     );
     return baseResult({
       status: classified.status,

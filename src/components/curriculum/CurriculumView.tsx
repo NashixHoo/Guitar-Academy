@@ -445,7 +445,7 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 bg-[#F8F7F4] dark:bg-[#1A1A20] p-2 rounded-2xl border border-[#D9D9D9] dark:border-[#33333E]">
           {courseList.map((cId) => {
             const meta = COURSE_METADATA_MAP[cId];
-            const status = catalogStatus[cId];
+            const status = catalogStatus[cId] || { progressPercentage: 0, totalLessons: 60 };
             const effCourseAccess = canStudentAccessCourse(effectiveSnapshot, cId);
             const effCourse = effectiveSnapshot.courses[cId];
             const isSelected = activeTrack === cId;
@@ -524,7 +524,7 @@ export const CurriculumView: React.FC<CurriculumViewProps> = ({
                         : 'text-amber-700 dark:text-amber-400'
                     }`}>
                       {effCourseAccess.fullCourseUnlocked
-                        ? `${status.progressPercentage}%`
+                        ? `${status?.progressPercentage || 0}%`
                         : effCourseAccess.partialAccess
                         ? `${effCourse.unlockedLessonIds.length}/${meta.totalLessons}`
                         : '50% nec.'}
