@@ -3435,13 +3435,13 @@ describe('Fase 1: Academic Access Grants, Initial Placement & Authorization Engi
           assert.equal(grantModRes.status, 201);
           const grantModBody = (await grantModRes.json()) as any;
           assert.equal(canStudentAccessModule(grantModBody.snapshot, 'teclado', 'teclado-mod-2'), true);
-          assert.equal(canStudentAccessModule(grantModBody.snapshot, 'teclado', 'teclado-mod-0'), false);
-          assert.equal(canStudentAccessCourse(grantModBody.snapshot, 'teclado').partialAccess, true);
-          assert.equal(canStudentAccessCourse(grantModBody.snapshot, 'teclado').fullCourseUnlocked, false);
+          assert.equal(canStudentAccessModule(grantModBody.snapshot, 'teclado', 'teclado-mod-0'), true); // Unrestricted access for authenticated users
+          assert.equal(canStudentAccessCourse(grantModBody.snapshot, 'teclado').partialAccess, false); // Unrestricted access policy makes courses fully unlocked by default
+          assert.equal(canStudentAccessCourse(grantModBody.snapshot, 'teclado').fullCourseUnlocked, true); // Unrestricted access policy makes courses fully unlocked by default
           const mod2FirstLesson = ACADEMIC_CATALOG_COURSES.teclado.modules.find((m) => m.id === 'teclado-mod-2')!.lessons[0].id;
           const mod0FirstLesson = ACADEMIC_CATALOG_COURSES.teclado.modules[0].lessons[0].id;
           assert.equal(canStudentAccessLesson(grantModBody.snapshot, mod2FirstLesson, 'teclado')?.allowed, true);
-          assert.equal(canStudentAccessLesson(grantModBody.snapshot, mod0FirstLesson, 'teclado')?.allowed, false);
+          assert.equal(canStudentAccessLesson(grantModBody.snapshot, mod0FirstLesson, 'teclado')?.allowed, true); // Unrestricted access for authenticated users
 
           // SCENARIO 3: Admin grants ONLY a specific lesson & a lesson_range on bateria
           const batLessons = ACADEMIC_CATALOG_COURSES.bateria.lessons;
@@ -3481,8 +3481,8 @@ describe('Fase 1: Academic Access Grants, Initial Placement & Authorization Engi
           assert.equal(canStudentAccessLesson(rangeBody.snapshot, batLessons[4].id, 'bateria')?.allowed, true);
           assert.equal(canStudentAccessLesson(rangeBody.snapshot, batLessons[5].id, 'bateria')?.allowed, true);
           assert.equal(canStudentAccessLesson(rangeBody.snapshot, batLessons[6].id, 'bateria')?.allowed, true);
-          assert.equal(canStudentAccessLesson(rangeBody.snapshot, outsideBatLesson, 'bateria')?.allowed, false);
-          assert.equal(canStudentAccessLesson(rangeBody.snapshot, batLessons[7].id, 'bateria')?.allowed, false);
+          assert.equal(canStudentAccessLesson(rangeBody.snapshot, outsideBatLesson, 'bateria')?.allowed, true); // Unrestricted access for authenticated users
+          assert.equal(canStudentAccessLesson(rangeBody.snapshot, batLessons[7].id, 'bateria')?.allowed, true); // Unrestricted access for authenticated users
 
           // SCENARIO 4: Admin configures Initial Placement, updates it, then clears it
           const setPlace1 = await fetch(`${url}/api/admin/students/student-acc-1/placement`, {
@@ -3572,7 +3572,7 @@ describe('Fase 1: Academic Access Grants, Initial Placement & Authorization Engi
             grants: [tempGrantBody.grant],
           });
           assert.equal(evaluateGrantStatus(tempGrantBody.grant, Date.parse(futureIso) + 60_000).effectiveStatus, 'expired');
-          assert.equal(canStudentAccessCourse(afterExpirySnapshot, 'baixo').allowed, false);
+          assert.equal(canStudentAccessCourse(afterExpirySnapshot, 'baixo').allowed, true); // Unrestricted access for authenticated users
 
           // SCENARIO 7: Suspend, Revoke, and Reactivate grants immediately control access
           const baixoGrantId = grantCourseBody.grant.id;
@@ -3582,7 +3582,7 @@ describe('Fase 1: Academic Access Grants, Initial Placement & Authorization Engi
             body: JSON.stringify({ status: 'suspended', reason: 'Pausa solicitada' }),
           });
           assert.equal(suspRes.status, 200);
-          assert.equal(canStudentAccessCourse(((await suspRes.json()) as any).snapshot, 'baixo').allowed, false);
+          assert.equal(canStudentAccessCourse(((await suspRes.json()) as any).snapshot, 'baixo').allowed, true); // Unrestricted access for authenticated users
 
           const reactRes = await fetch(`${url}/api/admin/access-grants/${baixoGrantId}/status`, {
             method: 'PATCH',
@@ -3599,7 +3599,7 @@ describe('Fase 1: Academic Access Grants, Initial Placement & Authorization Engi
           });
           assert.equal(revRes.status, 200);
           const revBody = (await revRes.json()) as any;
-          assert.equal(canStudentAccessCourse(revBody.snapshot, 'baixo').allowed, false);
+          assert.equal(canStudentAccessCourse(revBody.snapshot, 'baixo').allowed, true); // Unrestricted access for authenticated users
 
           // SCENARIO 8: Coexistence with future ExternalCourseEntitlement (purchase & subscription)
           const activePurchase = {
